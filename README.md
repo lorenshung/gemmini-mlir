@@ -36,3 +36,26 @@ The package manifest + provenance ride along under `.merlin/`
 
 See `AGENT.md` for the target brief and the oracle ladder, and `main` for the `<target>-mlir`
 convention and how Merlin hooks up to these out-of-tree repos.
+
+### Host structural readiness support
+
+`backend.rocc_semantics.rtl_checks` supplies the five host diagnostic methods
+required by Merlin's selected RTL-check capability: `load_default_facts`,
+`project_facts`, `screen`, `compile_trace_checks`, and `render_trace`.
+It consumes the selected/frozen RTL facts through Merlin's fact reader; it
+contains no candidate compiler, kernel, corpus lookup or numerical answer.
+The paired compiler and renderer screen command presence, transport decoding
+and the observed custom opcode. Exhaustive funct legality is checked only when
+the supplied decoder explicitly declares `complete_isa: true`; partial Scala
+header observations cannot prove it. Protocol ordering, movement geometry and
+numerical correctness are explicitly skipped and still require independent
+oracle evidence. Missing opcode evidence and malformed traces refuse.
+
+The companion `rocc_semantics` reads opcode, register usage, instruction names
+and configuration subtypes from the selected facts and support contract. Packed
+operand fields are decoded only when the facts resolve their actual widths;
+unknown widths remain unknown. It supplies the shared assembler/decoder broker
+without generating a candidate lowering or assuming numeric encodings.
+This is host support, never the evaluated agent's initially empty submission.
+Run its synthetic mutation tests with the Merlin interpreter:
+`python test/test_rtl_checks.py`.
