@@ -61,3 +61,41 @@ def test_other_targets_cannot_load_this_provider():
     path = PROVIDER
     with pytest.raises(ValueError, match="selected target"):
         load_execution_provider("synthetic_core_aten", path)
+
+
+@pytest.mark.parametrize("m,n,k", [(3, 2, 1), (17, 19, 31), (3, 2, 32), (33, 35, 65)])
+def test_actual_catalog_schedule_bounds_independent_ws_primitives(m, n, k):
+    provider = load_execution_provider("gemmini", PROVIDER)
+    package = PROVIDER.parents[2]
+    source = f"""builtin.module {{
+      func.func @forward(%a: tensor<{m}x{k}xi8>, %b: tensor<{k}x{n}xi8>) -> tensor<{m}x{n}xi32> {{
+        %c = arith.constant 0 : i32
+        %e = tensor.empty() : tensor<{m}x{n}xi32>
+        %z = linalg.fill ins(%c : i32) outs(%e : tensor<{m}x{n}xi32>) -> tensor<{m}x{n}xi32>
+        %r = linalg.matmul ins(%a, %b : tensor<{m}x{k}xi8>, tensor<{k}x{n}xi8>)
+          outs(%z : tensor<{m}x{n}xi32>) -> tensor<{m}x{n}xi32>
+        func.return %r : tensor<{m}x{n}xi32>
+      }}
+    }}"""
+    policy = dict(
+        numerical_semantics=dict(
+            accumulator_dtype="i32",
+            internal_arithmetic=dict(
+                signed_operand_bits=8,
+                mac_result_bits=20,
+                mac_result_overflow="wrap_to_20_bits",
+                full_operation_overflow_policy="bounded_exact_requires_each_partial_sum",
+            ),
+        )
+    )
+    proof = provider.admit_numeric_schedule(source, package=package, numeric_policy=policy)
+    (kernel,) = proof["kernels"]
+    assert max(kernel["primitive_k"]) <= kernel["padded_primitive_k"] <= 31
+    assert sum(kernel["k_split"]) == k
+    assert kernel["max_partial_sum_bound"] <= 524287
+    assert kernel["initialized_accumulator_rows"]
+    if k > kernel["padded_primitive_k"]:
+        assert kernel["initialized_accumulator_rows"] == kernel["accumulated_rows"]
+    policy["numerical_semantics"]["internal_arithmetic"].update(mac_result_bits=8, mac_result_overflow="wrap_to_8_bits")
+    with pytest.raises(ValueError, match="padded mesh K"):
+        provider.admit_numeric_schedule(source, package=package, numeric_policy=policy)
