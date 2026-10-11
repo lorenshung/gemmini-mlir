@@ -132,3 +132,38 @@ not a synthetic replacement or a passing hardware test.
 
 This handwritten support serves the sealed final reference. It exposes no
 component-authoring feedback factory or Phase 1/Phase 2 measurement adapter.
+
+## Core ATen execution and additive overlay
+
+`core_aten/` owns the Gemmini source-bound catalog adapter, Spike extension
+selection, full-call oracle and additive overlay provider. Merlin owns device
+routing, execution evidence, overlay minimization and semantic grading. Select
+execution explicitly with `--execution-provider /path/to/merlin-support/core_aten/execution_provider.py`
+or `MERLIN_CORE_ATEN_EXECUTION_PROVIDER`; `MERLIN_TARGET_PATH` still selects this
+support package's contract and backend. There is no native Merlin fallback.
+
+From a configured Merlin checkout, build the overlay with
+`python "$GEMMINI_SUPPORT/core_aten/build_overlay.py" --output-dir "$OVERLAY_OUTPUT"`.
+Capture and run its emitted corpus with Merlin's generic drivers; device runs
+also require the OOT device package and explicit RTL facts. Set `GEMMINI_SUPPORT`
+to this directory and select Spike plus libgemmini and dtc in the tool environment.
+
+Overlay geometry is parsed from the verified `gemmini_isa_headers` hardware pin
+(`7c540b3adf1b86ad93d07f893abe3a73489b568e`), with positive geometry required.
+There is no second literal tile/bank/row/DMA configuration check. The i8/i32
+ABI remains an explicit datapath qualification tied to that pin; other datatypes
+require a new provider qualification. Contract and conformance bytes come from
+this support package, never Merlin's target-specific examples. Tests include a
+synthetic facts fixture and do not certify hardware.
+
+The older `phase1-support-baseline` changes (7e7a883 and c5b94f1) are already
+represented by the current support residual's `plugin.backend`, lazy
+`rocc_semantics`, and selected RTL-check capability, with evolved implementation
+and existing migration records/tests. Their older implementations are not
+reintroduced over these owners.
+
+The full overlay construction and certificate-refresh tests require PyTorch
+and z3. A missing dependency is an explicit skipped test, not an optimum
+certificate. Independent exhaustive finite enumeration may revalidate the
+ten-candidate pool, but must report that evidence separately from a z3 run.
+`core_aten_migration.json` records predecessor and relocated content identities.

@@ -1,0 +1,62 @@
+{
+  "schema": "merlin.core_aten_support_migration.v1",
+  "merlin_source_revision": "6fb16e2b0eeb441c22ad47418e61fba3f75ba13c",
+  "files": [
+    {
+      "merlin_source": "examples/gemmini/phase0/core_aten/execution_provider.py",
+      "source_sha256": "ba8017c8e6801dfce9cfad1151d873ad2dcde24696b4953af7a1420d6de408c0",
+      "path": "core_aten/execution_provider.py",
+      "sha256": "ba8017c8e6801dfce9cfad1151d873ad2dcde24696b4953af7a1420d6de408c0",
+      "source_retained_in_merlin": false
+    },
+    {
+      "merlin_source": "examples/gemmini/phase0/core_aten/overlay_provider.py",
+      "source_sha256": "0f5ffaa3e69889b977df8e5ba84f78eda2d4bacf9207bba21393d175f043f531",
+      "path": "core_aten/overlay_provider.py",
+      "sha256": "e625bb9c89a25b938dfc3d0962053a622f76d062c3e7d2e5cede7949e424b77a",
+      "source_retained_in_merlin": false
+    },
+    {
+      "merlin_source": "examples/gemmini/phase0/core_aten/build_overlay.py",
+      "source_sha256": "acc874d5f32f393e035d260d580612dc79620ad3f989ce7a144e619cfee6aa0e",
+      "path": "core_aten/build_overlay.py",
+      "sha256": "acc874d5f32f393e035d260d580612dc79620ad3f989ce7a144e619cfee6aa0e",
+      "source_retained_in_merlin": false
+    },
+    {
+      "merlin_source": "merlin/tests/gemmini/test_core_aten_execution.py",
+      "source_sha256": "9af639aef18b05956d03b324e682698b535da82de12230e858522ac4c17c0449",
+      "path": "tests/test_core_aten_execution.py",
+      "sha256": "4efcaa9886599850b9e0b3feb8c263bb74e5f18b98c502343e515f4826674d60",
+      "source_retained_in_merlin": false
+    },
+    {
+      "merlin_source": "merlin/tests/gemmini/test_core_aten_overlay.py",
+      "source_sha256": "52d30c305dfc171939539bc53d36ee57b37b0e5c06529f6b9fa6175b42044f45",
+      "path": "tests/test_core_aten_overlay.py",
+      "sha256": "e9db417cb4e75c4eb20c495b69f657a279825d53f8dcf302232a69ea9ffbdbed",
+      "source_retained_in_merlin": false
+    },
+    {
+      "merlin_source": "experiments/reference-data/phase0/conformance/gemmini.yaml",
+      "source_sha256": "7d5f435e1033863fbcf44ad241a5ae4c864a001ceae6bbea4e222551cdf48aa4",
+      "path": "core_aten/resources/conformance.yaml",
+      "sha256": "7d5f435e1033863fbcf44ad241a5ae4c864a001ceae6bbea4e222551cdf48aa4",
+      "source_retained_in_merlin": true
+    },
+    {
+      "merlin_source": "merlin/tests/fixtures/core_aten_device/facts.json",
+      "source_sha256": "3ad86dea21e1a38c92afb47616ed9cb2172b963d20e2b5b041afec3c5aeb1cc7",
+      "path": "tests/fixtures/core_aten_device/facts.json",
+      "sha256": "3ad86dea21e1a38c92afb47616ed9cb2172b963d20e2b5b041afec3c5aeb1cc7",
+      "source_retained_in_merlin": true
+    }
+  ],
+  "interface": "Explicit execution provider path or MERLIN_CORE_ATEN_EXECUTION_PROVIDER; contract/backend separately selected with MERLIN_TARGET_PATH. No Merlin example fallback.",
+  "overlay": "Header-pin verification retained; positive geometry derived from verified macros, no duplicate literal geometry configuration. i8/i32 is a declared datapath qualification tied to gemmini_isa_headers at 7c540b3adf1b86ad93d07f893abe3a73489b568e. Contract read from merlin-support/contracts and conformance from local resources.",
+  "prior_support_commits": {
+    "7e7a88387d555485d298cc9a57ecf6aaa2682aea": "Already present in merlin-support/contracts/residual.yaml as plugin.backend: backend.",
+    "c5b94f11a3a2111e961cec290d23ac7d8ac9a491": "Superseded by evolved lazy rocc_semantics and RTL-check capabilities, tracked in rocc_semantics_migration.json and rtl_checks_migration.json."
+  },
+  "qualification": "Relocation inventory, not hardware certification; functional Spike observations are recorded separately."
+}
