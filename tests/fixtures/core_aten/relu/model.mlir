@@ -1,0 +1,24 @@
+builtin.module attributes {m2m.result_layout = "{\22authority\22: \22same_conversion_exported_program\22, \22inputs\22: [{\22dtype\22: \22int8\22, \22requires_grad\22: false, \22shape\22: [37, 21], \22storage_offset\22: 0, \22stride\22: [21, 1]}], \22results\22: [{\22alias_inputs\22: [], \22alias_results\22: [], \22dtype\22: \22int8\22, \22requires_grad\22: false, \22role\22: \22user_output\22, \22shape\22: [37, 21], \22storage_offset\22: 0, \22stride\22: [21, 1]}], \22schema_version\22: 1}", prov.level = "linalg-on-tensors"} {
+  func.func @forward(%0: tensor<37x21xi8>) -> tensor<37x21xi8> {
+    %1 = arith.constant {prov._pattern_hint = "dequantize_per_tensor", prov.op = "dequantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.dequantize_per_tensor.default", prov.orig_dtype = "float32"} 0.0219645947 : f32
+    %2 = tensor.splat %1 {prov._pattern_hint = "dequantize_per_tensor", prov.op = "dequantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.dequantize_per_tensor.default", prov.orig_dtype = "float32"} : tensor<f32>
+    %3 = arith.constant {prov._pattern_hint = "dequantize_per_tensor", prov.op = "dequantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.dequantize_per_tensor.default", prov.orig_dtype = "float32"} 0 : i64
+    %4 = tensor.splat %3 {prov._pattern_hint = "dequantize_per_tensor", prov.op = "dequantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.dequantize_per_tensor.default", prov.orig_dtype = "float32"} : tensor<i64>
+    %5 = "quant_ext.dequantize_per_tensor"(%0, %2, %4) <{quant_min = -128 : i64, quant_max = 127 : i64}> {prov.quant.qmin = -128 : i64, prov.quant.qmax = 127 : i64, prov.quant.granularity = "tensor", prov.quant.scale = 0.021964594897101907 : f64, prov.quant.zero_point = 0 : i64, prov.region_id = "dequantize_0", prov._pattern_hint = "dequantize_per_tensor", prov.op = "dequantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.dequantize_per_tensor.default", prov.orig_dtype = "float32"} : (tensor<37x21xi8>, tensor<f32>, tensor<i64>) -> tensor<37x21xf32>
+    %6 = "tensor.empty"() {prov.region_id = "minmax_0", prov.family = "elementwise", prov._pattern_hint = "relu", prov.op = "relu", prov.aten = "aten.relu.default", prov.orig_dtype = "float32"} : () -> tensor<37x21xf32>
+    %7 = linalg.generic {indexing_maps = [affine_map<(d0, d1) -> (d0, d1)>, affine_map<(d0, d1) -> (d0, d1)>], iterator_types = ["parallel", "parallel"]} ins(%5 : tensor<37x21xf32>) outs(%6 : tensor<37x21xf32>) attrs =  {prov.region_id = "minmax_0", prov.family = "elementwise", prov._pattern_hint = "relu", prov.op = "relu", prov.aten = "aten.relu.default", prov.orig_dtype = "float32"} {
+    ^bb0(%8: f32, %9: f32):
+      %10 = arith.constant 0 : i64
+      %11 = arith.sitofp %10 : i64 to f32
+      %12 = arith.cmpf olt, %8, %11 : f32
+      %13 = arith.select %12, %11, %8 : f32
+      linalg.yield %13 : f32
+    } -> tensor<37x21xf32>
+    %14 = arith.constant {prov._pattern_hint = "quantize_per_tensor", prov.op = "quantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.quantize_per_tensor.default", prov.orig_dtype = "int8"} 0.0218784586 : f32
+    %15 = tensor.splat %14 {prov._pattern_hint = "quantize_per_tensor", prov.op = "quantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.quantize_per_tensor.default", prov.orig_dtype = "int8"} : tensor<f32>
+    %16 = arith.constant {prov._pattern_hint = "quantize_per_tensor", prov.op = "quantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.quantize_per_tensor.default", prov.orig_dtype = "int8"} 0 : i64
+    %17 = tensor.splat %16 {prov._pattern_hint = "quantize_per_tensor", prov.op = "quantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.quantize_per_tensor.default", prov.orig_dtype = "int8"} : tensor<i64>
+    %18 = "quant_ext.quantize_per_tensor"(%7, %15, %17) <{quant_min = -128 : i64, quant_max = 127 : i64, output_dtype = "int8"}> {prov.quant.qmin = -128 : i64, prov.quant.qmax = 127 : i64, prov.quant.granularity = "tensor", prov.quant.scale = 0.021878459406834024 : f64, prov.quant.zero_point = 0 : i64, prov.quant.rounding = "half_to_even", prov.region_id = "quantize_0", prov._pattern_hint = "quantize_per_tensor", prov.op = "quantize_per_tensor", prov.family = "quantize", prov.aten = "quantized_decomposed.quantize_per_tensor.default", prov.orig_dtype = "int8"} : (tensor<37x21xf32>, tensor<f32>, tensor<i64>) -> tensor<37x21xi8>
+    func.return %18 : tensor<37x21xi8>
+  }
+}

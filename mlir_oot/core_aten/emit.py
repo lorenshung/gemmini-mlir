@@ -125,7 +125,7 @@ class _Emitter:
                 name = f"{symbol}__{arg.name}"
                 value = DenseIntOrFPElementsAttr.create_dense_int(
                     TensorType(i8, [data.size]), [int(x) if x < 128 else int(x) - 256 for x in data])
-                self.globals.append(llvm.GlobalOp(llvm.LLVMArrayType.from_size_and_type(data.size, i8), name,
+                self.globals.append(llvm.GlobalOp(llvm.LLVMArrayType(data.size, i8), name,
                                                   "internal", constant=True, value=value, alignment=64))
                 ptr = self.fb.add(llvm.AddressOfOp(name, PTR)).results[0]
             else:

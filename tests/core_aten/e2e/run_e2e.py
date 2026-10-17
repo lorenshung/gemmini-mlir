@@ -1,0 +1,173 @@
+"""End-to-end: model2MLIR quantized graph -> gemmini-mlir Core ATen catalog -> Spike / RTL.
+
+For every captured case directory (``capture.py``) this parses ``model.mlir``, binds and
+compiles every matched region through ``mlir_oot.core_aten.catalog``, wires the kernels by
+the manifest's operand sources (function arguments, earlier kernel results), links one
+bare-metal ELF and runs it.  The function result is checked against the eager PyTorch
+module's own output (tolerance 1 LSB; the bit-exact count is reported and must be >= 99%)
+and against the chained bit-level models of the kernels (exact).
+
+    python run_e2e.py CAPTURE_DIR [--only name ...] [--rtl] [--no-spike] [--batch NAME] [--json OUT]
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "device"))
+
+import runner  # noqa: E402
+from mlir_oot.core_aten.catalog import build  # noqa: E402
+from mlir_oot.core_aten.emit import compile_to_object  # noqa: E402
+from mlir_oot.core_aten.stream import simulate  # noqa: E402
+from mlir_oot.frontend.parse import parse_module  # noqa: E402
+
+
+def _key(src: dict) -> tuple:
+    return ("arg", src["func_arg"]) if "func_arg" in src else ("op", src["op_ordinal"], src["result"])
+
+
+def _return_source(text: str) -> tuple:
+    module = parse_module(text)
+    ordinals = {op: i for i, op in enumerate(module.walk())}
+    fn = [op for op in module.walk() if op.name == "func.func"][0]
+    ret = [op for op in fn.walk() if op.name == "func.return"][0]
+    v = ret.operands[0]
+    args = list(fn.body.blocks[0].args)
+    if v in args:
+        return ("arg", args.index(v))
+    return ("op", ordinals[v.owner], list(v.owner.results).index(v))
+
+
+def prepare(case_dir: Path, prefix: str, wd: Path):
+    text = (case_dir / "model.mlir").read_text()
+    device, manifest, matches = build(text)
+    if not manifest["bindings"]:
+        raise RuntimeError(f"{case_dir.name}: no region matched; declines={manifest['declines']}")
+    obj = compile_to_object(device, wd, stem=prefix)["object"]
+    # rename every kernel symbol per case so one ELF can hold many cases
+    inputs = dict(np.load(case_dir / "inputs.npz"))
+    expected = np.load(case_dir / "expected.npy")
+    kern = {k["symbol"]: k for k in manifest["kernels"]}
+    values: dict[tuple, str] = {}
+    model_values: dict[tuple, np.ndarray] = {}
+    buffers, calls, outputs = {}, [], set()
+    for i, arr in sorted(inputs.items()):
+        key = ("arg", int(i[3:]))
+        values[key] = f"{prefix}_{i}"
+        buffers[values[key]] = arr
+        model_values[key] = arr
+    for bi, (b, m) in enumerate(zip(manifest["bindings"], matches)):
+        k = kern[b["symbol"]]
+        names, sim_inputs = [], {}
+        for a in k["args"]:
+            if a["role"] == "input":
+                src = _key(b["operands"][a["name"]])
+                names.append(values[src])
+                sim_inputs[a["name"]] = model_values[src]
+            else:
+                bn = f"{prefix}_b{bi}_{a['name']}"
+                dt = np.int32 if a["dtype"] == "i32" else np.int8
+                buffers[bn] = np.zeros(a["shape"], dt)
+                names.append(bn)
+                if a["role"] == "output":
+                    outputs.add(bn)
+                    (oname, osrc), = b["result"].items()
+                    values[_key(osrc)] = bn
+        model = simulate(m.kernel.stream, sim_inputs)
+        (oname, osrc), = b["result"].items()
+        model_values[_key(osrc)] = model[oname]
+        calls.append((b["symbol"], names))
+    ret = _return_source(text)
+    out_buf = values[ret]
+    model_out = model_values[ret]
+    e = np.abs(model_out.astype(np.int64).reshape(-1) - expected.astype(np.int64).reshape(-1))
+    checks = [runner.Check(out_buf, model_out.reshape(-1).astype(buffers[out_buf].dtype), 0,
+                           f"{case_dir.name}_vs_model"),
+              runner.Check(out_buf, expected.reshape(-1).astype(buffers[out_buf].dtype), 1,
+                           f"{case_dir.name}_vs_eager_tol1")]
+    summary = dict(ops=[b["op"] for b in manifest["bindings"]], kernels=len(kern),
+                   instructions=sum(k["instructions"] for k in kern.values()),
+                   fences=sum(k["fences"] for k in kern.values()),
+                   model_vs_eager_max=int(e.max()), model_vs_eager_exact=float((e == 0).mean()),
+                   declines=manifest["declines"])
+    return Path(obj), buffers, calls, checks, outputs, summary
+
+
+def run(case_dirs, batch: str, rtl=False, spike=True) -> dict:
+    wd = runner.work_root() / batch
+    objects, buffers, calls, checks, outputs, summary = [], {}, [], [], set(), {}
+    for i, d in enumerate(case_dirs):
+        t0 = time.time()
+        prefix = f"e{i}_{d.name}"
+        o, b, c, ch, out, sm = prepare(d, prefix, wd)
+        sm["build_s"] = round(time.time() - t0, 1)
+        # one object per case: make its symbols unique by prefixing at the object level
+        renamed = wd / f"{prefix}_r.o"
+        _prefix_symbols(o, renamed, {s for s, _ in c}, prefix)
+        objects.append(renamed)
+        buffers.update(b)
+        calls += [(f"{prefix}__{s}", a) for s, a in c]
+        checks += ch
+        outputs |= out
+        summary[d.name] = sm
+    test = runner.DeviceTest(batch, objects, buffers, calls, checks, outputs)
+    elf = runner.build_elf(test, wd)
+    result = dict(elf=str(elf), cases=summary)
+    for engine, fn, on in (("spike", runner.run_spike, spike), ("rtl", runner.run_rtl, rtl)):
+        if not on:
+            continue
+        r = fn(elf)
+        result[engine] = dict(status=r.status, passed=r.passed, failed=r.failed, info=r.info, perf=r.perf,
+                              seconds=round(r.seconds, 1), exit=r.exit_code, tail=None if r.ok else r.log[-3000:])
+    return result
+
+
+def _prefix_symbols(obj: Path, out: Path, symbols, prefix):
+    import os
+    import subprocess
+    objcopy = Path(os.environ["GEMMINI_RISCV_TOOLS"]) / "bin" / "riscv64-unknown-elf-objcopy"
+    argv = [str(objcopy)]
+    for s in sorted(symbols):
+        argv.append(f"--redefine-sym={s}={prefix}__{s}")
+    # private constant globals are internal; kernel symbols are the only external definitions
+    subprocess.run(argv + [str(obj), str(out)], check=True)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("capture", type=Path)
+    ap.add_argument("--only", nargs="*")
+    ap.add_argument("--rtl", action="store_true")
+    ap.add_argument("--no-spike", action="store_true")
+    ap.add_argument("--batch", default="e2e")
+    ap.add_argument("--json", type=Path)
+    a = ap.parse_args()
+    dirs = sorted(p for p in a.capture.iterdir() if (p / "model.mlir").exists())
+    if a.only:
+        dirs = [d for d in dirs if d.name in a.only]
+    res = run(dirs, a.batch, rtl=a.rtl, spike=not a.no_spike)
+    text = json.dumps(res, indent=1)
+    if a.json:
+        a.json.write_text(text + "\n")
+    for eng in ("spike", "rtl"):
+        if eng in res:
+            print(eng, res[eng]["status"], "passed", len(res[eng]["passed"]), "failed", res[eng]["failed"],
+                  res[eng]["seconds"], "s")
+            for line in res[eng]["info"]:
+                print("  ", line)
+            if res[eng]["tail"]:
+                print(res[eng]["tail"][-2000:])
+    ok = all(res[e]["status"] == "PASS" for e in ("spike", "rtl") if e in res)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

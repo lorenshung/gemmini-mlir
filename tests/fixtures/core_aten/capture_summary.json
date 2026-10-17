@@ -1,0 +1,135 @@
+{
+ "mm": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 4 decomposed ops, 0 opaque"
+  ]
+ },
+ "addmm": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 5 decomposed ops, 0 opaque"
+  ]
+ },
+ "bmm": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 4 decomposed ops, 0 opaque"
+  ]
+ },
+ "convolution": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 5 decomposed ops, 0 opaque"
+  ]
+ },
+ "convolution_patch16": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 5 decomposed ops, 0 opaque"
+  ]
+ },
+ "sub_Tensor": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 4 decomposed ops, 0 opaque"
+  ]
+ },
+ "neg": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "add_Tensor": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 4 decomposed ops, 0 opaque"
+  ]
+ },
+ "mul_Scalar": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "relu": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "mean_dim": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "clone": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "permute": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "slice_scatter": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 4 decomposed ops, 0 opaque"
+  ]
+ },
+ "constant_pad_nd": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "constant_pad_nd_p1": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "full_like": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 3 decomposed ops, 0 opaque"
+  ]
+ },
+ "cat": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 4 decomposed ops, 0 opaque"
+  ]
+ },
+ "_to_copy": {
+  "ok": true,
+  "diagnostics": [
+   "torch-mlir path disabled (use_torch_mlir=False); using FXImporter",
+   "FXImporter fallback succeeded with 1 decomposed ops, 0 opaque"
+  ]
+ }
+}
