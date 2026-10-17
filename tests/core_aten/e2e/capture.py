@@ -149,7 +149,11 @@ def run(cases, root: Path, only=None):
             continue
         (d / "model.mlir").write_text(r.mlir_text)
         np.savez(d / "inputs.npz", **{f"arg{i}": t.numpy() for i, t in enumerate(ints)})
-        np.save(d / "expected.npy", expected.numpy())
+        if isinstance(expected, tuple):
+            for k, e in enumerate(expected):
+                np.save(d / f"expected{k}.npy", e.numpy())
+        else:
+            np.save(d / "expected.npy", expected.numpy())
         (d / "meta.json").write_text(json.dumps(dict(scales=mod.scales, s_out=mod.s_out, dtypes=mod.dtypes)))
     (root / "capture_summary.json").write_text(json.dumps(summary, indent=1))
     return summary
@@ -162,10 +166,13 @@ if __name__ == "__main__":
     ap.add_argument("--set", default="paper")
     a = ap.parse_args()
     sets = {"paper": paper_set, "paper_small": lambda: paper_set(small=True)}
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
     try:
         from capture_rest import rest_set  # noqa: E402
         sets["rest"] = rest_set
+        sets["rest_small"] = lambda: rest_set(small=True)
         sets["all"] = lambda: paper_set() + rest_set()
+        sets["all_small"] = lambda: paper_set(small=True) + rest_set(small=True)
     except ImportError:
         pass
     print(json.dumps(run(sets[a.set](), a.out, a.only), indent=1))

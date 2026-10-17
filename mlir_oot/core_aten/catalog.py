@@ -79,8 +79,10 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                                    counts=m.kernel.stream.counts(), meta=_jsonable(m.kernel.meta))
         argmap = {name: _source(v, ordinals, func_args) for name, v in m.operands}
         out_name, out_val = m.result
+        provs = [getattr(o.attributes.get("prov.aten"), "data", "") for o in m.consumed if o is not None]
+        provs = [p for p in provs if p and not p.startswith("quantized_decomposed.")]
         bindings.append(dict(
-            op=m.op, symbol=symbol, root_ordinal=ordinals[m.root],
+            op=m.op, aten=provs[0] if provs else "", symbol=symbol, root_ordinal=ordinals[m.root],
             replaced_ordinals=sorted({ordinals[o] for o in m.consumed if o is not None}),
             operands=argmap, result={out_name: _source(out_val, ordinals, func_args)},
             result_type=str(out_val.type), operand_types={n: str(v.type) for n, v in m.operands},

@@ -242,10 +242,12 @@ class Machine:
         else:
             data = self._read(ins.arg, ins.off, rows, cols, cfg["stride"], width)
         scale = cfg["scale"]
-        if is_acc:
+        if is_acc and not cfg["shrunk"]:
             if scale != 1.0:
-                data = _rne_sat(scale_f32(data, scale), -(1 << 31), (1 << 31) - 1)
+                # the stock configuration has no int32 MVIN scale unit
+                raise NotImplementedError("scaled full-width accumulator load")
         elif scale != 1.0:
+            # int8 MVIN scale unit, also for shrunk accumulator loads: the result is int8
             data = _rne_sat(scale_f32(data, scale), -128, 127)
         row = local & 0x3FFF
         for b0 in range(0, cols, DIM):

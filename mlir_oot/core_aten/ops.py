@@ -141,6 +141,42 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     return _end("aten.convolution.default", s, readout_scale=scale, layout="NCHW,OIHW->NCHW via NHWC")
 
 
+def conv_backward_input(g: ConvGeom, *, s_g: float, s_w: float, s_out: float) -> Kernel:
+    """grad_input (NCHW) of a forward convolution ``g`` from grad_output (NCHW) and OIHW weights."""
+    from .recipes.backward import conv_transpose
+    args = [Arg("g", "i8", (g.n, g.cout, g.oh, g.ow), "input"), Arg("w", "i8", (g.cout, g.cin, g.kh, g.kw), "input"),
+            Arg("y", "i8", (g.n, g.cin, g.h, g.w), "output"),
+            Arg("ws_g", "i8", (g.n, g.oh, g.ow, g.cout), "scratch"),
+            Arg("ws_w", "i8", (g.kh, g.kw, g.cout, g.cin), "scratch"),
+            Arg("ws_y", "i8", (g.n, g.h, g.w, g.cin), "scratch")]
+    s = _begin(args)
+    mv.emit_transpose(s, "g", [g.n, g.cout, g.oh, g.ow], "ws_g", [0, 2, 3, 1])
+    mv.emit_transpose(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 0, 1])
+    s.fence()
+    scale = s_g * s_w / s_out
+    conv_transpose(s, g, "ws_g", "ws_w", "ws_y", scale)
+    s.fence()
+    mv.emit_transpose(s, "ws_y", [g.n, g.h, g.w, g.cin], "y", [0, 3, 1, 2])
+    return _end("aten.convolution_backward.default", s, output="grad_input", readout_scale=scale)
+
+
+def conv_backward_weight(g: ConvGeom, *, s_g: float, s_x: float, s_out: float) -> Kernel:
+    """grad_weight (OIHW) from grad_output (NCHW) and the forward input (NCHW); Q11 readout."""
+    from .recipes.backward import conv_wgrad
+    args = [Arg("g", "i8", (g.n, g.cout, g.oh, g.ow), "input"), Arg("x", "i8", (g.n, g.cin, g.h, g.w), "input"),
+            Arg("y", "i8", (g.cout, g.cin, g.kh, g.kw), "output"),
+            Arg("ws_x", "i8", (g.n, g.h, g.w, g.cin), "scratch"),
+            Arg("ws_gw", "i8", (g.kh * g.kw, g.cout, g.cin), "scratch")]
+    s = _begin(args)
+    mv.emit_transpose(s, "x", [g.n, g.cin, g.h, g.w], "ws_x", [0, 2, 3, 1])
+    s.fence()
+    scale = s_g * s_x / s_out
+    conv_wgrad(s, g, "g", "ws_x", "ws_gw", scale)
+    s.fence()
+    mv.emit_transpose(s, "ws_gw", [g.kh * g.kw, g.cout, g.cin], "y", [1, 2, 0])
+    return _end("aten.convolution_backward.default", s, output="grad_weight", readout_scale=scale)
+
+
 # ---------------------------------------------------------------------------------------------
 # Elementwise
 # ---------------------------------------------------------------------------------------------
@@ -212,23 +248,27 @@ def add_scalar(op: str, shape, c: float, *, s_x: float, s_out: float, w: float =
 # Reductions
 # ---------------------------------------------------------------------------------------------
 
-def mean_dim(shape, dims, keepdim: bool, *, s_x: float, s_out: float) -> Kernel:
+def mean_dim(shape, dims, keepdim: bool, *, s_x: float, s_out: float, w: float | None = None,
+             op: str = "aten.mean.dim") -> Kernel:
+    """sum (w = 1) or mean (w = 1 / L, the default) over dims, one readout scale w s_x / s_out."""
     r = len(shape)
     dims = sorted(d % r for d in dims)
-    if dims != list(range(dims[0], dims[-1] + 1)):
+    # size-1 dims never break contiguity of the reduced block
+    eff = [d for d in dims if shape[d] != 1] or dims[:1]
+    if any(d not in dims and shape[d] != 1 for d in range(eff[0], eff[-1] + 1)):
         raise ValueError("mean over non-contiguous dims")
-    O = _numel(shape[:dims[0]])
+    O = _numel([shape[d] for d in range(eff[0]) if d not in dims])
     L = _numel([shape[d] for d in dims])
-    I = _numel(shape[dims[-1] + 1:])
+    I = _numel([shape[d] for d in range(eff[-1] + 1, r) if d not in dims])
     oshape = [1 if d in dims else shape[d] for d in range(r)] if keepdim else \
         [shape[d] for d in range(r) if d not in dims]
     s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(oshape), "output")])
-    sc = s_x / (L * s_out)
+    sc = (1.0 / L if w is None else w) * s_x / s_out
     if I == 1:
         rd.mean_last(s, "x", "y", O, L, sc)
     else:
         rd.mean_middle(s, "x", "y", O, L, I, sc)
-    return _end("aten.mean.dim", s, readout_scale=sc, reduced=L)
+    return _end(op, s, readout_scale=sc, reduced=L)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -259,6 +299,16 @@ def permute(shape, perm, *, s_x: float = 1.0, s_out: float = 1.0) -> Kernel:
     s = _begin(args)
     mv.emit_transpose(s, "x", list(shape), "y", perm, s_x / s_out)
     return _end("aten.permute.default", s, form="transposer")
+
+
+def _permute_into(s: Stream, x: str, shape, out: str, perm) -> None:
+    """Emit a permutation of x into out (strided DMA if the innermost dim stays, else the transposer)."""
+    perm = list(perm)
+    if perm[-1] == len(shape) - 1:
+        plan, _ = mv.permute_plan(x, list(shape), out, perm)
+        mv.emit_plan(s, plan)
+    else:
+        mv.emit_transpose(s, x, list(shape), out, perm)
 
 
 def cat(shapes, dim: int, *, s_in=None, s_out: float = 1.0) -> Kernel:

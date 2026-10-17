@@ -716,6 +716,7 @@ def match_convolution(op: Operation) -> Match | None:
 # ---------------------------------------------------------------------------------------------
 
 def match_mean(op: Operation) -> Match | None:
+    """linalg.reduce(addf) over dims, optionally scaled (mean.dim: 1 / L; a sum: any w)."""
     if op.name != "linalg.reduce":
         return None
     names = [o.name for o in op.regions[0].blocks[0].ops]
@@ -729,16 +730,166 @@ def match_mean(op: Operation) -> Match | None:
     L = int(np.prod([xshape[d] for d in dims]))
     ch = follow_chain(op.results[0])
     if ch.bias is not None or ch.c or ch.relu:
-        raise Decline("mean epilogue beyond a scale")
-    if not math.isclose(ch.w * L, 1.0, rel_tol=1e-6):
-        raise Decline("reduction is a sum, not a mean")
+        raise Decline("reduction epilogue beyond a scale")
     q = quant_sink(ch.final)
     keepdim = len(shape(q.value)) == len(xshape)
-    k = ops.mean_dim(xshape, dims, keepdim, s_x=qx.scale, s_out=q.scale)
-    if tuple(k.args[-1].shape) != shape(q.value):
-        raise Decline("mean output view")
-    return Match("aten.mean.dim", q.op, [op, *ch.ops, q.op, qx.dq], [("x", qx.value)], ("y", q.value), k,
-                 numeric=dict(s_x=qx.scale, s_out=q.scale, dims=dims))
+    is_mean = math.isclose(ch.w * L, 1.0, rel_tol=1e-6)
+    aten = "aten.mean.dim" if is_mean else (getattr(op.attributes.get("prov.aten"), "data", "") or "aten.sum.dim_IntList")
+    try:
+        k = ops.mean_dim(xshape, dims, keepdim, s_x=qx.scale, s_out=q.scale, w=ch.w, op=aten)
+    except ValueError as exc:
+        raise Decline(str(exc))
+    if int(np.prod(k.args[-1].shape)) != int(np.prod(shape(q.value))):
+        raise Decline("reduction output view")
+    k.args[-1]
+    return Match(aten, q.op, [op, *ch.ops, q.op, qx.dq], [("x", qx.value)], ("y", q.value), k,
+                 numeric=dict(s_x=qx.scale, s_out=q.scale, dims=dims, w=ch.w))
+
+
+# ---------------------------------------------------------------------------------------------
+# convolution_backward: grad_weight (a 3-reduction contraction) and grad_input (a gather loop)
+# ---------------------------------------------------------------------------------------------
+
+def _unpad(v: SSAValue):
+    """(source, pad_h, pad_w, consumed op) for a zero insert_slice pad, else (v, 0, 0, None)."""
+    p = producer(v)
+    if p is not None and p.name == "tensor.insert_slice" and splat_value(p.operands[1]) == 0.0:
+        offs = list(p.properties["static_offsets"].iter_values())
+        st = list(p.properties["static_strides"].iter_values())
+        if offs[:2] == [0, 0] and all(x == 1 for x in st):
+            return p.operands[0], offs[2], offs[3], p
+    return v, 0, 0, None
+
+
+def match_conv_wgrad(op: Operation) -> Match | None:
+    if op.name != "linalg.generic" or iterators(op) != ["parallel"] * 4 + ["reduction"] * 3:
+        return None
+    if [o.name for o in op.regions[0].blocks[0].ops] != ["arith.mulf", "arith.addf", "linalg.yield"]:
+        return None
+    if len(op.operands) != 3 or splat_value(op.operands[2]) != 0.0:
+        return None
+    xsrc, ph, pw, pad = _unpad(op.operands[0])
+    qx, qg = dequant(xsrc), dequant(op.operands[1])
+    if qx is None or qg is None:
+        return None
+    maps = generic_maps(op)
+    cx, cg, co = map_coeffs(maps[0]), map_coeffs(maps[1]), map_coeffs(maps[2])
+    if cx is None or cg is None or co != [[1 if j == i else 0 for j in range(7)] for i in range(4)]:
+        raise Decline("weight-gradient maps")
+    N, C, H, W = shape(qx.value)
+    Ng, F, OH, OW = shape(qg.value)
+    _, _, KH, KW = shape(op.results[0])
+    # x: (d4, d1, d5*sh + d2*dh, d6*sw + d3*dw); grad: (d4, d0, d5, d6)
+    if cg != [[0, 0, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 1]]:
+        raise Decline("grad map")
+    if cx[0] != [0, 0, 0, 0, 1, 0, 0] or cx[1] != [0, 1, 0, 0, 0, 0, 0]:
+        raise Decline("input map")
+    if maps[0].eval([F - 1, 0, 0, 0, 0, 0, 0], [])[1] != 0:
+        raise Decline("grouped weight gradient")
+    sh, dh, sw, dw = cx[2][5], cx[2][2], cx[3][6], cx[3][3]
+    g = ConvGeom(N, H, W, C, F, KH, KW, sh, sw, ph, pw, dh, dw, 1)
+    if (g.oh, g.ow, Ng) != (OH, OW, N):
+        raise Decline("weight-gradient extents")
+    q = _sandwich_out(op.results[0])
+    k = ops.conv_backward_weight(g, s_g=qg.scale, s_x=qx.scale, s_out=q.scale)
+    cons = [op, q.op, qx.dq, qg.dq] + ([pad] if pad else [])
+    aten = getattr(op.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
+    return Match(aten, q.op, cons, [("g", qg.value), ("x", qx.value)], ("y", q.value), k,
+                 layout=dict(source="NCHW,NCHW->OIHW", transposes="on-device"),
+                 numeric=dict(output="grad_weight", s_g=qg.scale, s_x=qx.scale, s_out=q.scale))
+
+
+def _numpy_grad_input(gv, wv, g: ConvGeom):
+    out = np.zeros((g.n, g.cin, g.h, g.w))
+    for kh in range(g.kh):
+        for kw in range(g.kw):
+            contrib = np.einsum("nfhw,fc->nchw", gv, wv[:, :, kh, kw])
+            for oh in range(g.oh):
+                ih = oh * g.sh - g.ph + kh * g.dh
+                if not 0 <= ih < g.h:
+                    continue
+                for ow in range(g.ow):
+                    iw = ow * g.sw - g.pw + kw * g.dw
+                    if 0 <= iw < g.w:
+                        out[:, :, ih, iw] += contrib[:, :, oh, ow]
+    return out
+
+
+def match_conv_input(op: Operation) -> Match | None:
+    """grad_input as a gather loop: verified against every consistent transposed-conv geometry."""
+    from . import linmap
+    if op.name != "linalg.generic" or len(op.operands) != 1 or etype(op.results[0]) != "f32":
+        return None
+    nested = {id(x) for x in op.walk()}
+    extracted = []
+    for o in op.walk():
+        if o.name != "tensor.extract":
+            continue
+        t = o.operands[0]
+        outside = (isinstance(t, OpResult) and id(t.owner) not in nested) or (
+            not isinstance(t, OpResult) and id(t.owner.parent_op()) not in nested)
+        if outside and t not in extracted:
+            extracted.append(t)
+    qs = [dequant(v) for v in extracted]
+    if len(qs) != 2 or any(q is None for q in qs):
+        return None
+    if not any(o.name == "arith.mulf" for o in op.walk()):
+        return None
+    N, C, H, W = shape(op.results[0])
+    a, b = qs
+    qg, qw = (a, b) if shape(a.value)[0] == N and shape(b.value)[1] == C else (b, a)
+    Ng, F, OH, OW = shape(qg.value)
+    Fw, Cw, KH, KW = shape(qw.value)
+    if (Ng, Fw, Cw) != (N, F, C):
+        return None
+    rng = np.random.default_rng(1234)
+    wv = rng.standard_normal((F, C, KH, KW))
+    gv = rng.standard_normal((N, F, OH, OW))
+
+    def leaf(v):
+        q = dequant(v)
+        if q is None:
+            return None
+        if q.value is qw.value:
+            return wv
+        if q.value is qg.value:
+            return (0, 1.0)
+        return None
+
+    try:
+        lm, region = linmap.extract(op.results[0], leaf)
+    except linmap.NotLinear as exc:
+        raise Decline(f"grad_input region: {exc}")
+    got = np.zeros(int(np.prod((N, C, H, W))))
+    np.add.at(got, lm.out, lm.coef * gv.reshape(-1)[lm.idx])
+    got += lm.const
+    found = None
+    for sh in range(1, 5):
+        for dh in range(1, 4):
+            for ph in range(0, dh * (KH - 1) + 1):
+                g = ConvGeom(N, H, W, C, F, KH, KW, sh, sh, ph, ph, dh, dh, 1)
+                try:
+                    g.validate()
+                except ValueError:
+                    continue
+                if (g.oh, g.ow) != (OH, OW):
+                    continue
+                if np.allclose(_numpy_grad_input(gv, wv, g).reshape(-1), got, atol=1e-9):
+                    found = g
+                    break
+            if found:
+                break
+        if found:
+            break
+    if found is None:
+        raise Decline("gather loop is not a transposed convolution of a square geometry")
+    q = _sandwich_out(op.results[0])
+    k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q.scale)
+    aten = getattr(op.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
+    return Match(aten, q.op, [op, q.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)], ("y", q.value), k,
+                 layout=dict(source="NCHW,OIHW->NCHW", transposes="on-device"),
+                 numeric=dict(output="grad_input", s_g=qg.scale, s_w=qw.scale, s_out=q.scale,
+                              geometry=found.__dict__))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -879,7 +1030,72 @@ def match_movement(op: Operation) -> Match | None:
     return None
 
 
-MATCHERS = (match_convolution, match_contraction, match_mean, match_elementwise, match_movement)
+def _region_closed(ops_, root_users) -> bool:
+    inside = set(id(o) for o in ops_)
+    for o in ops_:
+        for r in o.results:
+            for u in r.uses:
+                if id(u.operation) not in inside and u.operation not in root_users:
+                    return False
+    return True
+
+
+def match_linear(op: Operation) -> Match | None:
+    """A region linear in its quantized (or plain int8) inputs, exactly extracted (``linmap``)."""
+    from . import linmap, linmatch
+    nm = name_of(op)
+    if nm == "quant_ext.quantize_per_tensor":
+        q = quant_sink(op.operands[0])
+        if q is None or q.op is not op:
+            return None
+        root, out_val, s_out, integer = op.operands[0], op.results[0], q.scale, False
+    elif op.name == "func.return":
+        cands = [v for v in op.operands if etype(v) == "i8" and producer(v) is not None
+                 and producer(v).name in ("linalg.generic", "scf.for", "tensor.cast", "tensor.insert_slice",
+                                          "tensor.concat", "tensor.collapse_shape", "tensor.expand_shape")]
+        if len(cands) != 1:
+            return None
+        root, out_val, s_out, integer = cands[0], cands[0], 1.0, True
+    else:
+        return None
+    srcs: dict[int, linmatch.Src] = {}
+    by_value: dict = {}
+
+    def leaf(v):
+        if integer:
+            if isinstance(v, OpResult) or etype(v) != "i8":
+                return None
+            src = v
+            scale = 1.0
+        else:
+            dq = dequant(v)
+            if dq is None or dq.dtype != "i8":
+                return None
+            src, scale = dq.value, dq.scale
+        if src not in by_value:
+            k = len(by_value)
+            by_value[src] = (k, dq.dq if not integer else None)
+            srcs[k] = linmatch.Src(f"x{k}", shape(src), scale)
+        return by_value[src][0], scale
+
+    try:
+        lm, region = linmap.extract(root, leaf)
+    except linmap.NotLinear as exc:
+        raise Decline(f"not an exactly extractable linear region: {exc}")
+    if not region or not lm.out.size and not np.any(lm.const):
+        return None
+    if not _region_closed(region, {op} | set(users(out_val))):
+        raise Decline("region values escape the region")
+    aten = getattr(region[-1].attributes.get("prov.aten"), "data", "") or "linear_region"
+    kernel = linmatch.kernel_for(aten, lm, srcs, s_out)
+    operands = [(srcs[k].name, v) for v, (k, _) in sorted(by_value.items(), key=lambda kv: kv[1][0])]
+    consumed = list(region) + ([op] if not integer else []) + [d for _, (k, d) in by_value.items() if d is not None]
+    return Match(aten, op if not integer else producer(root), consumed, operands, ("y", out_val), kernel,
+                 numeric=dict(s_out=s_out, terms=int(lm.out.size), form=kernel.meta.get("form")))
+
+
+MATCHERS = (match_convolution, match_conv_wgrad, match_conv_input, match_contraction, match_mean, match_elementwise,
+            match_movement, match_linear)
 
 
 def match_all(module) -> tuple[list[Match], list[dict]]:

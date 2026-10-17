@@ -34,16 +34,16 @@ def _key(src: dict) -> tuple:
     return ("arg", src["func_arg"]) if "func_arg" in src else ("op", src["op_ordinal"], src["result"])
 
 
-def _return_source(text: str) -> tuple:
+def _return_sources(text: str) -> list[tuple]:
     module = parse_module(text)
     ordinals = {op: i for i, op in enumerate(module.walk())}
     fn = [op for op in module.walk() if op.name == "func.func"][0]
     ret = [op for op in fn.walk() if op.name == "func.return"][0]
-    v = ret.operands[0]
     args = list(fn.body.blocks[0].args)
-    if v in args:
-        return ("arg", args.index(v))
-    return ("op", ordinals[v.owner], list(v.owner.results).index(v))
+    out = []
+    for v in ret.operands:
+        out.append(("arg", args.index(v)) if v in args else ("op", ordinals[v.owner], list(v.owner.results).index(v)))
+    return out
 
 
 def prepare(case_dir: Path, prefix: str, wd: Path):
@@ -54,7 +54,10 @@ def prepare(case_dir: Path, prefix: str, wd: Path):
     obj = compile_to_object(device, wd, stem=prefix)["object"]
     # rename every kernel symbol per case so one ELF can hold many cases
     inputs = dict(np.load(case_dir / "inputs.npz"))
-    expected = np.load(case_dir / "expected.npy")
+    if (case_dir / "expected.npy").exists():
+        expected_list = [np.load(case_dir / "expected.npy")]
+    else:
+        expected_list = [np.load(p) for p in sorted(case_dir.glob("expected[0-9]*.npy"))]
     kern = {k["symbol"]: k for k in manifest["kernels"]}
     values: dict[tuple, str] = {}
     model_values: dict[tuple, np.ndarray] = {}
@@ -85,18 +88,19 @@ def prepare(case_dir: Path, prefix: str, wd: Path):
         (oname, osrc), = b["result"].items()
         model_values[_key(osrc)] = model[oname]
         calls.append((b["symbol"], names))
-    ret = _return_source(text)
-    out_buf = values[ret]
-    model_out = model_values[ret]
-    e = np.abs(model_out.astype(np.int64).reshape(-1) - expected.astype(np.int64).reshape(-1))
-    checks = [runner.Check(out_buf, model_out.reshape(-1).astype(buffers[out_buf].dtype), 0,
-                           f"{case_dir.name}_vs_model"),
-              runner.Check(out_buf, expected.reshape(-1).astype(buffers[out_buf].dtype), 1,
-                           f"{case_dir.name}_vs_eager_tol1")]
+    checks, worst_max, worst_exact = [], 0, 1.0
+    for k, (ret, expected) in enumerate(zip(_return_sources(text), expected_list)):
+        out_buf = values[ret]
+        model_out = model_values[ret]
+        e = np.abs(model_out.astype(np.int64).reshape(-1) - expected.astype(np.int64).reshape(-1))
+        worst_max, worst_exact = max(worst_max, int(e.max())), min(worst_exact, float((e == 0).mean()))
+        tag = case_dir.name if len(expected_list) == 1 else f"{case_dir.name}.out{k}"
+        checks += [runner.Check(out_buf, model_out.reshape(-1).astype(buffers[out_buf].dtype), 0, f"{tag}_vs_model"),
+                   runner.Check(out_buf, expected.reshape(-1).astype(buffers[out_buf].dtype), 1, f"{tag}_vs_eager_tol1")]
     summary = dict(ops=[b["op"] for b in manifest["bindings"]], kernels=len(kern),
                    instructions=sum(k["instructions"] for k in kern.values()),
                    fences=sum(k["fences"] for k in kern.values()),
-                   model_vs_eager_max=int(e.max()), model_vs_eager_exact=float((e == 0).mean()),
+                   model_vs_eager_max=worst_max, model_vs_eager_exact=worst_exact,
                    declines=manifest["declines"])
     return Path(obj), buffers, calls, checks, outputs, summary
 
