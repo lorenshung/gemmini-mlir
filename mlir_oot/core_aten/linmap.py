@@ -29,6 +29,46 @@ class NotLinear(Exception):
     pass
 
 
+def exact_float_widening(source, target):
+    formats = {'f16': (11, -24, 15), 'bf16': (8, -133, 127),
+               'f32': (24, -149, 127), 'f64': (53, -1074, 1023)}
+    if source not in formats or target not in formats:
+        return False
+    p, low, high = formats[source]
+    q, minimum, maximum = formats[target]
+    return q >= p and minimum <= low and maximum >= high
+
+
+def inverse_float_widening(op):
+    """Recognize a literal inverse of an exact widening, including cast generics."""
+    value = op.operands[0]
+    if isinstance(value, BlockArgument):
+        block = value.owner
+        parent = block.parent_op()
+        if parent is None or parent.name != 'linalg.generic' or len(parent.results) != 1:
+            return False
+        value = parent.operands[value.index]
+    if not isinstance(value, OpResult):
+        return False
+    producer = value.owner
+    if producer.name == 'linalg.generic' and len(producer.operands) == 2:
+        maps = _attr(producer, 'indexing_maps')
+        body = list(producer.regions[0].blocks[0].ops)
+        if not all(_identity_like(m.data) for m in maps) or len(body) != 2:
+            return False
+        cast, yielded = body
+        if (cast.name != 'arith.extf' or yielded.name != 'linalg.yield'
+                or list(cast.operands) != [producer.regions[0].blocks[0].args[0]]
+                or list(yielded.operands) != [cast.results[0]]):
+            return False
+    elif producer.name == 'arith.extf':
+        cast = producer
+    else:
+        return False
+    source, target = str(cast.operands[0].type), str(cast.results[0].type)
+    return exact_float_widening(source, target) and source == str(op.results[0].type)
+
+
 @dataclass
 class Sym:
     """Elementwise symbolic linear form over region inputs; arrays share one shape."""
@@ -479,6 +519,10 @@ class Region:
         if nm in ("arith.sitofp", "arith.uitofp"):
             return np.asarray(vals[0], object)
         if nm in ("arith.extf", "arith.truncf"):
+            if (isinstance(vals[0], Sym)
+                    and not exact_float_widening(str(op.operands[0].type), str(op.results[0].type))
+                    and not inverse_float_widening(op)):
+                raise NotLinear('floating narrowing inside a quantized region needs an exactness proof')
             return vals[0]
         if nm in ("arith.fptosi", "arith.fptoui"):
             if isinstance(vals[0], Sym):

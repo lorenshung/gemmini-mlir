@@ -135,6 +135,38 @@ def flat_copy(plan_stage, src, dst, n, scale=1.0):
     plan_stage.append(Copy(src, n, [dst], n, 1, n, scale))
 
 
+def gather_elements(s, sources, indices, itemsize, out, names, literal):
+    """Static element selectors lifted to consecutive little-endian byte lanes.
+
+    Runs share a nonnegative source stride. Reversals split into independent
+    elements; an element's bytes always retain their original order.
+    """
+    plan = Plan()
+    stage = plan.stage()
+    start = 0
+    while start < len(sources):
+        sid = int(sources[start])
+        index = start if sid < 0 else int(indices[start])
+        end, step = start + 1, None
+        while end < len(sources) and sources[end] == sid:
+            following = end if sid < 0 else int(indices[end])
+            delta = following - (end - 1 if sid < 0 else int(indices[end - 1]))
+            if delta < 0 or (step is not None and delta != step):
+                break
+            step = delta
+            end += 1
+        name = literal if sid < 0 else names[sid]
+        count = end - start
+        if step == 1 or count == 1:
+            size = count * itemsize
+            stage.append(Copy((name, index * itemsize), size, [(out, start * itemsize)], size, 1, size))
+        else:
+            stage.append(Copy((name, index * itemsize), (step or 0) * itemsize,
+                              [(out, start * itemsize)], itemsize, count, itemsize))
+        start = end
+    emit_plan(s, plan)
+
+
 def block_copy(stage, src_name, src_shape, src_index, dst_name, dst_shape, dst_index, extents, scale=1.0):
     """Copy the block ``extents`` (per dim) from src[src_index:] to dst[dst_index:] (same rank)."""
     r = len(extents)

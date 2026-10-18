@@ -62,7 +62,7 @@ class Ins(NamedTuple):
 @dataclass(frozen=True)
 class Arg:
     name: str
-    dtype: str            # "i8" or "i32"
+    dtype: str            # MLIR element type; raw movement keeps the logical type
     shape: tuple[int, ...]
     role: str             # "input" | "output" | "inout" | "const"
 
@@ -71,7 +71,8 @@ class Arg:
         n = 1
         for d in self.shape:
             n *= d
-        return n * (4 if self.dtype == "i32" else 1)
+        from .storage import itemsize
+        return n * itemsize(self.dtype)
 
 
 @dataclass
@@ -83,6 +84,7 @@ class Stream:
     consts: dict[str, np.ndarray] = field(default_factory=dict)
     readouts: list = field(default_factory=list)
     packs: list = field(default_factory=list)
+    bitwise: bool = False
 
     def __post_init__(self):
         self._index = {a.name: i for i, a in enumerate(self.args)}
@@ -330,6 +332,16 @@ def simulate(stream: Stream, inputs: dict[str, np.ndarray]) -> dict[str, np.ndar
     """Run ``stream`` on copies of ``inputs``; returns every non-const argument buffer."""
     buffers = {}
     for i, arg in enumerate(stream.args):
+        if arg.role != 'const' and (stream.bitwise or arg.dtype not in ('i8', 'i32')):
+            # Opaque elements have no numerical interpretation in byte DMA.
+            if arg.name in inputs:
+                data = np.ascontiguousarray(inputs[arg.name]).reshape(-1).view(np.uint8)
+                if data.nbytes != arg.nbytes:
+                    raise ValueError('raw movement input byte extent differs: ' + arg.name)
+                buffers[i] = data.copy()
+            else:
+                buffers[i] = np.full(arg.nbytes, 0x5a, dtype=np.uint8)
+            continue
         dt = np.int32 if arg.dtype == "i32" else np.int8
         if arg.role == "const":
             data = stream.consts[arg.name]
@@ -351,4 +363,8 @@ def simulate(stream: Stream, inputs: dict[str, np.ndarray]) -> dict[str, np.ndar
         apply(stream,buffers,readouts)
         start=boundary
     machine.run(replace(stream,ins=stream.ins[start:],readouts=[]))
+    if stream.bitwise:
+        from .storage import numpy_storage
+        return {arg.name: buffers[i].view(numpy_storage(arg.dtype)).reshape(arg.shape)
+                for i, arg in enumerate(stream.args) if arg.role != 'const'}
     return {arg.name: buffers[i] for i, arg in enumerate(stream.args) if arg.role != "const"}

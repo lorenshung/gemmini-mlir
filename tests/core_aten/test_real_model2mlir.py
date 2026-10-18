@@ -16,6 +16,24 @@ from mlir_oot.core_aten.stream import simulate, FULL_BIT, ACC_BIT
 from exact_oracle import evaluate
 
 
+@pytest.mark.parametrize('dtype', ['float16', 'bfloat16', 'int32', 'int64', 'complex64', 'bool'])
+@pytest.mark.parametrize('name', ['cat', 'clone', 'constant_pad_nd', 'reflection_pad1d',
+    'reflection_pad2d', 'reflection_pad3d', 'replication_pad2d', 'replication_pad3d',
+    'repeat', 'slice_scatter', 'select_scatter', 'full', 'full_like', 'fill_Scalar', '_to_copy'])
+def test_real_dtype_movement(name, dtype):
+    pytest.importorskip('m2m')
+    sys.path.insert(0, str(Path(__file__).parent / 'e2e'))
+    from dtype_movement import capture, wire
+    try:
+        text, inputs, expected = capture(name, dtype)
+    except RuntimeError as exc:
+        if dtype == 'bool' and "not implemented for 'Bool'" in str(exc):
+            pytest.skip(str(exc))
+        raise
+    _, manifest, _, _, _, _ = wire(text, inputs, expected, name + '_' + dtype)
+    assert manifest['bindings']
+
+
 @pytest.mark.parametrize('alpha', [-1.0, -0.375])
 @pytest.mark.parametrize('bias', [False, True])
 def test_real_signed_addmm_retains_exact_source_readout(alpha, bias):

@@ -38,6 +38,8 @@ SCHEMA = "gemmini_core_aten_catalog_v1"
 
 def _stream_digest(kernel) -> str:
     h = hashlib.sha256()
+    if kernel.stream.bitwise:
+        h.update(b'bitwise')
     h.update(json.dumps([(a.name, a.dtype, list(a.shape), a.role) for a in kernel.stream.args]).encode())
     for name, data in sorted(kernel.stream.consts.items()):
         h.update(name.encode() + data.tobytes())
@@ -58,6 +60,7 @@ def _source(value, ordinals, func_args):
 
 
 def build(source: str) -> tuple[ModuleOp, dict, list]:
+    from .storage import itemsize
     module = parse_module(source)
     ordinals = {op: i for i, op in enumerate(module.walk())}
     funcs = [op for op in module.walk() if op.name == "func.func"]
@@ -83,7 +86,8 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                 op.detach()
                 device.body.blocks[0].add_op(op)
             kernels[symbol] = dict(symbol=symbol, op=m.op, stream_sha256=digest,
-                                   args=[dict(name=a.name, dtype=a.dtype, shape=list(a.shape), role=a.role)
+                                   args=[dict(name=a.name, dtype=a.dtype, shape=list(a.shape), role=a.role,
+                                              **(dict(element_bytes=itemsize(a.dtype)) if m.kernel.stream.bitwise else {}))
                                          for a in m.kernel.args],
                                    instructions=report["instructions"], fences=report["fences"],
                                    counts=m.kernel.stream.counts(), meta=_jsonable(m.kernel.meta),

@@ -38,18 +38,21 @@ def rewrite(source: str, manifest: dict) -> str:
     kernels = {k["symbol"]: k for k in manifest["kernels"]}
     declared = {}
     doomed = []
+    replacements = {}
     for b in manifest["bindings"]:
         k = kernels[b["symbol"]]
         (out_name, out_src), = b["result"].items()
         out_val = _value(out_src, ops_, func_args)
         root = ops_[b["root_ordinal"]]
         ins = [_value(b["operands"][a["name"]], ops_, func_args) for a in k["args"] if a["role"] == "input"]
+        ins = [replacements.get(value, value) for value in ins]
         out_ty = out_val.type
         empty = tensor.EmptyOp([], out_ty)
         callee = "ca_" + b["symbol"]
         call = func.CallOp(callee, [*ins, empty.results[0]], [out_ty])
         root.parent_block().insert_ops_before([empty, call], root)
         out_val.replace_all_uses_with(call.results[0])
+        replacements[out_val] = call.results[0]
         doomed += [ops_[i] for i in b["replaced_ordinals"]]
         if callee not in declared:
             ftype = FunctionType.from_lists([v.type for v in ins] + [out_ty], [out_ty])
@@ -92,6 +95,7 @@ _CT = {"i8": "int8_t", "i32": "int32_t"}
 
 
 def shim_source(manifest: dict) -> str:
+    from .storage import itemsize
     ranks = set()
     lines = []
     body = []
@@ -114,7 +118,7 @@ def shim_source(manifest: dict) -> str:
                 n = 1
                 for d in a["shape"]:
                     n *= d
-                body.append(f"static int8_t {sym}__{a['name']}[{n * (4 if a['dtype'] == 'i32' else 1)}] "
+                body.append(f"static int8_t {sym}__{a['name']}[{n * itemsize(a['dtype'])}] "
                             f"__attribute__((aligned(64)));")
         body.append(f"void _mlir_ciface_ca_{sym}({params}) {{")
         checks = []
@@ -127,7 +131,7 @@ def shim_source(manifest: dict) -> str:
             if a["role"] == "scratch":
                 call.append(f"{sym}__{a['name']}")
             else:
-                call.append(f"(void *)(({_CT[a['dtype']]} *){a['name']}->aligned + {a['name']}->offset)")
+                call.append(f"(void *)((uint8_t *){a['name']}->aligned + {a['name']}->offset * {itemsize(a['dtype'])})")
         body.append(f"  {sym}({', '.join(call)});")
         body.append(f"  *result = *{out['name']};")
         body.append("}")

@@ -121,8 +121,28 @@ class QIn:
     unsigned: bool = False
 
 
+def exact_widening_source(p):
+    """A closed, elementwise widening carrier changes no rational code value."""
+    if p is not None and p.name == 'linalg.generic' and len(p.operands) == 2 and len(p.results) == 1:
+        body = list(p.regions[0].blocks[0].ops)
+        block = p.regions[0].blocks[0]
+        if (len(body) == 2 and body[0].name == 'arith.extf' and body[1].name == 'linalg.yield'
+                and list(body[0].operands) == [block.args[0]]
+                and list(body[1].operands) == [body[0].results[0]]
+                and shape(p.operands[0]) == shape(p.results[0])
+                and all(identity_map(m) for m in generic_maps(p))
+                and all(i == 'parallel' for i in iterators(p))):
+            from .linmap import exact_float_widening
+            if exact_float_widening(str(body[0].operands[0].type), str(body[0].results[0].type)):
+                return p.operands[0]
+    return None
+
+
 def dequant(v: SSAValue) -> QIn | None:
     p = producer(v)
+    widened = exact_widening_source(p)
+    if widened is not None:
+        return dequant(widened)
     if p is None or name_of(p) != "quant_ext.dequantize_per_tensor":
         return None
     from .quant_schema import attributes
@@ -276,7 +296,13 @@ def analyse_body(block: Block, n_in: int, consts: dict[int, float]) -> Body | No
             if c is None:
                 return None
             env[op.results[0]] = Fraction(c)
-        elif nm in ("arith.sitofp", "arith.uitofp", "arith.extf"):
+        elif nm == 'arith.extf':
+            from .linmap import exact_float_widening
+            if (not isinstance(vals[0], (Lin, float, Fraction))
+                    or not exact_float_widening(str(op.operands[0].type), str(op.results[0].type))):
+                return None
+            env[op.results[0]] = vals[0]
+        elif nm in ("arith.sitofp", "arith.uitofp"):
             if not isinstance(vals[0], (float, Fraction)):
                 return None
             env[op.results[0]] = vals[0]
@@ -494,7 +520,7 @@ def match_elementwise(op: Operation) -> Match | None:
             return Match("aten.clone.default", op, [op], [("x", src)], ("y", op.results[0]), ops.clone(oshape))
         return None
     # --- quantized sandwich -----------------------------------------------------------------
-    if any(data.get(i) is None for i in used) or etype(op.results[0]) != "f32":
+    if any(data.get(i) is None for i in used) or etype(op.results[0]) not in ('f16', 'bf16', 'f32', 'f64'):
         return None
     qout = quant_sink(op.results[0])
     if qout is None:
@@ -599,6 +625,10 @@ def follow_chain(v: SSAValue) -> Chain:
             continue
         if name_of(u) == "quant_ext.quantize_per_tensor":
             return ch
+        if exact_widening_source(u) is ch.final:
+            ch.ops.append(u)
+            ch.final = u.results[0]
+            continue
         if u.name == "linalg.transpose" and ch.perm is None:
             ch.perm = [int(p) for p in u.properties["permutation"].iter_values()]
             ch.ops.append(u)
@@ -1203,7 +1233,7 @@ def _movement_out(op: Operation, ins: list[QIn]):
     res = op.results[0]
     if all(q.dq is None for q in ins) and etype(res) == "i8":
         return res, 1.0, None
-    if any(q.dq is None for q in ins) or etype(res) != "f32":
+    if any(q.dq is None for q in ins) or etype(res) not in ('f16', 'bf16', 'f32', 'f64'):
         return None
     qo = quant_sink(res)
     if qo is None:
@@ -1428,7 +1458,9 @@ def _bind_dense_layouts(match):
 def match_all(module) -> tuple[list[Match], list[dict]]:
     """Every matched region in program order, plus recorded declines (with reasons)."""
     from .integer_regions import match_integer_region
+    from .bitwise import match as match_bitwise
     matches, declines = [], []
+    quantized_module = any(name_of(o).startswith('quant_ext.') for o in module.walk())
     generalized_quant = any(name_of(o).startswith('quant_ext.') and
         (splat_value(o.operands[2]) != 0 or _prop_int(o,'quant_min') != -128 or _prop_int(o,'quant_max') != 127)
         for o in module.walk() if len(o.operands)>=3 and etype(o.operands[0])!='i32')
@@ -1440,6 +1472,8 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
             declines.append(dict(ordinal=ordinal, op=op.name, reason="empty or dynamic tensor shape", aten=""))
             continue
         selected_matchers = (match_integer_region,match_convolution,match_convolution_rows,match_conv_wgrad,match_conv_input,match_contraction,match_elementwise,match_linear) if generalized_quant else (match_integer_region,*MATCHERS)
+        if not quantized_module:
+            selected_matchers = (match_bitwise, *selected_matchers)
         for fn in selected_matchers:
             try:
                 m = fn(op)
@@ -1457,4 +1491,17 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                 break
         if name_of(op).startswith("quant_ext.quantize_") and id(op) not in taken and not any(d["ordinal"] == ordinal for d in declines):
             declines.append(dict(ordinal=ordinal, op=name_of(op), reason="unsupported or unproved quantization scheme; device requires exact per-tensor signed int8 readout", aten=""))
+    if not quantized_module:
+        arithmetic = {'arith.addf', 'arith.subf', 'arith.mulf', 'arith.divf', 'arith.negf',
+                      'arith.addi', 'arith.subi', 'arith.muli', 'arith.fptosi', 'arith.sitofp',
+                      'arith.truncf', 'arith.extsi', 'arith.trunci'}
+        reported = {d['ordinal'] for d in declines}
+        for ordinal, candidate in enumerate(module.walk()):
+            if id(candidate) in taken or ordinal in reported or any(k.startswith('prov.quant.') for k in candidate.attributes):
+                continue
+            if candidate.name in ('linalg.matmul', 'linalg.batch_matmul') or (
+                    candidate.name == 'linalg.generic' and any(o.name in arithmetic for o in candidate.walk())):
+                declines.append(dict(ordinal=ordinal, op=candidate.name,
+                    reason='no exact integer schedule for unquantized data arithmetic or numeric conversion',
+                    aten=getattr(candidate.attributes.get('prov.aten'), 'data', '')))
     return matches, declines
