@@ -16,6 +16,57 @@ from .match import (Match, Decline, producer, shape, dense_values, splat_value,
                     _attr_of, _scalar_const, identity_map, generic_maps, iterators)
 
 
+def candidate_readouts(op):
+    """Follow integer values only through static, bit-preserving tensor layouts.
+
+    Grouped convolutions concatenate independently computed numerator matrices
+    before a shared channel readout. These layouts stay on the host; their
+    presence does not change the integer producer or move rounding boundaries.
+    """
+    from .views import reindex_shape
+    from .match import etype
+    pending, visited = [op.results[0]], set()
+    while pending:
+        value = pending.pop()
+        if value in visited:
+            continue
+        visited.add(value)
+        for use in value.uses:
+            user = use.operation
+            if getattr(user.attributes.get('prov.quant.arithmetic'), 'data', None) == 'exact':
+                yield user
+            if len(user.results) != 1 or etype(user.results[0]) != 'i32':
+                continue
+            if user.name in ('tensor.reshape', 'tensor.collapse_shape', 'tensor.expand_shape', 'tensor.cast'):
+                if use.index != 0:
+                    continue
+                try:
+                    reindex_shape(user)
+                except ValueError:
+                    continue
+            elif user.name == 'linalg.transpose':
+                if use.index != 0:
+                    continue
+                perm = list(user.properties['permutation'].iter_values())
+                if sorted(perm) != list(range(len(shape(value)))):
+                    continue
+                if tuple(shape(value)[i] for i in perm) != shape(user.results[0]):
+                    continue
+            elif user.name == 'tensor.concat':
+                axis = int(user.properties['dim'].value.data)
+                output = shape(user.results[0])
+                if not 0 <= axis < len(output) or any(
+                        etype(v) != 'i32' or len(shape(v)) != len(output) or any(
+                            a != b for i,(a,b) in enumerate(zip(shape(v),output)) if i != axis)
+                        for v in user.operands):
+                    continue
+                if sum(shape(v)[axis] for v in user.operands) != output[axis]:
+                    continue
+            else:
+                continue
+            pending.append(user.results[0])
+
+
 def readout(op):
     """Identify the source readout; retain its exact host implementation.
 
@@ -23,9 +74,7 @@ def readout(op):
     an explicit float bias or substitute a rounded product for the rational pair.
     """
     from .quant_schema import attributes, ratios
-    uses = list(op.results[0].uses)
-    for use in uses:
-        reader = use.operation
+    for reader in candidate_readouts(op):
         if reader.name != 'linalg.generic' or len(reader.results) != 1:
             continue
         if getattr(reader.attributes.get('prov.quant.arithmetic'),'data',None) != 'exact':
@@ -36,7 +85,9 @@ def readout(op):
         require(getattr(attrs.get('numerics'),'data',None)=='integer_readout','readout numerics are not exact integer')
         factors = ratios(attrs)
         require(all(s != 0 for s in factors),'zero exact readout coefficient')
-        require(len(factors) in (1,shape(op.results[0])[-1]),'readout scale channel extent')
+        channels = shape(reader.operands[0])
+        require(channels is not None and len(factors) in (1,channels[-1] if channels else 1),
+                'readout scale channel extent')
         if any(k.startswith('prov.quant.') for k in op.attributes):
             producer_attrs = attributes(op,'contraction')
             require(getattr(producer_attrs.get('host_only'),'data',None) != 'true','host-only source contraction')
@@ -44,10 +95,15 @@ def readout(op):
     return None
 
 
+def contraction(op):
+    return (match_integer_gemm(op, require_zero=False) or
+            match_integer_gemm(op, require_zero=False, operand_dtype="i32"))
+
+
 def has_integer_readout(module):
-    return any(match_integer_gemm(op, require_zero=False) is not None and
-               any(getattr(use.operation.attributes.get('prov.quant.arithmetic'),'data',None)=='exact'
-                   for use in op.results[0].uses)
+    return any(contraction(op) is not None and
+               any(getattr(reader.attributes.get('prov.quant.arithmetic'),'data',None)=='exact'
+                   for reader in candidate_readouts(op))
                for op in module.walk())
 
 
@@ -76,7 +132,7 @@ def seed_guard(value):
 
 
 def match_integer_region(op):
-    dims = match_integer_gemm(op, require_zero=False)
+    dims = contraction(op)
     if dims is None:
         return None
     selected = readout(op)
@@ -121,13 +177,22 @@ def match_integer_region(op):
             values = np.asarray(values, np.int32)
         else:
             runtime_seed = seed
-    kernel = ops.matmul('aten.bmm.default' if batch else 'aten.addmm.default' if bias else 'aten.mm.default', dims.m, dims.k, dims.n,
-                        batch=batch, s_out=None, bias=bias, bias_const=values,
-                        bias_rows=bias_rows, relu=relu, bias_range=guarded_range)
-    kernel.meta.update(integer_readout=True, dimensions=dict(batch=dims.batch,m=dims.m,n=dims.n,k=dims.k),
+    operands = [('a', op.operands[0]), ('b', op.operands[1])]
+    if str(op.operands[0].type.get_element_type()) == 'i32':
+        from .centered_regions import kernel as centered_kernel
+        kernel, operands, producers = centered_kernel(op, dims, batch, bias, values, bias_rows, guarded_range)
+        consumed.extend(producers)
+    else:
+        kernel = ops.matmul('aten.bmm.default' if batch else 'aten.addmm.default' if bias else 'aten.mm.default', dims.m, dims.k, dims.n,
+                            batch=batch, s_out=None, bias=bias, bias_const=values,
+                            bias_rows=bias_rows, relu=relu, bias_range=guarded_range)
+    kernel.meta.update(output_dtype='i32', scale=1, relu=False, bias=bias,
+                       integer_readout=True, dimensions=dict(batch=dims.batch,m=dims.m,n=dims.n,k=dims.k),
                        seed=('guarded_runtime' if runtime_seed is not None else 'constant') if bias else 'zero')
     kernel.meta.update(readout="full_i32", requantization="retained_source_exact_integer",
                        scale_numerator=[str(v.numerator) for v in scale],scale_denominator=[str(v.denominator) for v in scale])
-    return Match(kernel.op, op, consumed, [('a', op.operands[0]), ('b', op.operands[1])] + ([('bias',runtime_seed)] if runtime_seed is not None else []),
+    return Match(kernel.op, op, consumed, operands + ([('bias',runtime_seed)] if runtime_seed is not None else []),
                  ('out', op.results[0]), kernel,
-                 numeric=dict(integer_readout=True, scale=scale, relu=relu, seed=None if values is None else values.tolist(), runtime_seed=runtime_seed is not None))
+                 numeric=dict(integer_readout=True, scale=scale, relu=relu, seed=None if values is None else values.tolist(), runtime_seed=runtime_seed is not None,
+                              **(dict(centered_byte_contraction=kernel.meta["centered_byte_contraction"])
+                                 if "centered_byte_contraction" in kernel.meta else {})))

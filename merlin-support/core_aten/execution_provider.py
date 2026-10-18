@@ -20,12 +20,6 @@ def prepare_bundle(directory, *, target, facts):
 def routing(directory, *, target, package, facts, eligible):
     from merlin.system.offload import device_dtype_triples
 
-    triples = {tuple(shape.dtypes) for _, shape in eligible}
-    if len(triples) != 1 or not triples.issubset(set(device_dtype_triples(target))):
-        raise ValueError("ambiguous or underivable device datapath")
-    operand, weight, accum = next(iter(triples))
-    if operand != weight:
-        raise ValueError("catalog requires identical operand storage types")
     # A closed seeded MAC + byte readout needs the region ABI: its seed and
     # result types differ from the old two-input/raw-i32 contraction ABI.
     regions = _core_aten_module(package, "integer_regions")
@@ -38,17 +32,35 @@ def routing(directory, *, target, package, facts, eligible):
         selected = [m for m in matches if m.kernel.meta.get("integer_readout") or m.kernel.meta.get('limb_plan')]
         if not selected:
             return None
+        # Logical centered operands are i32, but their proved physical
+        # products are signed byte x byte -> i32. Admission derives that
+        # datapath from the closed lowering, never by narrowing the source.
+        if ('i8','i8','i32') not in set(device_dtype_triples(target)):
+            return None
+        operand, weight, accum = 'i8','i8','i32'
         def region_builder(prepared, workdir):
             # Re-prove the actual prepared bytes, not a preceding capture.
             if (Path(directory) / "spec-int8-admission.json").exists():
                 import json
                 policy = json.loads((Path(directory) / "spec-int8-admission.json").read_text())["selection"]["spec"]
-                admit_numeric_schedule(Path(prepared).read_text(), package=package, numeric_policy=policy)
+                proof = admit_numeric_schedule(Path(prepared).read_text(), package=package, numeric_policy=policy)
+                if proof.get('status') != 'proven':
+                    workdir = Path(workdir);workdir.mkdir(parents=True,exist_ok=True)
+                    manifest = workdir/'core_aten_catalog.json'
+                    manifest.write_text(json.dumps(dict(status='declined',reason=proof.get('reason'),
+                        kernels=[],bindings=[],numeric_schedule_proof=proof),indent=2)+'\n')
+                    return None,None,None,manifest
             return core_aten_offload(prepared, workdir, package=package)
         audit = load_module(package, "mlir_oot.golden_device_catalog", package_name="core_aten_region_audit")
         return DeviceRouting(device=target, package_dir=package, operand_dtype=operand,
                              accum_dtype=accum, region_offload=region_builder,
                              final_elf_audit=audit.final_elf_audit)
+    triples = {tuple(shape.dtypes) for _, shape in eligible}
+    if len(triples) != 1 or not triples.issubset(set(device_dtype_triples(target))):
+        return None
+    operand, weight, accum = next(iter(triples))
+    if operand != weight:
+        return None
     # Immutable snapshots at different roots must not share cached Python modules.
     identity = hashlib.sha256(str(Path(package).resolve()).encode()).hexdigest()
     backend = load_module(package, "mlir_oot.golden_device_catalog", package_name=f"core_aten_backend_{identity}")
@@ -393,27 +405,36 @@ def _admit_integer_regions(source, *, package, numeric_policy):
     catalog_module = _core_aten_module(package, "catalog")
     _, catalog, matches = catalog_module.build(source)
     proofs = []
+    def refuse(reason):
+        return dict(status='declined',reason=reason,source_sha256=catalog['source_sha256'],
+                    kernels=[],bindings=[],declines=catalog['declines'])
     for binding, match in zip(catalog["bindings"], matches):
         if not match.kernel.meta.get("integer_readout"):
             continue
         dims = match.kernel.meta["dimensions"]
-        bound = integer_split_k_limit(numeric_policy, tile_dim=16, full_k=dims["k"])
+        try:
+            bound = integer_split_k_limit(numeric_policy, tile_dim=16, full_k=dims["k"])
+        except ValueError as exc:
+            return refuse(str(exc))
         if bound is None or bound["max_padded_k"] < 16:
-            raise ValueError("provider padded mesh K exceeds selected internal MAC bound")
+            return refuse("provider padded mesh K exceeds selected internal MAC bound")
         stream = match.kernel.stream
         computes = [i for i in stream.ins if i.kind == "compute"]
         if not computes or any(i.a("a_cols") > 16 or i.a("bd") != 0xffffffff for i in computes):
-            raise ValueError("seeded WS primitive differs from the proved independent dot product")
+            return refuse("seeded WS primitive differs from the proved independent dot product")
         if any(i.a("dataflow") != 1 for i in stream.ins if i.kind == "config_ex"):
-            raise ValueError("seeded proof requires weight-stationary execution")
+            return refuse("seeded proof requires weight-stationary execution")
         # The bound producer is exact integer math with raw full-width DMA.
         # Source exact readout remains on the host, including bias and RNE.
         stores=[i for i in stream.ins if i.kind=='mvout']
-        if not stores or any(not (i.a('local') & (1 << 29)) for i in stores):
-            raise ValueError('exact producer requires full-width i32 readout')
+        accumulator_stores = [i for i in stores if i.a('local') & (1 << 31)]
+        byte_layout = match.kernel.meta.get('centered_byte_contraction')
+        if (not accumulator_stores or any(not (i.a('local') & (1 << 29)) for i in accumulator_stores)
+                or (not byte_layout and len(accumulator_stores) != len(stores))):
+            return refuse('exact producer requires full-width i32 readout')
         if any(i.a('scale') != 1 for i in stream.ins if i.kind=='config_ld') or any(
                 i.a('acc_scale') != 1 for i in stream.ins if i.kind=='config_st'):
-            raise ValueError('exact producer contains an unproved FP32 data-path scale')
+            return refuse('exact producer contains an unproved FP32 data-path scale')
         proofs.append(dict(symbol=binding["symbol"], status="proven", schedule=match.kernel.meta,
             primitive_k=sorted({i.a("a_cols") for i in computes}), padded_primitive_k=16,
             k_split=[min(16, dims["k"]-k) for k in range(0,dims["k"],16)],
@@ -423,7 +444,9 @@ def _admit_integer_regions(source, *, package, numeric_policy):
             bound=bound, exact_arithmetic=True, device_readout="full_i32",
             quantization="retained_source_exact_integer_host_readout", seed=match.kernel.meta["seed"],
             accumulator_min=match.kernel.meta["accumulator_min"], accumulator_max=match.kernel.meta["accumulator_max"],
+            full_result_bound=max(abs(match.kernel.meta["accumulator_min"]),abs(match.kernel.meta["accumulator_max"])),
             emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest()))
+    proofs = list({row['symbol']: row for row in proofs}.values())
     if not proofs:
         return dict(status='declined', reason='provider did not cover any exact seeded readout region',
                     source_sha256=catalog['source_sha256'], kernels=[], bindings=[], declines=catalog['declines'])

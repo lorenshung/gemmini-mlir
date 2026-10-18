@@ -439,3 +439,52 @@ def test_plain_catalog_cannot_bypass_quant_placement_policy(real_capture, key, v
     assert refused["covered_contractions"] == 0
     assert not refused["coverage_complete"]
     assert len(refused["declines"]) == 2
+
+
+# Real centered-i32 byte-origin captures use the same schema pin above.
+from asymmetric_capture import (KINDS as ASYMMETRIC_KINDS, SCHEMES as ASYMMETRIC_SCHEMES,
+                                capture as centered_capture, check as check_centered)
+
+
+@pytest.mark.parametrize('kind',ASYMMETRIC_KINDS)
+@pytest.mark.parametrize('scheme',ASYMMETRIC_SCHEMES)
+def test_real_centered_contraction(kind,scheme):
+    pytest.importorskip('torch')
+    pytest.importorskip('m2m')
+    source,inputs,expected = centered_capture(kind,scheme)
+    _,manifest,replays = check_centered(source,inputs,expected)
+    assert len(replays) == (3 if kind=='conv' else 1),manifest['declines']
+    assert not any('centered' in d['reason'] or 'unsafe device schedule' in d['reason'] for d in manifest['declines'])
+    path = Path(__file__).parents[2]/'merlin-support/core_aten/execution_provider.py'
+    spec = importlib.util.spec_from_file_location('provider_asymmetric_test',path)
+    provider = importlib.util.module_from_spec(spec);spec.loader.exec_module(provider)
+    policy = dict(numerical_semantics=dict(accumulator_dtype='i32',internal_arithmetic=dict(
+        signed_operand_bits=8,mac_result_bits=20,mac_result_overflow='wrap_to_20_bits',
+        full_operation_overflow_policy='bounded_exact_requires_each_partial_sum')))
+    proof = provider.admit_numeric_schedule(source,package=path.parents[2],numeric_policy=policy)
+    assert proof['status'] == 'proven',proof
+    assert len(proof['kernels']) == len(replays)
+    assert all(k['exact_arithmetic'] and k['schedule']['centered_byte_contraction'] for k in proof['kernels'])
+    from merlin.frontends.linalg_mlir import parse_mlir_text
+    from merlin.targetgen.core_aten_spec_int8 import provider_coverage
+    from mlir_oot.core_aten.integer_regions import contraction
+    module = parse_mlir_text(source)
+    # Binding hashes authenticate serialization exactly, as in Merlin's lane.
+    normalized = str(module)
+    proof = provider.admit_numeric_schedule(normalized,package=path.parents[2],numeric_policy=policy)
+    for op in module.walk():
+        if contraction(op):
+            failure = provider_coverage(module,proof,op)
+            # Merlin is edited independently. Its older admission guard still
+            # refuses uint8 host readouts, after accepting this provider's raw
+            # integer producer proof. That consumer restriction is external to
+            # the target schedule and must never change our source Q boundary.
+            assert failure in (None,'readout quantization bounds do not fit signed i8')
+
+
+@pytest.mark.parametrize('scheme',['asym8','uint8'])
+def test_real_centered_multi_tile_tails(scheme):
+    pytest.importorskip('torch')
+    pytest.importorskip('m2m')
+    _,manifest,replays = check_centered(*centered_capture('mm',scheme,wide=True))
+    assert len(replays) == 1,manifest['declines']

@@ -181,3 +181,96 @@ An empty catalog is an explicit refusal manifest with `status="declined"`,
 `(None, None, None, manifest_path)` and emits no model or shim. Callers must
 handle the absent artifacts as a device refusal; a preexisting object in the
 work directory does not make it a successful compilation.
+
+## Centered i32 byte contractions
+
+model2mlir 23b0cd5 represents asymmetric signed-byte, unsigned-byte and
+per-channel zero points by extending storage bytes to i32, subtracting exact
+zero points, and performing the contraction in i32. Narrow quantization bounds
+are not runtime storage bounds. The provider proves the complete operand
+producer graph, including static slices, transpose, reshape, concatenation and
+padding. A provenance annotation alone never authorizes narrowing.
+
+For each physical operand it proves `X[p] = S[p] + C[p]`, where `S` selects
+one signed byte (or zero for padding) and `C` is a literal integer. For unsigned
+storage the existing byte packing ABI uses XOR 0x80, so
+`extui(q) - z = signed(q XOR 0x80) + (128 - z)`. Signed storage uses
+`extsi(q) - z`. Every byte bit pattern is covered, including magnitude-255
+centered results. Source centering intermediates must fit i32; integer casts
+that truncate data, dynamic zero points, data-dependent indexing and unbound
+non-byte inputs refuse with an explicit reason.
+
+`C` is decomposed into literal signed-byte planes, each in [-127,127]. The
+provider computes every operand-plane pair on Gemmini, seeds subsequent
+products with the preceding full-i32 output, and fences each DRAM dependency.
+Thus `(S_A + sum C_A) @ (S_B + sum C_B)` is recombined entirely by exact device
+integer accumulation. No arithmetic correction, product scaling or rounding
+moves into the host epilogue. The only host input adaptation is the existing
+lossless unsigned-byte XOR packing. Operand layout gathers use scratchpad byte
+DMA; every accumulator MVOUT remains full i32 and all LD/ST scales are one.
+
+The prefix bound is `abs(seed) + sum_k(sum_plane_abs(A) * sum_plane_abs(B))`,
+using 128 for a selected arbitrary signed byte and the exact absolute literal
+values. This covers every partial sum independently of cancellation. If it
+exceeds i32 capacity the provider declines with
+`centered byte plane accumulation has no nonoverflow i32 bound`; it does not
+assume that the final centered result alone proves the reordered schedule.
+Each WS mesh product has at most 16 signed-byte MACs, under the existing
+selected internal-MAC bound.
+
+Each kernel's `meta.centered_byte_contraction` (also copied to the binding's
+`numeric.centered_byte_contraction`) records:
+
+- `version=1`, `rule="closed_byte_selectors_plus_literal_integer_planes"`;
+- `operand_planes`, `product_count`, `operand_bounds`, and
+  `accumulator_min`/`accumulator_max` for the expanded schedule;
+- `prefix_bound`, `unsigned_packing`, `unsigned_sources`,
+  `source_operand_types`, and `selector_sha256` for each operand's selector
+  source ids, source indices and integer constant array;
+- `rounding="none"`, `device_scales="unit"`, `readout="full_i32"`.
+
+The catalog's existing source SHA256, source operation ordinal, replaced
+operation ordinals and input SSA bindings bind this proof to the actual closed
+producer graph. Numeric admission checks the emitted primitive K, selected
+MAC capacity, unit scales and all full accumulator stores. Scratchpad byte
+stores are allowed only as the proved operand-layout stage. The proof's
+`schedule` also records `output_dtype="i32"`, `scale=1`, `relu=false`, `bias`
+and `full_result_bound` in the kernel proof for Merlin's integer-continuation
+coverage check. These describe raw numerator storage, without altering the
+source readout factors.
+
+The bound contraction alone is replaced. Its exact source rational readout,
+including negative alpha, channel scales, float bias, RNE, output zero point
+and clamp, is retained. A shared readout may follow bit-preserving static
+reshape/collapse/expand/cast, transpose or concatenation (for example grouped
+convolution). Those continuation operations remain outside the integer
+producer binding. Model state supplying zero points must first be bound as
+literal source constants by the host compiler; an unconstrained runtime i32
+zero-point tensor is not treated as a compile-time literal.
+
+Routing resolves these proved regions before checking the *logical* source
+contraction dtype against hardware datapaths. An i32/i32 source contraction
+therefore selects the declared physical i8/i8/i32 datapath only after proving
+its byte-plane decomposition. The prepared-source numeric proof must succeed
+before compilation; a rejected policy returns a refusal manifest and no
+rewritten module, shim or object. Unsupported datapath selection also returns
+no route, rather than raising an exception.
+
+## Frontend forms at the schema pin
+
+The exact-quantized linear-map interpreter supports `math.fma` as the rational
+product plus sum required by that numeric contract. This adds no rounding
+boundary and does not admit unquantized native IEEE arithmetic. New frontend
+NaN-payload selectors are eliminated only when a full byte-domain bound proves
+the tested value finite. Uninterpreted payload bits must be discarded by a
+proved selector; if they affect output data, extraction declines. Static
+unsigned index comparisons use the actual integer width (64 for target index),
+so negative padding coordinates do not pass unsigned upper-bound guards.
+
+For convolution weight gradients expressed with explicit gather/vector/tail
+loops, the provider extracts a closed bilinear map. It verifies the source
+coefficients, channel/group relations, exact affine stride/dilation/padding,
+and the complete set of contributions with no duplicates or omissions. Only
+then does it select the existing exact weight-gradient kernel. Its metadata
+records `source_proof="complete_closed_bilinear_gather_map"`. These checks
+come from the source body and geometry, not its operation label.

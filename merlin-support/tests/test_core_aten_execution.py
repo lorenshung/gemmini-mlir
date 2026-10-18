@@ -44,14 +44,13 @@ def test_provider_binds_catalog_and_derives_precision_from_selected_facts(tmp_pa
         )
         assert (route.operand_dtype, route.accum_dtype) == ("i8", "i32")
         assert route.select is None and route.catalog_builder is builder
-        with pytest.raises(ValueError, match="underivable"):
-            provider.routing(
-                tmp_path,
-                target="synthetic_core_aten",
-                package=tmp_path,
-                facts=document,
-                eligible=[(None, SimpleNamespace(dtypes=("f32", "f32", "f32")))],
-            )
+        assert provider.routing(
+            tmp_path,
+            target="synthetic_core_aten",
+            package=tmp_path,
+            facts=document,
+            eligible=[(None, SimpleNamespace(dtypes=("f32", "f32", "f32")))],
+        ) is None
         backend.build_catalog = lambda source: (None, {"covered_contractions": 0})
         assert (
             provider.routing(

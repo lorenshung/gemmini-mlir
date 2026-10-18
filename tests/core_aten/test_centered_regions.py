@@ -1,0 +1,143 @@
+"""Checked byte origins, storage-wide bounds, and clean centered-i32 refusals."""
+import numpy as np
+import pytest
+
+from mlir_oot.core_aten.catalog import build
+from mlir_oot.core_aten.stream import simulate
+from exact_oracle import evaluate
+
+
+def source(k=3, *, unsigned=True, zp=255, runtime=False, truncate=False):
+    extension = 'arith.extui' if unsigned else 'arith.extsi'
+    maps = 'affine_map<(d0,d1)->(d0,d1)>'
+    inputs = f'%a: tensor<1x{k}xi8>, %b: tensor<{k}x1xi8>'
+    if runtime: inputs += f', %z: tensor<1x{k}xi32>'
+    a = f'''%ea = tensor.empty() : tensor<1x{k}xi32>
+      %wa = linalg.generic {{indexing_maps=[{maps},{maps}], iterator_types=["parallel","parallel"]}}
+        ins(%a:tensor<1x{k}xi8>) outs(%ea:tensor<1x{k}xi32>) {{
+        ^bb0(%x:i8,%y:i32): %v = {extension} %x : i8 to i32
+        linalg.yield %v : i32
+      }} -> tensor<1x{k}xi32>'''
+    if not runtime:
+        a += f'\n%z = arith.constant dense<{zp}> : tensor<1x{k}xi32>'
+    a += f'''\n%ca = linalg.generic {{indexing_maps=[{maps},{maps},{maps}], iterator_types=["parallel","parallel"]}}
+      ins(%wa,%z:tensor<1x{k}xi32>,tensor<1x{k}xi32>) outs(%ea:tensor<1x{k}xi32>) {{
+      ^bb1(%x:i32,%point:i32,%y:i32): %v = arith.subi %x,%point : i32
+      linalg.yield %v : i32
+    }} -> tensor<1x{k}xi32>
+    %eb = tensor.empty() : tensor<{k}x1xi32>
+    %wb = linalg.generic {{indexing_maps=[{maps},{maps}], iterator_types=["parallel","parallel"]}}
+      ins(%b:tensor<{k}x1xi8>) outs(%eb:tensor<{k}x1xi32>) {{
+      ^bb2(%x:i8,%y:i32): %v = arith.extsi %x : i8 to i32
+      linalg.yield %v : i32
+    }} -> tensor<{k}x1xi32>'''
+    if truncate:
+        a = a.replace('%v = arith.subi %x,%point : i32', '%d = arith.subi %x,%point : i32\n%t = arith.trunci %d : i32 to i8\n%v = arith.extsi %t : i8 to i32')
+    return f'''builtin.module {{ func.func @forward({inputs}) -> tensor<1x1xi32> {{
+      {a}
+      %c = arith.constant 0 : i32
+      %seed = tensor.splat %c : tensor<1x1xi32>
+      %acc = linalg.matmul ins(%ca,%wb:tensor<1x{k}xi32>,tensor<{k}x1xi32>) outs(%seed:tensor<1x1xi32>) -> tensor<1x1xi32>
+      %empty = tensor.empty() : tensor<1x1xi32>
+      %out = linalg.generic {{indexing_maps=[{maps},{maps}],iterator_types=["parallel","parallel"]}}
+        ins(%acc:tensor<1x1xi32>) outs(%empty:tensor<1x1xi32>)
+        attrs = {{prov.quant.arithmetic="exact",prov.quant.accumulator="i32",prov.quant.numerics="integer_readout",
+                  prov.quant.scale_numerator=["1"],prov.quant.scale_denominator=["1"]}} {{
+        ^bb3(%x:i32,%y:i32): linalg.yield %x : i32
+      }} -> tensor<1x1xi32>
+      func.return %out : tensor<1x1xi32>
+    }} }}'''
+
+
+@pytest.mark.parametrize('unsigned,zp',[(True,0),(True,128),(True,255),(False,-128),(False,127)])
+def test_full_storage_extremes_never_narrow(unsigned,zp):
+    text=source(unsigned=unsigned,zp=zp)
+    _,manifest,matches=build(text)
+    match,=[m for m in matches if m.numeric.get('integer_readout')]
+    for code in (-128,-1,0,127):
+        feed=dict(x0=np.full((1,3),code,np.int8),x1=np.full((3,1),-128,np.int8))
+        assert np.array_equal(simulate(match.kernel.stream,feed)['out'],evaluate(match,feed)['out'])
+    assert not manifest['declines']
+
+
+@pytest.mark.parametrize('options,reason',[
+    (dict(runtime=True),'unbound block argument'),
+    (dict(truncate=True),'unsupported limb data operation: arith.trunci'),
+    (dict(zp=1000),'not a bounded integer constant'),
+    (dict(k=70000),'no nonoverflow i32 bound'),
+])
+def test_unproved_centered_form_declines_cleanly(options,reason):
+    _,manifest,matches=build(source(**options))
+    assert not any(m.numeric.get('integer_readout') for m in matches)
+    assert any(reason in d['reason'] for d in manifest['declines']),manifest['declines']
+
+
+def test_repeated_centered_bindings_share_one_unambiguous_schedule_proof():
+    from xdsl.dialects import func
+    from xdsl.dialects.builtin import FunctionType
+    from mlir_oot.frontend.parse import parse_module
+    from test_scalar_mean_island import provider,PACKAGE,POLICY
+    module=parse_module(source())
+    fn=next(o for o in module.walk() if o.name=='func.func')
+    contraction=next(o for o in fn.walk() if o.name=='linalg.matmul')
+    reader=next(u.operation for u in contraction.results[0].uses)
+    ret=next(o for o in fn.walk() if o.name=='func.return')
+    clone=contraction.clone()
+    read_clone=reader.clone({contraction.results[0]:clone.results[0]})
+    fn.body.block.insert_ops_before([clone,read_clone],ret)
+    replacement=func.ReturnOp(ret.operands[0],read_clone.results[0])
+    fn.body.block.insert_op_before(replacement,ret);fn.body.block.erase_op(ret)
+    fn.properties['function_type']=FunctionType.from_lists(list(fn.function_type.inputs),[replacement.operands[0].type]*2)
+    module.verify()
+    proof=provider().admit_numeric_schedule(str(module),package=PACKAGE,numeric_policy=POLICY)
+    assert proof['status']=='proven',proof
+    assert len(proof['bindings'])==2 and len(proof['kernels'])==1
+
+
+def test_selected_mac_width_without_one_mesh_tile_declines_cleanly():
+    from copy import deepcopy
+    from test_scalar_mean_island import provider,PACKAGE,POLICY
+    policy=deepcopy(POLICY)
+    policy['numerical_semantics']['internal_arithmetic']['mac_result_bits']=16
+    policy['numerical_semantics']['internal_arithmetic']['mac_result_overflow']='wrap_to_16_bits'
+    proof=provider().admit_numeric_schedule(source(),package=PACKAGE,numeric_policy=policy)
+    assert proof['status']=='declined' and not proof['kernels'] and not proof['bindings']
+    assert proof['reason']=='provider padded mesh K exceeds selected internal MAC bound'
+
+
+def test_inconsistent_selected_mac_policy_declines_cleanly():
+    from copy import deepcopy
+    from test_scalar_mean_island import provider,PACKAGE,POLICY
+    policy=deepcopy(POLICY)
+    policy['numerical_semantics']['internal_arithmetic']['mac_result_bits']=16
+    proof=provider().admit_numeric_schedule(source(),package=PACKAGE,numeric_policy=policy)
+    assert proof['status']=='declined' and not proof['kernels']
+    assert proof['reason']=='integer mesh has unsupported selected MAC/accumulator arithmetic'
+
+
+def test_centered_i32_source_routes_to_proved_physical_byte_datapath(tmp_path):
+    from pathlib import Path
+    from types import SimpleNamespace
+    from merlin.targetgen.core_aten_device import selected_facts
+    from test_scalar_mean_island import provider,PACKAGE
+    (tmp_path/'model.mlir').write_text(source())
+    fixture=PACKAGE/'merlin-support/tests/fixtures/core_aten_device/facts.json'
+    with selected_facts('synthetic_core_aten',fixture) as facts:
+        route=provider().routing(tmp_path,target='synthetic_core_aten',package=PACKAGE,facts=facts,
+                                 eligible=[(None,SimpleNamespace(dtypes=('i32','i32','i32')))])
+    assert route and callable(route.region_offload) and route.catalog_builder is None
+    assert route.operand_dtype=='i8' and route.accum_dtype=='i32'
+    # The route must honor a refusal when proving the prepared bytes; it must
+    # not compile simply because the unprepared source had a match.
+    from copy import deepcopy
+    import json
+    from test_scalar_mean_island import POLICY
+    policy=deepcopy(POLICY)
+    policy['numerical_semantics']['internal_arithmetic']['mac_result_bits']=16
+    policy['numerical_semantics']['internal_arithmetic']['mac_result_overflow']='wrap_to_16_bits'
+    (tmp_path/'spec-int8-admission.json').write_text(json.dumps(dict(selection=dict(spec=policy))))
+    result=route.region_offload(tmp_path/'model.mlir',tmp_path/'refused')
+    assert result[:3]==(None,None,None)
+    manifest=json.loads(result[3].read_text())
+    assert manifest['status']=='declined' and not manifest['kernels']
+    assert 'compilation' not in manifest
