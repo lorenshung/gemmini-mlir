@@ -13,6 +13,7 @@ import os
 import json
 import subprocess
 import sys
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -53,8 +54,32 @@ def main() -> int:
     cases = sorted(p for p in a.capture.iterdir() if (p / "model.mlir").exists())
     if a.only:
         cases = [c for c in cases if c.name in a.only]
+    # Results are appended as each case completes (and a rerun resumes from them): an RTL run lasts
+    # hours, and one case raising must not discard the others.
+    log = a.out.with_suffix(".jsonl") if a.out else None
+    done = {}
+    if log and log.exists():
+        for line in log.read_text().splitlines():
+            r = json.loads(line)
+            if r.get("status") in ("PASS", "FAIL", "REFUSED"):
+                done[r["case"]] = r
+    lock = threading.Lock()
+
+    def guarded(c):
+        if c.name in done:
+            return done[c.name]
+        try:
+            r = one(c, a.engine, f"{a.tag}_{a.engine}")
+        except Exception as exc:  # noqa: BLE001
+            r = dict(case=c.name, status="ERROR", error=f"{type(exc).__name__}: {exc}"[-1500:])
+        if log:
+            with lock, log.open("a") as f:
+                f.write(json.dumps(r) + "\n")
+        print(f"{r['case']:32s} {r['status']}", flush=True)
+        return r
+
     with ThreadPoolExecutor(max_workers=a.j) as pool:
-        rows = list(pool.map(lambda c: one(c, a.engine, f"{a.tag}_{a.engine}"), cases))
+        rows = list(pool.map(guarded, cases))
     if a.out:
         a.out.write_text(json.dumps(rows, indent=1) + "\n")
     for r in rows:
