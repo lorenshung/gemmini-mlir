@@ -113,6 +113,8 @@ def conv2d(s: Stream, g: ConvGeom, x: str, w: str, y: str, *, bias: str | None =
                             s.mvin(s.at(bias, (grp * cog + (jb + j) * DIM) * 4), dst, nc, mr, 2)
                         else:
                             s.mvin(None, dst, nc, mr, 2)
+                            if bias is not None:
+                                s.fence()
                             for _ in range(bias_repeat if bias is not None else 0):
                                 s.mvin(s.at(bias, (grp * cog + (jb + j) * DIM) * 4),
                                        ACC(acc0 + (i * tj + j) * DIM, accumulate=True), nc, mr, 2)

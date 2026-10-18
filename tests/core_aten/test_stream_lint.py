@@ -42,12 +42,15 @@ class TestLint(unittest.TestCase):
         s.mvin(s.at("x"), SP(4), 16, 4, 0)
         lint(s)
 
-    def test_zero_fill_then_accumulate_is_sanctioned(self):
+    def test_zero_fill_then_accumulate_requires_fence(self):
         s = self._stream()
         s.config_ld(0, 16, shrink=False)
         s.mvin(None, ACC(0), 16, 16, 0)
         s.config_ld(1, 16, shrink=True)
         s.mvin(s.at("x"), ACC(0, accumulate=True), 16, 16, 1)
+        with self.assertRaisesRegex(HazardError, "HW3"):
+            lint(s)
+        s.ins.insert(2, type(s.ins[0])('fence', (), None, 0))
         lint(s)
 
     def test_hw2_shrunk_accumulator_zero_fill(self):
@@ -120,6 +123,7 @@ def test_repeated_accumulates_preserve_overwrite_hazard():
     s=Stream([Arg('x','i8',(16,16),'input')])
     s.config_ld(2,0,shrink=False)
     s.mvin(None,ACC(0),16,16,2)
+    s.fence()
     s.config_ld(0,16,shrink=True)
     for _ in range(1000):
         s.mvin(s.at('x'),ACC(0,accumulate=True),16,16)

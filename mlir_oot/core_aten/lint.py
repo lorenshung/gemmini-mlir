@@ -7,7 +7,7 @@ Rules (analysis/recipe_corrections.md, HW1-HW4 and the DRAM rule):
 * HW2  a zero-fill MVIN into the accumulator must use a load state configured with
        shrink = 0 (the shrunk ZeroWriter byte count trips DMACommandTracker).
 * HW3  a MVIN must not follow an overlapping MVIN of the same local rows/columns unless
-       both accumulate, the first is a zero-fill and the second accumulates, an EX or
+       both accumulate, an EX or
        MVOUT touching those rows sits between them, or a fence does.
 * HW4  pooled spad-source MVOUTs are never emitted (pooling stays disabled).
 * DRAM a MVIN or MVOUT overlapping bytes an earlier MVOUT of this stream wrote needs a
@@ -119,7 +119,7 @@ def lint(stream: Stream) -> dict:
                     if prior:
                         for (p0, p1, pacc, pzero, pidx) in prior:
                             if p0 < c0 + nc and c0 < p1:
-                                if (pacc and accumulate) or (pzero and accumulate):
+                                if pacc and accumulate:
                                     continue
                                 err(i, f"HW3: MVIN after overlapping MVIN #{pidx} on {space} row {r} with no fence")
                                 break

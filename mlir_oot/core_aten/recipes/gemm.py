@@ -77,6 +77,7 @@ def blocked_matmul(s: Stream, A: tuple[str, int], lda: int, B: tuple[str, int], 
                             s.mvin(s.at(bias[0], boff), ACC(tile), nc, mr, 2)
                         else:
                             s.mvin(None, ACC(tile), nc, mr, 2)
+                            s.fence()
                             for _ in range(bias_repeat):
                                 s.mvin(s.at(bias[0], boff), ACC(tile, accumulate=True), nc, mr, 2)
             for kb in range(0, Kt, TK):

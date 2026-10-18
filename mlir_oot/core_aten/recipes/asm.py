@@ -5,7 +5,7 @@ block of C elements (C = 1 views every element as a row).  The int32 sums are ex
 term is an int8 MVIN into the accumulator (shrunk state, unit scale: the MVIN scale unit
 saturates to int8, so an integer weight W is W accumulating MVINs of the row), accumulated
 onto a zero-filled tile (zero-fill through a shrink=0 state, HW2;
-zero-fill followed by accumulates is the ordering the RTL guarantees, HW3).  Consecutive
+an explicit fence orders zero-fill before accumulating loads, HW3). Consecutive
 output rows whose t-th terms read input rows in arithmetic progression (any non-negative
 DRAM stride, including 0 for a broadcast) share one MVIN.  Output rows are processed in
 chunks of one accumulator half; readouts are grouped by equal scale.
@@ -43,6 +43,7 @@ def accumulate_sum(s: Stream, x: str, y: str, C: int, rows_out: int, out_row: np
             cw = min(DIM, C - ct * DIM)
             for b in range(0, rr, DIM):
                 s.mvin(None, ACC(half + ct * R + b), cw, min(DIM, rr - b), 2)
+        s.fence()
         sel = (out_row >= r0) & (out_row < r0 + rr)
         o, i, w, k = out_row[sel], in_row[sel], weight[sel], rank[sel]
         for t in range(int(k.max()) + 1 if k.size else 0):
