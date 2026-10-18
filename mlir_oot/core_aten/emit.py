@@ -114,6 +114,7 @@ class _Emitter:
     def __init__(self, stream: Stream, symbol: str):
         self.stream = stream
         self.symbol = symbol
+        self.ptr_type = PTR
         runtime = [a for a in stream.args if a.role != "const"]
         self.fb = FnBuilder([PTR] * len(runtime))
         self.base = {}
@@ -171,7 +172,22 @@ class _Emitter:
             pos += width
 
     def module(self, tree) -> ModuleOp:
-        self.nodes(tree, [])
+        if self.stream.packs:
+            from .host_readout import emit_packs
+            emit_packs(self)
+        if self.stream.readouts:
+            from .host_readout import emit
+            groups={}
+            for r in self.stream.readouts:
+                groups.setdefault(len(self.stream.ins) if r.after is None else r.after,[]).append(r)
+            start=0
+            for boundary,readouts in sorted(groups.items()):
+                self.nodes(reroll([encode(i) for i in self.stream.ins[start:boundary]]),[])
+                emit(self,readouts)
+                start=boundary
+            self.nodes(reroll([encode(i) for i in self.stream.ins[start:]]),[])
+        else:
+            self.nodes(tree,[])
         fn = llvm.FuncOp(self.symbol, llvm.LLVMFunctionType([PTR] * len(self.fb.entry.args)),
                          linkage=llvm.LinkageAttr("external"), body=self.fb.finish())
         module = ModuleOp([*self.globals, fn])

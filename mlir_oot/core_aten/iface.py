@@ -153,7 +153,7 @@ def movement_kernel(attrs, src_shape, src_dtype, dst_shape, dst_dtype) -> ops.Ke
     if tuple(out.shape) != tuple(dst_shape):
         raise IfaceDecline("MOVEMENT result extent differs from the declared one", "MOVEMENT", dst_shape)
     lm = _gather_map(np.ascontiguousarray(out), {0: 1.0 if scale is None else f32(scale)}, fill)
-    return linmatch.copy_kernel("MOVEMENT", lm, {0: linmatch.Src("x0", tuple(src_shape), 1.0)}, 1.0)
+    return linmatch.kernel_for("MOVEMENT", lm, {0: linmatch.Src("x0", tuple(src_shape), 1.0)}, 1.0)
 
 
 def concat_kernel(attrs, src_shapes, dst_shape) -> ops.Kernel:
@@ -163,7 +163,7 @@ def concat_kernel(attrs, src_shapes, dst_shape) -> ops.Kernel:
     out = np.concatenate(parts, axis=attrs["axis"])
     ratios = {i: 1.0 if scales is None else f32(scales[i]) for i in range(len(src_shapes))}
     srcs = {i: linmatch.Src(f"x{i}", tuple(sh), 1.0) for i, sh in enumerate(src_shapes)}
-    return linmatch.copy_kernel("CONCAT", _gather_map(out, ratios, None), srcs, 1.0)
+    return linmatch.kernel_for("CONCAT", _gather_map(out, ratios, None), srcs, 1.0)
 
 
 def insert_slice_kernel(attrs, dest_shape, src_shape) -> ops.Kernel:
@@ -171,7 +171,7 @@ def insert_slice_kernel(attrs, dest_shape, src_shape) -> ops.Kernel:
     sl = tuple(slice(o, o + n * s, s) for o, n, s in zip(attrs["offsets"], src_shape, attrs["strides"]))
     out[sl] = _tags(1, src_shape)
     srcs = {0: linmatch.Src("x0", tuple(dest_shape), 1.0), 1: linmatch.Src("x1", tuple(src_shape), 1.0)}
-    return linmatch.copy_kernel("INSERT_SLICE", _gather_map(out, {0: 1.0, 1: 1.0}, None), srcs, 1.0)
+    return linmatch.kernel_for("INSERT_SLICE", _gather_map(out, {0: 1.0, 1: 1.0}, None), srcs, 1.0)
 
 
 def fill_kernel(attrs, dst_shape) -> ops.Kernel:
@@ -201,8 +201,10 @@ def affine_kernel(attrs, x_shape, y_shape, dst_dtype) -> ops.Kernel:
             return ops.to_copy_widen(x_shape)                      # args x -> y, exact widening
     bound = abs(c) + sum(128 * abs(v) for v in w)
     accumulator_bound(bound)
-    if dst_dtype == "i8":
-        prove_affine([Q(sc) * v for v in w], Q(sc) * c, w, c, Q(sc), relu)
+    if dst_dtype == 'i8':
+        kernel = (ops.add_tensor('AFFINE_MAP',x_shape,y_shape,wa=w[0],alpha=w[1],c=c,s_a=1,s_b=1,s_out=Q(1)/Q(sc),relu=relu)
+                  if two else ops.add_scalar('AFFINE_MAP',x_shape,c,w=w[0],s_x=1,s_out=Q(1)/Q(sc),relu=relu))
+        return kernel
     s = ops._begin(args)
     if not two and w == [1] and c == 0 and not relu and dst_dtype == "i8":
         ew.unary_scale(s, "x", "dst", n, sc)                      # the identical single rounding
@@ -384,7 +386,7 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
 
 def _sum(lm, src_shape, W, rho, dst_shape) -> ops.Kernel:
     try:
-        return linmatch.sum_kernel("WINDOW_SUM", lm, linmatch.Src("x0", src_shape, 1.0), 1.0, weights=W, rho=rho)
+        return linmatch.kernel_for("WINDOW_SUM",lm,{0:linmatch.Src("x0",src_shape,1)},1)
     except (Decline, ValueError) as exc:
         raise IfaceDecline(f"WINDOW_SUM: {exc}", "WINDOW_SUM", dst_shape)
 
@@ -426,8 +428,15 @@ class Program:
                     remap[k] = s._index[cname]
                 else:
                     remap[k] = s._index[mapping[a.name]]
+            start=len(s.ins)
             for ins in ks.ins:
                 s.ins.append(ins if ins.arg is None else Ins(ins.kind, ins.attrs, remap[ins.arg], ins.off))
+            from dataclasses import replace
+            for r in ks.readouts:
+                s.readouts.append(replace(r,out=mapping[r.out],terms=[(mapping[n],f) for n,f in r.terms],
+                    permutations={mapping[n]:v for n,v in (r.permutations or {}).items()},
+                    broadcasts={mapping[n]:v for n,v in (r.broadcasts or {}).items()},
+                    after=start+(len(ks.ins) if r.after is None else r.after)))
         s.fence()
         return s
 

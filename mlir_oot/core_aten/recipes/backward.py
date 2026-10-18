@@ -25,14 +25,14 @@ def _fdiv(a, b):
     return a // b
 
 
-def conv_transpose(s: Stream, g: ConvGeom, gy: str, wb: str, gx: str, scale: float) -> None:
+def conv_transpose(s: Stream, g: ConvGeom, gy: str, wb: str, gx: str, scale: float, *, out_i32: bool = False) -> None:
     """gy: NHWC [N, OH, OW, F]; wb: [KH, KW, F, C]; gx: NHWC [N, H, W, C] int8 at ``scale``."""
     F, C = g.cout, g.cin
     s.config_ex(c_stride=g.sw)
     s.config_ld(0, F)
     s.config_ld(1, C)
     s.config_ld(2, 0, 1.0, shrink=False)
-    s.config_st(C, NO_ACT, scale)
+    s.config_st(C*(4 if out_i32 else 1), NO_ACT, scale)
     t = u = 0
     for n in range(g.n):
         for ih in range(g.h):
@@ -66,11 +66,11 @@ def conv_transpose(s: Stream, g: ConvGeom, gy: str, wb: str, gx: str, scale: flo
                                 s.mvin(s.at(wb, (tap * F + f0) * C + c0), SP(b), nc, kr, 1)
                                 s.preload(SP(b), ACC(acc + orow, accumulate=True), nc, kr, nc, v)
                                 s.compute(SP(a), kr, v)
-                    s.mvout(s.at(gx, ((n * g.h + ih) * g.w + iw0) * C + c0), ACC(acc), nc, mr)
+                    s.mvout(s.at(gx, (((n * g.h + ih) * g.w + iw0) * C + c0)*(4 if out_i32 else 1)), ACC(acc,full=out_i32), nc, mr)
     s.config_ex()
 
 
-def conv_wgrad(s: Stream, g: ConvGeom, gy: str, x: str, gw: str, scale: float) -> None:
+def conv_wgrad(s: Stream, g: ConvGeom, gy: str, x: str, gw: str, scale: float, *, out_i32: bool = False) -> None:
     """gy: NCHW [N, F, OH, OW]; x: NHWC [N, H, W, C]; gw: [KH*KW, F, C] int8 at ``scale``."""
     F, C = g.cout, g.cin
     OP = g.oh * g.ow
@@ -78,7 +78,7 @@ def conv_wgrad(s: Stream, g: ConvGeom, gy: str, x: str, gw: str, scale: float) -
     s.config_ld(0, OP)
     s.config_ld(1, g.sw * C)
     s.config_ld(2, 0, 1.0, shrink=False)
-    s.config_st(C, NO_ACT, scale)
+    s.config_st(C*(4 if out_i32 else 1), NO_ACT, scale)
     t = u = 0
     for tap in range(g.kh * g.kw):
         kh, kw = divmod(tap, g.kw)
@@ -114,4 +114,4 @@ def conv_wgrad(s: Stream, g: ConvGeom, gy: str, x: str, gw: str, scale: float) -
                                    hi - lo + 1, 1)
                             s.preload(SP(b), ACC(acc, accumulate=True), nci, mk, nci, nco)
                             s.compute(SP(a), mk, nco)
-                s.mvout(s.at(gw, (tap * F + co0) * C + ci0), ACC(acc), nci, nco)
+                s.mvout(s.at(gw, ((tap * F + co0) * C + ci0)*(4 if out_i32 else 1)), ACC(acc,full=out_i32), nci, nco)

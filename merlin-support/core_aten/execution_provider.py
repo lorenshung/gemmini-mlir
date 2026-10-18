@@ -270,15 +270,22 @@ def _admit_integer_regions(source, *, package, numeric_policy):
             raise ValueError("seeded WS primitive differs from the proved independent dot product")
         if any(i.a("dataflow") != 1 for i in stream.ins if i.kind == "config_ex"):
             raise ValueError("seeded proof requires weight-stationary execution")
-        # ops.matmul proved all SRAM partial sums, constant seed and every
-        # rational RNE transition before this stream could be emitted.
+        # The bound producer is exact integer math with raw full-width DMA.
+        # Source exact readout remains on the host, including bias and RNE.
+        stores=[i for i in stream.ins if i.kind=='mvout']
+        if not stores or any(not (i.a('local') & (1 << 29)) for i in stores):
+            raise ValueError('exact producer requires full-width i32 readout')
+        if any(i.a('scale') != 1 for i in stream.ins if i.kind=='config_ld') or any(
+                i.a('acc_scale') != 1 for i in stream.ins if i.kind=='config_st'):
+            raise ValueError('exact producer contains an unproved FP32 data-path scale')
         proofs.append(dict(symbol=binding["symbol"], status="proven", schedule=match.kernel.meta,
             primitive_k=sorted({i.a("a_cols") for i in computes}), padded_primitive_k=16,
             k_split=[min(16, dims["k"]-k) for k in range(0,dims["k"],16)],
             max_partial_sum_bound=16*bound["maximum_product"],
             mac_positive_limit=(1 << (bound["mac_result_bits"]-1))-1,
             headroom=((1 << (bound["mac_result_bits"]-1))-1)-16*bound["maximum_product"],
-            bound=bound, exact_arithmetic=True, seed=match.kernel.meta["seed"],
+            bound=bound, exact_arithmetic=True, device_readout="full_i32",
+            quantization="retained_source_exact_integer_host_readout", seed=match.kernel.meta["seed"],
             accumulator_min=match.kernel.meta["accumulator_min"], accumulator_max=match.kernel.meta["accumulator_max"],
             emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest()))
     if not proofs:

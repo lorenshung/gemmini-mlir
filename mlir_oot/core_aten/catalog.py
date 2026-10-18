@@ -41,6 +41,9 @@ def _stream_digest(kernel) -> str:
     h.update(json.dumps([(a.name, a.dtype, list(a.shape), a.role) for a in kernel.stream.args]).encode())
     for name, data in sorted(kernel.stream.consts.items()):
         h.update(name.encode() + data.tobytes())
+    from dataclasses import asdict
+    h.update(json.dumps(_jsonable([asdict(r) for r in kernel.stream.readouts]),sort_keys=True).encode())
+    h.update(repr(kernel.stream.packs).encode())
     for ins in kernel.stream.ins:
         r = encode(ins)
         h.update(repr((r.key, r.values)).encode())
@@ -76,7 +79,8 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                                    args=[dict(name=a.name, dtype=a.dtype, shape=list(a.shape), role=a.role)
                                          for a in m.kernel.args],
                                    instructions=report["instructions"], fences=report["fences"],
-                                   counts=m.kernel.stream.counts(), meta=_jsonable(m.kernel.meta))
+                                   counts=m.kernel.stream.counts(), meta=_jsonable(m.kernel.meta),
+                                   requantization=_readout_contracts(m.kernel.stream))
         argmap = {name: _source(v, ordinals, func_args) for name, v in m.operands}
         out_name, out_val = m.result
         provs = [getattr(o.attributes.get("prov.aten"), "data", "") for o in m.consumed if o is not None]
@@ -100,13 +104,24 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
     return device, manifest, matches
 
 
+def _readout_contracts(stream):
+    from dataclasses import asdict
+    return _jsonable([dict(asdict(r),rounding='half_to_even',execution='host',device_readout='full_i32') for r in stream.readouts])
+
+
 def _jsonable(obj):
+    import numpy as np
+    if isinstance(obj,np.ndarray): return _jsonable(obj.tolist())
+    if isinstance(obj,np.integer): return int(obj)
     if isinstance(obj, dict):
         return {str(k): _jsonable(v) for k, v in obj.items()}
     if isinstance(obj, (list, tuple)):
         return [_jsonable(v) for v in obj]
     if isinstance(obj, (int, float, str, bool)) or obj is None:
         return obj
+    from fractions import Fraction
+    if isinstance(obj, Fraction):
+        return dict(numerator=str(obj.numerator), denominator=str(obj.denominator))
     try:
         return float(obj)
     except (TypeError, ValueError):

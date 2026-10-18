@@ -18,6 +18,7 @@ data-dependent indices) raises ``NotLinear``; the region then stays on the host.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from fractions import Fraction as Q
 
 import numpy as np
 from xdsl.dialects.builtin import DenseIntOrFPElementsAttr, FloatAttr, IntegerAttr, TensorType
@@ -33,7 +34,7 @@ class Sym:
     """Elementwise symbolic linear form over region inputs; arrays share one shape."""
 
     terms: list[tuple[int, np.ndarray, np.ndarray]] = field(default_factory=list)   # (src, idx, coef)
-    const: np.ndarray | float = 0.0
+    const: np.ndarray | float = 0
 
     @property
     def shape(self):
@@ -43,15 +44,15 @@ class Sym:
 
     def bshape(self, shp):
         return Sym([(s, np.broadcast_to(i, shp), np.broadcast_to(c, shp)) for s, i, c in self.terms],
-                   np.broadcast_to(np.asarray(self.const, np.float64), shp))
+                   np.broadcast_to(np.asarray(self.const, object), shp))
 
     def scale(self, k):
         return Sym([(s, i, c * k) for s, i, c in self.terms], self.const * k)
 
-    def add(self, other, k=1.0):
+    def add(self, other, k=1):
         if isinstance(other, Sym):
             return Sym(self.terms + [(s, i, c * k) for s, i, c in other.terms], self.const + k * other.const)
-        return Sym(list(self.terms), self.const + k * np.asarray(other, np.float64))
+        return Sym(list(self.terms), self.const + k * np.asarray(other, object))
 
     def take(self, index):
         return Sym([(s, i[index], c[index]) for s, i, c in self.terms], np.asarray(self.const)[index]
@@ -80,12 +81,12 @@ def where(cond, a, b):
     cond = np.asarray(cond, bool)
     if not isinstance(a, Sym) and not isinstance(b, Sym):
         return np.where(cond, a, b)
-    sa = a if isinstance(a, Sym) else Sym([], np.asarray(a, np.float64))
-    sb = b if isinstance(b, Sym) else Sym([], np.asarray(b, np.float64))
+    sa = a if isinstance(a, Sym) else Sym([], np.asarray(a, object))
+    sb = b if isinstance(b, Sym) else Sym([], np.asarray(b, object))
     shp = np.broadcast_shapes(cond.shape, sa.shape, sb.shape)
     sa, sb, cond = sa.bshape(shp), sb.bshape(shp), np.broadcast_to(cond, shp)
-    terms = [(s, i, np.where(cond, c, 0.0)) for s, i, c in sa.terms] + \
-            [(s, i, np.where(cond, 0.0, c)) for s, i, c in sb.terms]
+    terms = [(s, i, np.where(cond, c, 0)) for s, i, c in sa.terms] + \
+            [(s, i, np.where(cond, 0, c)) for s, i, c in sb.terms]
     return Sym(terms, np.where(cond, sa.const, sb.const)).compact()
 
 
@@ -101,15 +102,15 @@ class Scatter:
 def _scatter_to_sym(shape, base, updates) -> Sym:
     """Materialize scatter contributions as dense per-element terms (rank within each output)."""
     n = int(np.prod(shape)) if shape else 1
-    out = base if isinstance(base, Sym) else Sym([], np.asarray(base, np.float64))
+    out = base if isinstance(base, Sym) else Sym([], np.asarray(base, object))
     out = out.bshape(shape)
     terms = list(out.terms)
-    const = np.array(out.const, np.float64).reshape(-1).copy()
+    const = np.array(out.const, object).reshape(-1).copy()
     for flat, upd in updates:
         flat = np.asarray(flat, np.int64).reshape(-1)
-        np.add.at(const, flat, np.asarray(upd.const, np.float64).reshape(-1) if np.ndim(upd.const) else upd.const)
+        np.add.at(const, flat, np.asarray(upd.const, object).reshape(-1) if np.ndim(upd.const) else upd.const)
         for src, idx, coef in upd.terms:
-            idx, coef = np.asarray(idx).reshape(-1), np.asarray(coef, np.float64).reshape(-1)
+            idx, coef = np.asarray(idx).reshape(-1), np.asarray(coef, object).reshape(-1)
             keep = coef != 0
             f, i, c = flat[keep], idx[keep], coef[keep]
             order = np.argsort(f, kind="stable")
@@ -119,7 +120,7 @@ def _scatter_to_sym(shape, base, updates) -> Sym:
             for r in range(int(rank.max()) + 1 if f.size else 0):
                 sel = rank == r
                 ti = np.zeros(n, np.int64)
-                tc = np.zeros(n, np.float64)
+                tc = np.zeros(n, object)
                 ti[f[sel]] = i[sel]
                 tc[f[sel]] = c[sel]
                 terms.append((src, ti.reshape(shape), tc.reshape(shape)))
@@ -140,9 +141,9 @@ def _const(op):
     a = _attr(op, "value")
     if isinstance(a, (IntegerAttr, FloatAttr)):
         v = a.value.data
-        return float(v) if isinstance(a, FloatAttr) else int(v)
+        return Q(v) if isinstance(a, FloatAttr) else int(v)
     if isinstance(a, DenseIntOrFPElementsAttr):
-        vals = np.array(list(a.get_values()))
+        vals = np.array([Q(v) if isinstance(v, float) else v for v in a.get_values()], dtype=object)
         return vals.reshape(_shape(op.results[0]))
     raise NotLinear(f"constant {a}")
 
@@ -183,12 +184,12 @@ class Region:
             self.memo[v] = lf
             return lf
         if lf is not None:
-            sid, coef = lf
+            sid, coef, *offset = lf
             shp = _shape(v)
             n = int(np.prod(shp)) if shp else 1
             self.sources[sid] = v
-            val = Sym([(sid, np.arange(n, dtype=np.int64).reshape(shp), np.full(shp, float(coef)))],
-                      np.zeros(shp))
+            val = Sym([(sid, np.arange(n, dtype=np.int64).reshape(shp), np.full(shp, Q(coef), dtype=object))],
+                      np.full(shp,offset[0] if offset else 0,dtype=object))
             self.memo[v] = val
             return val
         if isinstance(v, BlockArgument):
@@ -208,7 +209,7 @@ class Region:
             s = self.tensor(op.operands[0])
             return np.full(_shape(op.results[0]), s)
         if nm == "tensor.empty":
-            return np.zeros(_shape(op.results[0]))
+            return np.zeros(_shape(op.results[0]), dtype=object)
         if nm in ("tensor.collapse_shape", "tensor.expand_shape", "tensor.cast"):
             x = self.tensor(op.operands[0])
             shp = _shape(op.results[0])
@@ -216,6 +217,25 @@ class Region:
                 return Scatter(shp, x.base.reshape(shp) if isinstance(x.base, Sym) else np.asarray(x.base).reshape(shp),
                                x.updates)
             return x.reshape(shp) if isinstance(x, Sym) else np.asarray(x).reshape(shp)
+        if nm == 'linalg.reduce':
+            block=op.regions[0].blocks[0]
+            body=list(block.ops)
+            if [o.name for o in body]!=['arith.addf','linalg.yield'] or set(body[0].operands)!=set(block.args) or list(body[1].operands)!=[body[0].results[0]]:
+                raise NotLinear('reduction is not a closed sum')
+            value=self.tensor(op.operands[0]);init=self.tensor(op.operands[1])
+            dims=tuple(_attr(op,'dimensions').iter_values())
+            full_shape=_shape(op.operands[0]);remaining=[i for i in range(len(full_shape)) if i not in dims]
+            out_shape=tuple(full_shape[i] for i in remaining)
+            def moved(a):
+                return np.moveaxis(np.broadcast_to(a,full_shape),dims,list(range(len(remaining),len(full_shape)))).reshape(out_shape+(-1,))
+            if isinstance(value,Sym):
+                terms=[]
+                for sid,idx,coef in value.terms:
+                    i,c=moved(idx),moved(coef)
+                    terms.extend((sid,i[...,k],c[...,k]) for k in range(i.shape[-1]))
+                total=Sym(terms,moved(value.const).sum(-1))
+                return total.add(init)
+            return moved(value).sum(-1)+init
         if nm == "linalg.generic":
             return self._generic(op)
         if nm == "linalg.broadcast":
@@ -258,7 +278,7 @@ class Region:
             parts = [self.tensor(x) for x in op.operands]
             shp = _shape(op.results[0])
             idx = np.indices(shp)
-            out = np.zeros(shp)
+            out = np.zeros(shp, dtype=object)
             start = 0
             for x, p in zip(op.operands, parts):
                 n = _shape(x)[dim]
@@ -313,7 +333,7 @@ class Region:
                     raise NotLinear("insert is not an accumulate of the extracted element")
                 flat = np.ravel_multi_index(read[1], shp)
                 val = env[v][1]
-                val = val if isinstance(val, Sym) else Sym([], np.asarray(val, np.float64))
+                val = val if isinstance(val, Sym) else Sym([], np.asarray(val, object))
                 upd = (flat, val.bshape(ivs.shape))
                 env[o.results[0]] = ("inserted",)
                 continue
@@ -395,11 +415,11 @@ class Region:
                     terms.append((s_, ii[..., k], cc[..., k]))
             total = Sym(terms, moved(v.bshape(tuple(dims)).const).sum(-1))
         else:
-            total = moved(np.asarray(v, np.float64)).sum(-1)
+            total = moved(np.asarray(v, object)).sum(-1)
         if isinstance(init, Sym) or isinstance(total, Sym):
-            base = init if isinstance(init, Sym) else Sym([], np.asarray(init, np.float64))
+            base = init if isinstance(init, Sym) else Sym([], np.asarray(init, object))
             return base.bshape(pshape).add(total if isinstance(total, Sym) else Sym([], total))
-        return np.asarray(init, np.float64) + total
+        return np.asarray(init, object) + total
 
     def _block(self, block, env, ivs, mask):
         for op in block.ops:
@@ -428,7 +448,7 @@ class Region:
         if nm in ("arith.index_cast", "arith.index_castui", "arith.extsi", "arith.extui", "arith.trunci"):
             return vals[0]
         if nm in ("arith.sitofp", "arith.uitofp"):
-            return np.asarray(vals[0], np.float64)
+            return np.asarray(vals[0], object)
         if nm in ("arith.extf", "arith.truncf"):
             return vals[0]
         if nm in ("arith.fptosi", "arith.fptoui"):
@@ -441,17 +461,17 @@ class Region:
             if nm == "arith.addf":
                 return (a if isinstance(a, Sym) else Sym([], a)).add(b)
             if nm == "arith.subf":
-                return (a if isinstance(a, Sym) else Sym([], np.asarray(a, np.float64))).add(b, -1.0)
+                return (a if isinstance(a, Sym) else Sym([], np.asarray(a, object))).add(b, -1)
             if nm == "arith.mulf":
                 if isinstance(a, Sym) and not isinstance(b, Sym):
-                    return a.scale(np.asarray(b, np.float64))
+                    return a.scale(np.asarray(b, object))
                 if isinstance(b, Sym) and not isinstance(a, Sym):
-                    return b.scale(np.asarray(a, np.float64))
+                    return b.scale(np.asarray(a, object))
                 raise NotLinear("product of two inputs")
             if nm == "arith.divf" and isinstance(a, Sym) and not isinstance(b, Sym):
-                return a.scale(1.0 / np.asarray(b, np.float64))
+                return a.scale(Q(1) / np.asarray(b, object))
             if nm == "arith.negf":
-                return a.scale(-1.0)
+                return a.scale(-1)
             if nm == "arith.select":
                 return where(a, b, vals[2])
             if nm == "tensor.extract":
@@ -592,19 +612,19 @@ def extract(root: SSAValue, leaf) -> tuple[LinearMap, list[Operation]]:
     if isinstance(val, Scatter):
         for flat, upd in val.updates:
             for s_, i, c in upd.compact().terms:
-                c = np.asarray(c, np.float64).reshape(-1)
+                c = np.asarray(c, object).reshape(-1)
                 nz = c != 0
                 extra.append((np.asarray(flat).reshape(-1)[nz], s_, np.asarray(i).reshape(-1)[nz], c[nz]))
             if np.any(np.asarray(upd.const)):
                 raise NotLinear("scatter of a constant")
         val = val.base
     if not isinstance(val, Sym):
-        val = Sym([], np.asarray(val, np.float64))
+        val = Sym([], np.asarray(val, object))
     val = val.bshape(shp)
     outs, srcs, idxs, coefs = [], [], [], []
     p = np.arange(n, dtype=np.int64)
     for s, i, c in val.compact().terms:
-        c = np.asarray(c, np.float64).reshape(-1)
+        c = np.asarray(c, object).reshape(-1)
         nz = c != 0
         outs.append(p[nz])
         srcs.append(np.full(int(nz.sum()), s, np.int64))
@@ -616,6 +636,6 @@ def extract(root: SSAValue, leaf) -> tuple[LinearMap, list[Operation]]:
         idxs.append(i)
         coefs.append(c)
     cat = (lambda xs, dt: np.concatenate(xs) if xs else np.zeros(0, dt))
-    lm = LinearMap(shp, cat(outs, np.int64), cat(srcs, np.int64), cat(idxs, np.int64), cat(coefs, np.float64),
-                   np.asarray(val.const, np.float64).reshape(-1), reg.sources)
+    lm = LinearMap(shp, cat(outs, np.int64), cat(srcs, np.int64), cat(idxs, np.int64), cat(coefs, object),
+                   np.asarray(val.const, object).reshape(-1), reg.sources)
     return lm, reg.ops

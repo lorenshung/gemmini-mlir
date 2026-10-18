@@ -25,7 +25,7 @@ def _ones(s: Stream):
         s.const("ones16", np.ones(DIM, np.int8))
 
 
-def mean_last(s: Stream, x: str, out: str, R: int, L: int, scale: float) -> None:
+def mean_last(s: Stream, x: str, out: str, R: int, L: int, scale: float, *, out_i32: bool = False) -> None:
     _ones(s)
     s.config_ex()
     s.config_ld(1, 1)
@@ -44,18 +44,18 @@ def mean_last(s: Stream, x: str, out: str, R: int, L: int, scale: float) -> None
                 s.mvin(s.at(x, (r0 + i0) * L + k0), SP(slot), kr, mr, 0)
                 s.preload(SP(ONES), ACC(acc + i0, accumulate=k0 > 0), 1, kr, 1, mr)
                 s.compute(SP(slot), kr, mr)
-        s.config_st(1, NO_ACT, scale)
+        s.config_st(4 if out_i32 else 1, NO_ACT, scale)
         for i in range(0, rr, DIM):
-            s.mvout(s.at(out, r0 + i), ACC(acc + i), 1, min(DIM, rr - i))
+            s.mvout(s.at(out, (r0 + i)*(4 if out_i32 else 1)), ACC(acc + i, full=out_i32), 1, min(DIM, rr - i))
 
 
-def mean_middle(s: Stream, x: str, out: str, O: int, L: int, I: int, scale: float) -> None:
+def mean_middle(s: Stream, x: str, out: str, O: int, L: int, I: int, scale: float, *, out_i32: bool = False) -> None:
     _ones(s)
     s.config_ex()
     s.config_ld(0, 0)
     s.mvin(s.at("ones16"), SP(ONEROW), DIM, 1, 0)
     s.config_ld(1, I)
-    s.config_st(I, NO_ACT, scale)
+    s.config_st(I*(4 if out_i32 else 1), NO_ACT, scale)
     t = u = 0
     for o in range(O):
         for j0 in range(0, I, DIM):
@@ -69,4 +69,4 @@ def mean_middle(s: Stream, x: str, out: str, O: int, L: int, I: int, scale: floa
                 s.mvin(s.at(x, (o * L + k0) * I + j0), SP(slot), nc, kr, 1)
                 s.preload(SP(slot), ACC(acc, accumulate=k0 > 0), nc, kr, nc, 1)
                 s.compute(SP(ONEROW), kr, 1)
-            s.mvout(s.at(out, o * I + j0), ACC(acc), nc, 1)
+            s.mvout(s.at(out, (o * I + j0)*(4 if out_i32 else 1)), ACC(acc, full=out_i32), nc, 1)

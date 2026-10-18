@@ -117,6 +117,8 @@ class QIn:
     scale: float
     dq: Operation | None     # the dequantize op consumed (None: integer domain)
     dtype: str
+    zero_point: int = 0
+    unsigned: bool = False
 
 
 def dequant(v: SSAValue) -> QIn | None:
@@ -125,15 +127,25 @@ def dequant(v: SSAValue) -> QIn | None:
         return None
     s = splat_value(p.operands[1])
     zp = splat_value(p.operands[2])
+    if zp is not None and getattr(p.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8':
+        zp=int(zp)&255
     src = p.operands[0]
-    if s is None or zp != 0 or etype(src) not in ("i8", "i32") or not math.isfinite(s) or not s > 0:
+    if s is None or zp is None or etype(src) not in ("i8", "i32") or not math.isfinite(s) or not s > 0:
         return None
+    if 'prov.quant.scale_numerator' in p.attributes or 'prov.quant.scale_denominator' in p.attributes:
+        from .quant_schema import attributes,ratios
+        pair=ratios(attributes(p,'dequantize'))
+        if len(pair)!=1 or pair[0]!=Fraction(s):
+            raise Decline('source DQ operands differ from exact scale provenance')
+        s=pair[0]
     lo, hi = _prop_int(p, "quant_min"), _prop_int(p, "quant_max")
     if lo is None or hi is None or lo > hi:
         return None
-    if etype(src) == "i8" and (lo < -128 or hi > 127):
+    unsigned = lo >= 0
+    bounds = (0,255) if unsigned else (-128,127)
+    if etype(src)=="i8" and not (bounds[0]<=lo<=hi<=bounds[1] and bounds[0]<=zp<=bounds[1]):
         return None
-    return QIn(src, float(s), p, etype(src))
+    return QIn(src, float(s), p, etype(src),int(zp),unsigned)
 
 
 @dataclass(frozen=True)
@@ -143,6 +155,8 @@ class QOut:
     scale: float
     qmin: int
     qmax: int
+    zero_point: int = 0
+    unsigned: bool = False
 
 
 def quant_sink(v: SSAValue) -> QOut | None:
@@ -153,13 +167,22 @@ def quant_sink(v: SSAValue) -> QOut | None:
     if q.operands[0] is not v:
         return None
     s, zp = splat_value(q.operands[1]), splat_value(q.operands[2])
-    if s is None or zp != 0 or etype(q.results[0]) != "i8" or not math.isfinite(s) or not s > 0:
+    if zp is not None and getattr(q.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8':
+        zp=int(zp)&255
+    if s is None or zp is None or etype(q.results[0]) != "i8" or not math.isfinite(s) or not s > 0:
         return None
+    if 'prov.quant.scale_numerator' in q.attributes or 'prov.quant.scale_denominator' in q.attributes:
+        from .quant_schema import attributes,ratios
+        pair=ratios(attributes(q,'quantize'))
+        if len(pair)!=1 or pair[0]!=Fraction(s):
+            raise Decline('source Q operands differ from exact scale provenance')
+        s=pair[0]
     lo, hi = _prop_int(q, "quant_min"), _prop_int(q, "quant_max")
-    if (lo, hi) != (-128, 127):
-        # the readout saturates to the full int8 range; a narrow output range needs a clamp
+    unsigned = getattr(q.properties.get('output_dtype'),'data',None)=='uint8' or (lo is not None and lo>=0)
+    bounds=(0,255) if unsigned else (-128,127)
+    if lo is None or hi is None or not bounds[0]<=lo<hi<=bounds[1] or not bounds[0]<=zp<=bounds[1]:
         return None
-    return QOut(q, q.results[0], float(s), lo, hi)
+    return QOut(q,q.results[0],float(s),lo,hi,int(zp),unsigned)
 
 
 def single_use(v: SSAValue) -> Operation | None:
@@ -427,7 +450,7 @@ def match_elementwise(op: Operation) -> Match | None:
         return None
     s_o = qout.scale
     terms = [(i, body.lin.terms[i], data[i]) for i in used]
-    c = body.lin.c
+    c = body.lin.c + sum(Fraction(w)*Fraction(q.scale)*((128 if q.unsigned else 0)-q.zero_point) for _,w,q in terms)
     consumed = [op, qout.op] + [t[2].dq for t in terms]
     if len(terms) == 0:
         raise Decline("constant elementwise result")
@@ -443,11 +466,12 @@ def match_elementwise(op: Operation) -> Match | None:
                 k = ops.scale_map(aten, oshape, w, s_x=q.scale, s_out=s_o)
         elif c == 0 and body.relu:
             if w <= 0:
-                raise Decline("ReLU after a non-positive scale (C7)")
+                pass # ReLU is evaluated exactly in the host epilogue
             aten, k = "aten.relu.default", ops.relu(oshape, s_x=Fraction(w) * Fraction(q.scale), s_out=s_o)
         else:
             aten = "aten.add.Scalar" if c > 0 else "aten.sub.Scalar"
             k = ops.add_scalar(aten, oshape, c, s_x=q.scale, s_out=s_o, w=w, relu=body.relu)
+        _pack_inputs(k,[("x",q)])
         return Match(aten, op, consumed, [("x", q.value)], ("y", qout.value), k,
                      numeric=dict(w=w, c=c, s_x=q.scale, s_out=s_o))
     if len(terms) == 2:
@@ -463,6 +487,7 @@ def match_elementwise(op: Operation) -> Match | None:
         aten = "aten.add.Tensor" if wb > 0 else "aten.sub.Tensor"
         k = ops.add_tensor(aten, oshape, bshape, wa=wa, alpha=wb, s_a=qa.scale, s_b=qb.scale, s_out=s_o,
                            c=c, relu=body.relu, b_lead=kb)
+        _pack_inputs(k,[("a",qa),("b",qb)])
         return Match(aten, op, consumed, [("a", qa.value), ("b", qb.value)], ("y", qout.value), k,
                      numeric=dict(wa=wa, wb=wb, c=c, s_a=qa.scale, s_b=qb.scale, s_out=s_o))
     raise Decline("more than two tensor operands")
@@ -587,21 +612,33 @@ def _bias_operand(ch: Chain, s_acc: float, n: int, broadcast_dim_ok, full_ok=Non
     if not full and not broadcast_dim_ok(amap):
         raise Decline("bias broadcast does not follow the output channel")
     if isinstance(src, QIn):
-        if src.dtype != "i32":
-            raise Decline("runtime bias is not int32")
-        r = Fraction(wb) * Fraction(src.scale) / (Fraction(ch.w) * Fraction(s_acc))
-        rep = int(round(r))
-        if not 1 <= rep <= 16 or r != rep:
-            raise Decline("runtime bias weight is not a small integer in accumulator units")
-        return ("arg", src, rep, full)
-    vals = np.asarray(src, np.float64).reshape(-1)
+        if src.dtype != 'i32':
+            raise Decline('runtime bias is not int32')
+        return ('arg',src,Fraction(wb)*Fraction(src.scale),full)
+    vals = np.asarray(src,dtype=object)
     if vals.size != n and not full:
-        raise Decline("bias extent")
-    from .exactness import rational as Q, require
-    units = [Q(wb) * Q(float(v)) / (Q(ch.w) * Q(s_acc)) for v in vals]
-    require(all(v.denominator == 1 and -(1 << 31) <= v < (1 << 31) for v in units),
-            "bias is not exactly representable in accumulator units")
-    return ("const", np.array([int(v) for v in units], np.int32), 1, full)
+        raise Decline('bias extent')
+    return ('const',np.array([Fraction(wb)*Fraction(float(v)) for v in vals.flat],dtype=object).reshape(vals.shape),1,full)
+
+
+def _host_bias(kernel, bias, output_scale, convolution=False):
+    if bias is None:
+        return
+    from .stream import Arg
+    out = next(a for a in kernel.args if a.role == 'output')
+    readout = kernel.stream.readouts[-1]
+    bshape = (1,out.shape[1],1,1) if convolution else ((out.shape[-1],) if not bias[3] else out.shape)
+    if bias[0] == 'const':
+        readout.constant = np.broadcast_to(np.asarray(bias[1],dtype=object).reshape(bshape),out.shape)/Fraction(output_scale)
+    else:
+        value = bias[1].value
+        arg = Arg('bias','i32',shape(value),'input')
+        kernel.stream._index['bias'] = len(kernel.stream.args)
+        kernel.stream.args.append(arg)
+        readout.terms.append(('bias',Fraction(bias[2])/Fraction(output_scale)))
+        readout.constant=readout.constant-bias[1].zero_point*Fraction(bias[2])/Fraction(output_scale)
+        readout.broadcasts = {'bias':bshape}
+
 
 
 def match_contraction(op: Operation) -> Match | None:
@@ -648,6 +685,11 @@ def match_contraction(op: Operation) -> Match | None:
         (M, K), N, Bn = sa, sb[1], 0
     # integer contraction: exact i32 readout
     if etype(a) == "i8" and etype(b) == "i8" and etype(op.results[0]) == "i32":
+        if any(key.startswith('prov.quant.') for key in op.attributes):
+            from .quant_schema import attributes
+            attrs=attributes(op,'contraction')
+            if getattr(attrs.get('host_only'),'data',None)=='true':
+                raise Decline('host-only source integer contraction')
         k = ops.matmul("aten.bmm.default" if batched else "aten.mm.default", M, K, N, batch=Bn)
         return Match(k.op, op, [op], [("a", a), ("b", b)], ("out", op.results[0]), k)
     qa, qb = dequant(a), dequant(b)
@@ -667,9 +709,11 @@ def match_contraction(op: Operation) -> Match | None:
         raise Decline("constant epilogue offset")
     aten = "aten.bmm.default" if batched else ("aten.addmm.default" if bias else "aten.mm.default")
     k = ops.matmul(aten, M, K, N, batch=Bn, s_a=qa.scale, s_b=qb.scale, s_out=q.scale, alpha=ch.w,
-                   bias=bias is not None, relu=ch.relu,
-                   bias_const=bias[1] if bias and bias[0] == "const" else None,
-                   bias_rows=bool(bias and bias[3]), bias_repeat=bias[2] if bias else 1)
+                   bias=False, relu=ch.relu,
+                   bias_const=None,
+                   bias_rows=False)
+    _host_bias(k,bias,q.scale)
+    ops.contraction_zero_points(k,qa,qb,M,K,N,Bn)
     operands = [("a", qa.value), ("b", qb.value)]
     if bias and bias[0] == "arg":
         operands.append(("bias", bias[1].value))
@@ -761,9 +805,12 @@ def match_convolution_rows(op: Operation) -> Match | None:
     bias = _bias_operand(ch, s_acc, F, lambda m: trailing_block(m) == m.num_dims - 1)
     if ch.c:
         raise Decline("constant epilogue offset")
-    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=bias is not None,
-                             relu=ch.relu, bias_const=bias[1] if bias and bias[0] == "const" else None,
-                             bias_repeat=bias[2] if bias else 1)
+    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
+                             relu=ch.relu, bias_const=None,
+                             bias_repeat=1)
+    _host_bias(k,bias,q.scale,convolution=True)
+    _pack_inputs(k,[("x",qx),("w",qw)])
+    ops.convolution_zero_points(k,("x",qx),("w",qw),g)
     operands = [("x", qx.value), ("w", qw.value)]
     if bias and bias[0] == "arg":
         operands.append(("bias", bias[1].value))
@@ -831,9 +878,12 @@ def match_convolution(op: Operation) -> Match | None:
     bias = _bias_operand(ch, s_acc, F, lambda m: map_coeffs(m) == [[0, 1, 0, 0]])
     if ch.c:
         raise Decline("constant epilogue offset")
-    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=bias is not None,
-                             relu=ch.relu, bias_const=bias[1] if bias and bias[0] == "const" else None,
-                             bias_repeat=bias[2] if bias else 1)
+    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
+                             relu=ch.relu, bias_const=None,
+                             bias_repeat=1)
+    _host_bias(k,bias,q.scale,convolution=True)
+    _pack_inputs(k,[("x",qx),("w",qw)])
+    ops.convolution_zero_points(k,("x",qx),("w",qw),g)
     operands = [("x", qx.value), ("w", qw.value)]
     if bias and bias[0] == "arg":
         operands.append(("bias", bias[1].value))
@@ -928,11 +978,151 @@ def match_conv_wgrad(op: Operation) -> Match | None:
         raise Decline("weight-gradient extents")
     q = _sandwich_out(op.results[0])
     k = ops.conv_backward_weight(g, s_g=qg.scale, s_x=qx.scale, s_out=q.scale)
+    _pack_inputs(k,[("g",qg),("x",qx)])
+    ops.convolution_zero_points(k,("g",qg),("x",qx),g,"weight")
     cons = [op, q.op, qx.dq, qg.dq] + ([pad] if pad else [])
     aten = getattr(op.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
     return Match(aten, q.op, cons, [("g", qg.value), ("x", qx.value)], ("y", q.value), k,
                  layout=dict(source="NCHW,NCHW->OIHW", transposes="on-device"),
                  numeric=dict(output="grad_weight", s_g=qg.scale, s_x=qx.scale, s_out=q.scale))
+
+
+def _dq_leaves(root: SSAValue, limit: int = 4000) -> list[QIn]:
+    """Dequantized tensors the producers of ``root`` read (stopping at dequantize ops)."""
+    seen, out, stack = set(), [], [root]
+    while stack and len(seen) < limit:
+        v = stack.pop()
+        if id(v) in seen:
+            continue
+        seen.add(id(v))
+        q = dequant(v)
+        if q is not None:
+            if all(x.value is not q.value for x in out):
+                out.append(q)
+            continue
+        p = producer(v)
+        if p is None:
+            continue
+        for o in p.walk():
+            stack.extend(o.operands)
+    return out
+
+
+def _per_tap_contraction(root: SSAValue, qg: QIn, qw: QIn):
+    """The generic T[n, g, c, kh, kw, oh, ow] = sum_f g[n, g, f, oh, ow] w[g, f, c, kh, kw] in root's producers."""
+    seen, stack = set(), [root]
+    while stack:
+        v = stack.pop()
+        if id(v) in seen:
+            continue
+        seen.add(id(v))
+        p = producer(v)
+        if p is None or dequant(v) is not None:
+            continue
+        if (p.name == "linalg.generic" and iterators(p) == ["parallel"] * 7 + ["reduction"]
+                and [o.name for o in p.regions[0].blocks[0].ops] == ["arith.mulf", "arith.addf", "linalg.yield"]):
+            return p
+        stack.extend(p.operands)
+    return None
+
+
+def _conv_input_two_stage(op, q0, root, qg, qw):
+    from . import linmap
+    t = _per_tap_contraction(root, qg, qw)
+    if t is None:
+        raise Decline("grad_input region too large and not a per-tap contraction")
+    N, C, H, W = shape(root)
+    _, F, OH, OW = shape(qg.value)
+    _, _, KH, KW = shape(qw.value)
+    srcs = [_through_reshapes(x) for x in t.operands[:2]]
+    if not {id(s_) for s_ in srcs} <= {id(qw.dq.results[0]), id(qg.dq.results[0])} or splat_value(t.operands[2]) != 0.0:
+        raise Decline("per-tap contraction operands")
+    cos = [map_coeffs(m) for m in generic_maps(t)]
+    wmap = cos[0] if srcs[0] is qw.dq.results[0] else cos[1]
+    gmap = cos[1] if srcs[0] is qw.dq.results[0] else cos[0]
+    e = lambda d: [1 if j == d else 0 for j in range(8)]
+    if (wmap != [e(1), e(7), e(2), e(3), e(4)] or gmap != [e(0), e(1), e(7), e(5), e(6)]
+            or cos[2] != [e(d) for d in range(7)]):
+        raise Decline("per-tap contraction maps")
+    block = t.regions[0].blocks[0]
+    multiply,addition,yielded = list(block.ops)
+    if not (set(multiply.operands)==set(block.args[:2]) and
+            set(addition.operands)=={multiply.results[0],block.args[2]} and
+            list(yielded.operands)==[addition.results[0]]):
+        raise Decline('per-tap contraction body is not closed MAC')
+    tshape = shape(t.results[0])
+    if tshape != (N, 1, C, KH, KW, OH, OW):
+        raise Decline("per-tap contraction extents")
+
+    def leaf(v):
+        return (0, Fraction(1)) if v is t.results[0] else None
+
+    lm, region = linmap.extract(root, leaf)
+    if np.any(lm.coef != 1.0) or np.any(lm.const != 0):
+        raise Decline("shift-add chain is not a pure scatter-add")
+    n_, _, c_, kh_, kw_, oh_, ow_ = np.unravel_index(lm.idx, tshape)
+    on, oc, oy, ox = np.unravel_index(lm.out, (N, C, H, W))
+    if not (np.array_equal(on, n_) and np.array_equal(oc, c_)):
+        raise Decline("scatter mixes channels")
+    def axis_geometry(position, tap, output):
+        # Solve the exact affine identity output = stride*position +
+        # dilation*tap - padding. Rank-deficient axes get unit defaults.
+        rows = []
+        for a,b,c in sorted(set(zip(position.tolist(),tap.tolist(),output.tolist()))):
+            row = [Fraction(a),Fraction(b),Fraction(1),Fraction(c)]
+            for pivot,prior in rows:
+                factor = row[pivot]
+                row = [x-factor*y for x,y in zip(row,prior)]
+            pivot = next((j for j in range(3) if row[j]),None)
+            if pivot is None:
+                if row[3]: raise Decline('non-affine transposed convolution scatter')
+                continue
+            row = [x/row[pivot] for x in row]
+            rows.append((pivot,row)); rows.sort()
+        answer = [Fraction(1),Fraction(1),Fraction(0)]
+        for pivot,row in reversed(rows):
+            answer[pivot] = row[3]-sum(row[j]*answer[j] for j in range(pivot+1,3))
+        if any(v.denominator != 1 for v in answer):
+            raise Decline('noninteger transposed convolution geometry')
+        stride,dilation,offset = map(int,answer)
+        return stride,dilation,-offset
+    sh,dh,ph = axis_geometry(oh_,kh_,oy)
+    sw,dw,pw = axis_geometry(ow_,kw_,ox)
+    found = ConvGeom(N,H,W,C,F,KH,KW,sh,sw,ph,pw,dh,dw,1)
+    found.validate()
+    if (found.oh,found.ow) != (OH,OW):
+        raise Decline('transposed convolution extents')
+    iy = np.arange(OH)[:,None]*sh-ph+np.arange(KH)[None]*dh
+    ix = np.arange(OW)[:,None]*sw-pw+np.arange(KW)[None]*dw
+    expected = int(((iy>=0)&(iy<H)).sum()*((ix>=0)&(ix<W)).sum())*N*C
+    pairs = np.stack((lm.out,lm.idx),axis=1)
+    if expected != lm.out.size or len(np.unique(pairs,axis=0)) != expected:
+        raise Decline('transposed scatter does not cover each contribution exactly once')
+    if found is None:
+        raise Decline("scatter is not a transposed convolution of a square geometry")
+    k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q0.scale)
+    _pack_inputs(k,[("g",qg),("w",qw)])
+    ops.convolution_zero_points(k,("g",qg),("w",qw),found,"input")
+    aten = getattr(t.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
+    return Match(aten, q0.op, [*region, t, q0.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)],
+                 ("y", q0.value), k, layout=dict(source="NCHW,OIHW->NCHW", transposes="on-device"),
+                 numeric=dict(output="grad_input", s_g=qg.scale, s_w=qw.scale, s_out=q0.scale,
+                              geometry=found.__dict__, verification="structural contraction + extracted scatter"))
+
+
+def match_conv_input(op):
+    if name_of(op) != 'quant_ext.quantize_per_tensor': return None
+    q = quant_sink(op.operands[0])
+    root = op.operands[0]
+    if q is None or len(shape(root) or ()) != 4: return None
+    leaves = [v for v in _dq_leaves(root) if v.dtype=='i8' and len(shape(v.value))==4]
+    if len(leaves)!=2: return None
+    N,C,H,W = shape(root)
+    for qg,qw in (leaves,leaves[::-1]):
+        gs,ws=shape(qg.value),shape(qw.value)
+        if gs[0]==N and ws[0]==gs[1] and ws[1]==C and _per_tap_contraction(root,qg,qw) is not None:
+            return _conv_input_two_stage(op,q,root,qg,qw)
+    return None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1118,24 +1308,18 @@ def match_linear(op: Operation) -> Match | None:
         if src not in by_value:
             k = len(by_value)
             by_value[src] = (k, dq.dq if not integer else None)
-            srcs[k] = linmatch.Src(f"x{k}", shape(src), scale)
-        return by_value[src][0], scale
+            srcs[k] = linmatch.Src(f"x{k}", shape(src), scale, dq.unsigned if not integer else False)
+        return by_value[src][0], Fraction(scale), Fraction(scale)*((128 if dq.unsigned else 0)-dq.zero_point) if not integer else Fraction(0)
 
     try:
         lm, region = linmap.extract(root, leaf)
     except linmap.NotLinear as exc:
         raise Decline(f"not an exactly extractable linear region: {exc}")
-    if not region or not lm.out.size and not np.any(lm.const):
+    if not region:
         return None
     if not _region_closed(region, {op} | set(users(out_val))):
         raise Decline("region values escape the region")
     aten = getattr(region[-1].attributes.get("prov.aten"), "data", "") or "linear_region"
-    # The vectorized extractor currently stores binary64 coefficients. Only
-    # structural movement preserves source rationals through that representation.
-    # Arithmetic regions need rational extraction before they may reach hardware.
-    if any(x.name in ("arith.addf", "arith.subf", "arith.mulf", "arith.divf", "arith.negf", "arith.truncf", "arith.fptosi", "arith.fptoui", "linalg.reduce")
-           for region_op in region for x in region_op.walk()):
-        raise Decline("exact arithmetic: linear extractor has no rational coefficient proof")
     kernel = linmatch.kernel_for(aten, lm, srcs, s_out)
     operands = [(srcs[k].name, v) for v, (k, _) in sorted(by_value.items(), key=lambda kv: kv[1][0])]
     consumed = list(region) + ([op] if not integer else []) + [d for _, (k, d) in by_value.items() if d is not None]
@@ -1143,8 +1327,29 @@ def match_linear(op: Operation) -> Match | None:
                  numeric=dict(s_out=s_out, terms=int(lm.out.size), form=kernel.meta.get("form")))
 
 
-MATCHERS = (match_convolution, match_convolution_rows, match_conv_wgrad, match_contraction, match_mean, match_elementwise,
+MATCHERS = (match_convolution, match_convolution_rows, match_conv_wgrad, match_conv_input, match_contraction, match_mean, match_elementwise,
             match_movement, match_linear)
+
+
+def _pack_inputs(kernel, inputs):
+    from .stream import Arg,Ins
+    s=kernel.stream
+    for name,q in inputs:
+        if not q.unsigned: continue
+        old=s._index[name]; packed=name+'__signed'; new=len(s.args)
+        s.args.append(Arg(packed,'i8',shape(q.value),'scratch'));s._index[packed]=new
+        s.packs.append((name,packed))
+        s.ins=[Ins(i.kind,i.attrs,new if i.arg==old else i.arg,i.off) for i in s.ins]
+
+
+def _configure_quant(match):
+    output = producer(match.result[1])
+    if output is not None and name_of(output)=='quant_ext.quantize_per_tensor':
+        q = quant_sink(output.operands[0])
+        if q is not None:
+            for r in match.kernel.stream.readouts:
+                if r.out==match.result[0]:
+                    r.zero_point,r.quant_min,r.quant_max=q.zero_point,q.qmin,q.qmax
 
 
 def _bind_dense_layouts(match):
@@ -1165,6 +1370,9 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     """Every matched region in program order, plus recorded declines (with reasons)."""
     from .integer_regions import match_integer_region
     matches, declines = [], []
+    generalized_quant = any(name_of(o).startswith('quant_ext.') and
+        (splat_value(o.operands[2]) != 0 or _prop_int(o,'quant_min') != -128 or _prop_int(o,'quant_max') != 127)
+        for o in module.walk() if len(o.operands)>=3 and etype(o.operands[0])!='i32')
     taken: set[int] = set()
     for ordinal, op in enumerate(module.walk()):
         if id(op) in taken:
@@ -1172,10 +1380,12 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         if any(any(d <= 0 for d in shape(v)) for v in (*op.operands, *op.results) if shape(v) is not None):
             declines.append(dict(ordinal=ordinal, op=op.name, reason="empty or dynamic tensor shape", aten=""))
             continue
-        for fn in (match_integer_region, *MATCHERS):
+        selected_matchers = (match_integer_region,match_convolution,match_convolution_rows,match_conv_wgrad,match_conv_input,match_contraction,match_elementwise,match_linear) if generalized_quant else (match_integer_region,*MATCHERS)
+        for fn in selected_matchers:
             try:
                 m = fn(op)
                 if m is not None:
+                    _configure_quant(m)
                     _bind_dense_layouts(m)
             except (Decline, ValueError, OverflowError, ZeroDivisionError) as exc:
                 declines.append(dict(ordinal=ordinal, op=op.name, reason=str(exc),

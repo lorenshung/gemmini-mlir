@@ -81,6 +81,8 @@ class Stream:
     args: list[Arg]
     ins: list[Ins] = field(default_factory=list)
     consts: dict[str, np.ndarray] = field(default_factory=dict)
+    readouts: list = field(default_factory=list)
+    packs: list = field(default_factory=list)
 
     def __post_init__(self):
         self._index = {a.name: i for i, a in enumerate(self.args)}
@@ -336,5 +338,17 @@ def simulate(stream: Stream, inputs: dict[str, np.ndarray]) -> dict[str, np.ndar
         else:
             data = np.full(arg.shape, 0x5A if dt is np.int8 else 0x5A5A5A5A, dt)
         buffers[i] = np.ascontiguousarray(data.astype(dt).reshape(arg.shape)).copy()
-    Machine(buffers).run(stream)
+    for source,dest in stream.packs:
+        buffers[stream._index[dest]].view(np.uint8).flat[:] = buffers[stream._index[source]].view(np.uint8).reshape(-1) ^ 128
+    from dataclasses import replace
+    from .requant import apply
+    machine=Machine(buffers)
+    groups={}
+    for r in stream.readouts: groups.setdefault(len(stream.ins) if r.after is None else r.after,[]).append(r)
+    start=0
+    for boundary,readouts in sorted(groups.items()):
+        machine.run(replace(stream,ins=stream.ins[start:boundary],readouts=[]))
+        apply(stream,buffers,readouts)
+        start=boundary
+    machine.run(replace(stream,ins=stream.ins[start:],readouts=[]))
     return {arg.name: buffers[i] for i, arg in enumerate(stream.args) if arg.role != "const"}

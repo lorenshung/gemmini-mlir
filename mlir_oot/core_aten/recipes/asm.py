@@ -20,10 +20,12 @@ from ..stream import ACC, DIM, NO_ACT, Stream
 
 def accumulate_sum(s: Stream, x: str, y: str, C: int, rows_out: int, out_row: np.ndarray, in_row: np.ndarray,
                    weight: np.ndarray, rho: np.ndarray, *, x_pitch: int | None = None,
-                   y_pitch: int | None = None) -> None:
+                   y_pitch: int | None = None, out_i32: bool = False) -> None:
     """``out_row``/``in_row``/``weight``: one entry per term; ``rho``: readout scale per output row."""
     xp = C if x_pitch is None else x_pitch
     yp = C if y_pitch is None else y_pitch
+    if out_i32:
+        yp *= 4
     nct = (C + DIM - 1) // DIM
     R = max(1, 512 // nct)
     order = np.lexsort((in_row, out_row))
@@ -74,9 +76,9 @@ def accumulate_sum(s: Stream, x: str, y: str, C: int, rows_out: int, out_row: np
                 e = r
                 while e + 1 < rr and e + 1 - r < DIM and rho[r0 + e + 1] == rho[r0 + r]:
                     e += 1
-                cfg = (yp, float(rho[r0 + r]))
+                cfg = (yp, 1.0 if out_i32 else float(rho[r0 + r]))
                 if st != cfg:
-                    s.config_st(yp, NO_ACT, float(rho[r0 + r]))
+                    s.config_st(yp, NO_ACT, cfg[1])
                     st = cfg
-                s.mvout(s.at(y, (r0 + r) * yp + ct * DIM), ACC(half + ct * R + r), cw, e - r + 1)
+                s.mvout(s.at(y, (r0 + r) * yp + ct * DIM * (4 if out_i32 else 1)), ACC(half + ct * R + r, full=out_i32), cw, e - r + 1)
                 r = e + 1

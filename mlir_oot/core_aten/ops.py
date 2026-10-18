@@ -1,10 +1,9 @@
-"""Core ATen op lowerings: semantic parameters + quantization -> one device kernel stream.
+"""Core ATen target schedules: exact int8/i32 math and full-width readout.
 
-Every kernel takes dense row-major int8 tensors (int32 for bias seeds and widened outputs)
-in the argument order of ``Kernel.args``; activations of convolutions are channels-last
-(NHWC) and weights HWIO.  Quantization is per-tensor symmetric int8 with zero point 0:
-a tensor q with scale s represents s q.  Each lowering reads its inputs' and output's
-scales and folds them into the recipe's single rounding step.
+Quantized outputs use an exact rational CPU epilogue, fenced after the device
+stores. Distinct source scales remain distinct; coefficients are never rounded
+into approximate integer weights. Device instructions use unity data-path scales
+unless their product exactness is explicitly established and recorded.
 """
 
 from __future__ import annotations
@@ -13,8 +12,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .exactness import rational as Q, require, prove_readout, prove_affine, accumulator_bound
-from .numerics import best_int_multiplier, code, parts127, rational_weights
+from .exactness import rational as Q, require, prove_readout, accumulator_bound
+from .numerics import code, parts127
 from .recipes import elementwise as ew
 from .recipes import movement as mv
 from .recipes import reduce as rd
@@ -51,7 +50,32 @@ def _begin(args) -> Stream:
 
 def _end(op, s, **meta) -> Kernel:
     s.fence()
+    meta.update(device_arithmetic='exact_integer',quantize_rounding='host_exact_rational_RNE' if s.readouts else 'none',
+                device_readout='full_i32' if s.readouts else 'exact_integer_storage')
+    proofs=[]
+    for instruction in s.ins:
+        if instruction.kind not in ('config_ld','config_st'): continue
+        factor=instruction.a('scale') if instruction.kind=='config_ld' else instruction.a('acc_scale')
+        if factor != 1:
+            require(instruction.kind=='config_ld','nonunit accumulator readout requires an explicit product-exactness proof')
+            prove_readout(Q(factor),-128,127)
+            proofs.append(dict(unit='mvin',factor=str(Q(factor)),input_min=-128,input_max=127,
+                               proof='exact_fp32_conversion_and_product'))
+    meta['fp32_product_proofs']=proofs
     return Kernel(op, s, meta)
+
+
+def _readout(s, name, scale, relu=False):
+    from dataclasses import replace
+    from .requant import Readout
+    index = s._index[name]
+    arg = s.args[index]
+    raw = name + '__i32'
+    s.args[index] = replace(arg,name=raw,dtype='i32',role='scratch')
+    s._index[raw] = index
+    s.args.append(replace(arg,dtype='i8',role='output'))
+    # Instructions emitted using the original name address the raw tile.
+    s.readouts.append(Readout(name,[(raw,Q(scale))],relu=relu))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -68,38 +92,44 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
     s_out None selects the raw int32 readout of the exact integer contraction.
     """
     require(min(M, K, N) > 0 and batch >= 0, "empty or dynamic contraction")
+    require(s_out is not None or not relu,'raw i32 contraction cannot silently apply byte-readout ReLU')
+    require(isinstance(bias_repeat,int) and 1<=bias_repeat<=16,'invalid integer seed repetition')
     bound = K * 16384
     lo, hi = -bound, bound
     if bias:
         if bias_const is not None:
+            literals=np.asarray(bias_const,dtype=object)
+            require(all(int(v)==v and -(1<<31)<=v<(1<<31) for v in literals.flat),'seed is not exactly int32')
             values = np.asarray(bias_const, dtype=np.int64)
             lo += min(0, int(values.min())) * bias_repeat
             hi += max(0, int(values.max())) * bias_repeat
         else:
             require(bias_range is not None, "runtime i32 seed has no nonoverflow range proof")
+            require(-(1<<31)<=bias_range[0]<=bias_range[1]<(1<<31),'invalid runtime seed range')
             lo += min(0, bias_range[0]) * bias_repeat
             hi += max(0, bias_range[1]) * bias_repeat
     require(-(1 << 31) <= lo <= hi < (1 << 31), "unproved i32 accumulator overflow bound")
-    if s_out is not None:
-        prove_readout(Q(alpha) * Q(s_a) * Q(s_b) / Q(s_out), lo, hi, relu)
+
     B = max(batch, 1)
     lead = (batch,) if batch else ()
-    out_i32 = s_out is None
+    out_i32 = True
     args = [Arg("a", "i8", lead + (M, K), "input"), Arg("b", "i8", lead + (K, N), "input")]
     if bias and bias_const is None:
         args.append(Arg("bias", "i32", (M, N) if bias_rows else (N,), "input"))
     args.append(Arg("out", "i32" if out_i32 else "i8", lead + (M, N), "output"))
     s = _begin(args)
+    if s_out is not None:
+        _readout(s, "out", Q(alpha)*Q(s_a)*Q(s_b)/Q(s_out), relu)
     bname = None
     if bias:
         bname = "bias"
         if bias_const is not None:
             bname = "bias_c"
             s.const(bname, np.asarray(bias_const, np.int32).reshape((M, N) if bias_rows else (N,)))
-    scale = 1.0 if out_i32 else Q(alpha) * Q(s_a) * Q(s_b) / Q(s_out)
+    scale = 1.0
     for bi in range(B):
         blocked_matmul(s, ("a", bi * M * K), K, ("b", bi * K * N), N, ("out", bi * M * N * (4 if out_i32 else 1)), N,
-                       M, K, N, bias=(bname, 0) if bias else None, scale=scale, relu=relu, out_i32=out_i32,
+                       M, K, N, bias=(bname, 0) if bias else None, scale=scale, relu=False, out_i32=out_i32,
                        configure=bi == 0, bias_rows=bias_rows, bias_repeat=bias_repeat)
     return _end(op, s, readout_scale=scale, accumulator_min=lo, accumulator_max=hi)
 
@@ -118,20 +148,21 @@ def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float
                 bias: bool = False, relu: bool = False, alpha: float = 1.0) -> Kernel:
     """Channels-last: NHWC x HWIO -> NHWC; bias int32 [Cout] at scale s_x s_w (PT2E)."""
     g.validate()
+    require(s_out is not None or not relu,"raw i32 convolution cannot silently apply byte-readout ReLU")
     require(not bias, "runtime convolution seed has no nonoverflow range proof")
     bound = g.kh * g.kw * (g.cin // g.groups) * 16384
     accumulator_bound(bound)
-    if s_out is not None:
-        prove_readout(Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out), -bound, bound, relu)
-    out_i32 = s_out is None
+    out_i32 = True
     args = [Arg("x", "i8", (g.n, g.h, g.w, g.cin), "input"),
             Arg("w", "i8", (g.kh, g.kw, g.cin // g.groups, g.cout), "input")]
     if bias:
         args.append(Arg("bias", "i32", (g.cout,), "input"))
     args.append(Arg("y", "i32" if out_i32 else "i8", (g.n, g.oh, g.ow, g.cout), "output"))
     s = _begin(args)
-    scale = 1.0 if out_i32 else Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out)
-    _conv_body(s, g, "x", "w", "y", "bias" if bias else None, scale, relu, out_i32)
+    if s_out is not None:
+        _readout(s,"y",Q(alpha)*Q(s_x)*Q(s_w)/Q(s_out),relu)
+    scale = 1.0
+    _conv_body(s, g, "x", "w", "y", "bias" if bias else None, scale, False, out_i32)
     return _end("aten.convolution.default", s, readout_scale=scale, layout="NHWC,HWIO->NHWC")
 
 
@@ -148,7 +179,6 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     if bias:
         bound += int(np.max(np.abs(np.asarray(bias_const, dtype=np.int64)))) * bias_repeat
     accumulator_bound(bound)
-    prove_readout(Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out), -bound, bound, relu)
     if g.groups != 1:
         raise ValueError("grouped convolution needs the channels-last kernel")
     args = [Arg("x", "i8", (g.n, g.cin, g.h, g.w), "input"), Arg("w", "i8", (g.cout, g.cin, g.kh, g.kw), "input")]
@@ -157,7 +187,7 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     args += [Arg("y", "i8", (g.n, g.cout, g.oh, g.ow), "output"),
              Arg("ws_x", "i8", (g.n, g.h, g.w, g.cin), "scratch"),
              Arg("ws_w", "i8", (g.kh, g.kw, g.cin, g.cout), "scratch"),
-             Arg("ws_y", "i8", (g.n, g.oh, g.ow, g.cout), "scratch")]
+             Arg("ws_y", "i32", (g.n, g.oh, g.ow, g.cout), "scratch")]
     s = _begin(args)
     bname = None
     if bias:
@@ -169,93 +199,92 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     mv.emit_transpose(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 1, 0])
     s.fence()
     scale = Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out)
-    _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, scale, relu, False, bias_repeat)
-    s.fence()
-    mv.emit_transpose(s, "ws_y", [g.n, g.oh, g.ow, g.cout], "y", [0, 3, 1, 2])
+    _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, 1.0, False, True, bias_repeat)
+    from .requant import Readout
+    s.readouts.append(Readout("y",[("ws_y",scale)],relu=relu,
+        permutations={"ws_y":((g.n,g.oh,g.ow,g.cout),(0,3,1,2))}))
     return _end("aten.convolution.default", s, readout_scale=scale, layout="NCHW,OIHW->NCHW via NHWC")
 
 
-def conv_backward_input(g: ConvGeom, *, s_g: float, s_w: float, s_out: float) -> Kernel:
-    """grad_input (NCHW) of a forward convolution ``g`` from grad_output (NCHW) and OIHW weights."""
-    require(False, "transposed convolution requires a full intermediate overflow and readout proof")
+def conv_backward_input(g, *, s_g, s_w, s_out):
+    from .recipes.backward import conv_transpose
+    from .requant import Readout
+    g.validate()
+    accumulator_bound(g.kh*g.kw*g.cout*16384)
+    args = [Arg('g','i8',(g.n,g.cout,g.oh,g.ow),'input'),
+            Arg('w','i8',(g.cout,g.cin,g.kh,g.kw),'input'),
+            Arg('y','i8',(g.n,g.cin,g.h,g.w),'output'),
+            Arg('ws_g','i8',(g.n,g.oh,g.ow,g.cout),'scratch'),
+            Arg('ws_w','i8',(g.kh,g.kw,g.cout,g.cin),'scratch'),
+            Arg('acc','i32',(g.n,g.h,g.w,g.cin),'scratch')]
+    s = _begin(args)
+    _permute_into(s,'g',args[0].shape,'ws_g',[0,2,3,1])
+    _permute_into(s,'w',args[1].shape,'ws_w',[2,3,0,1])
+    s.fence()
+    conv_transpose(s,g,'ws_g','ws_w','acc',1,out_i32=True)
+    s.readouts.append(Readout('y',[('acc',Q(s_g)*Q(s_w)/Q(s_out))],
+       permutations={'acc':((g.n,g.h,g.w,g.cin),(0,3,1,2))}))
+    return _end('aten.convolution_backward.default',s,output='grad_input')
 
 
-def conv_backward_weight(g: ConvGeom, *, s_g: float, s_x: float, s_out: float) -> Kernel:
-    """grad_weight (OIHW) from grad_output (NCHW) and the forward input (NCHW); Q11 readout."""
-    require(False, "weight gradient requires a full intermediate overflow and readout proof")
+def conv_backward_weight(g, *, s_g, s_x, s_out):
+    from .recipes.backward import conv_wgrad
+    from .requant import Readout
+    g.validate()
+    accumulator_bound(g.n*g.oh*g.ow*16384)
+    args = [Arg('g','i8',(g.n,g.cout,g.oh,g.ow),'input'),
+            Arg('x','i8',(g.n,g.cin,g.h,g.w),'input'),
+            Arg('y','i8',(g.cout,g.cin,g.kh,g.kw),'output'),
+            Arg('ws_x','i8',(g.n,g.h,g.w,g.cin),'scratch'),
+            Arg('acc','i32',(g.kh,g.kw,g.cout,g.cin),'scratch')]
+    s = _begin(args)
+    _permute_into(s,'x',args[1].shape,'ws_x',[0,2,3,1]); s.fence()
+    conv_wgrad(s,g,'g','ws_x','acc',1,out_i32=True)
+    s.readouts.append(Readout('y',[('acc',Q(s_g)*Q(s_x)/Q(s_out))],
+       permutations={'acc':((g.kh,g.kw,g.cout,g.cin),(2,3,0,1))}))
+    return _end('aten.convolution_backward.default',s,output='grad_weight')
 
 
 # ---------------------------------------------------------------------------------------------
 # Elementwise
 # ---------------------------------------------------------------------------------------------
 
-def scale_map(op: str, shape, c: float, *, s_x: float, s_out: float) -> Kernel:
-    """y = c x (neg: c = -1, mul.Scalar: c, div.Scalar: 1 / c), one MVIN-scale rounding."""
-    prove_readout(Q(c) * Q(s_x) / Q(s_out), -128, 127)
-    n = _numel(shape)
-    s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(shape), "output")])
-    ew.unary_scale(s, "x", "y", n, Q(c) * Q(s_x) / Q(s_out))
-    return _end(op, s, mvin_scale=Q(c) * Q(s_x) / Q(s_out))
+def _dense_linear(op, out_shape, inputs, constant=0, relu=False):
+    from .linmap import LinearMap
+    from .linmatch import Src
+    from .exact_linear import kernel
+    n = _numel(out_shape)
+    outs, ids, indices, coefficients, srcs = [], [], [], [], {}
+    for sid, (name, shp, index, coefficient) in enumerate(inputs):
+        srcs[sid] = Src(name, tuple(shp), 1)
+        outs.append(np.arange(n,dtype=np.int64))
+        ids.append(np.full(n,sid,np.int64))
+        indices.append(np.asarray(index,np.int64).reshape(-1))
+        coefficients.append(np.broadcast_to(np.asarray(coefficient,dtype=object).reshape(-1),(n,)))
+    lm = LinearMap(tuple(out_shape),np.concatenate(outs),np.concatenate(ids),np.concatenate(indices),
+                   np.concatenate(coefficients),np.broadcast_to(np.asarray(constant,dtype=object).reshape(-1),(n,)),{})
+    result = kernel(op,lm,srcs,1)
+    result.stream.readouts[-1].relu = relu
+    return result
 
 
-def relu(shape, *, s_x: float, s_out: float) -> Kernel:
-    prove_readout(Q(s_x) / Q(s_out), -128, 127, True)
-    n = _numel(shape)
-    s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(shape), "output")])
-    ew.unary_readout(s, "x", "y", n, Q(s_x) / Q(s_out), relu=True)
-    return _end("aten.relu.default", s, readout_scale=Q(s_x) / Q(s_out))
+def scale_map(op, shape, c, *, s_x, s_out):
+    return _dense_linear(op,shape,[('x',shape,np.arange(_numel(shape)),Q(c)*Q(s_x)/Q(s_out))])
 
 
-def add_tensor(op: str, shape, b_shape, *, alpha: float = 1.0, s_a: float, s_b: float, s_out: float,
-               wa: float = 1.0, c: float = 0.0, relu: bool = False, b_lead: int | None = None) -> Kernel:
-    """y = act(wa a + alpha b + c) (add.Tensor; sub.Tensor has alpha < 0), one rounding (Q2/Q10).
-
-    ``b`` is same-shape or broadcast over the leading ``b_lead`` output dims (a stride-0 row).
-    """
-    shape, b_shape = tuple(shape), tuple(b_shape)
-    n = _numel(shape)
-    if b_lead is None:
-        b_lead = 0 if b_shape == shape else len(shape) - len(b_shape)
-        while b_lead < len(shape) and _numel(shape[b_lead:]) != _numel(b_shape):
-            b_lead += 1
-    inner = _numel(shape[b_lead:])
-    if _numel(b_shape) != inner or (b_lead and tuple(shape[b_lead:]) != tuple(b_shape[-(len(shape) - b_lead):])):
-        raise ValueError(f"unsupported broadcast {b_shape} -> {shape}")
-    if b_lead == 0:
-        rows, cols = (n // 64, 64) if n % 64 == 0 else (n // (shape[-1] if shape else 1), shape[-1] if shape else 1)
-        a_stride = b_stride = cols
-    else:
-        rows, cols, a_stride, b_stride = n // inner, inner, inner, 0
-    if wa == 0 or alpha == 0:
-        raise ValueError("degenerate linear combination")
-    al, be = abs(wa) * s_a / s_out, abs(alpha) * s_b / s_out
-    Wa, Wb = rational_weights(al, be)
-    Wa_s = Wa if wa > 0 else -Wa
-    Wb_s = Wb if alpha > 0 else -Wb
-    bias = int(round(c * Wa / (abs(wa) * s_a))) if c else None
-    sc = al / Wa
-    prove_affine([Q(wa) * Q(s_a) / Q(s_out), Q(alpha) * Q(s_b) / Q(s_out)], Q(c) / Q(s_out),
-                 [Wa_s, Wb_s], bias or 0, Q(sc), relu)
-    terms = [("a", a_stride, parts127(Wa_s)), ("b", b_stride, parts127(Wb_s))]
-    s = _begin([Arg("a", "i8", shape, "input"), Arg("b", "i8", b_shape, "input"), Arg("y", "i8", shape, "output")])
-    ew.lincomb(s, terms, "y", rows, cols, sc, bias=bias, relu=relu)
-    return _end(op, s, weights=(Wa_s, Wb_s), bias=bias, readout_scale=al / Wa)
+def relu(shape, *, s_x, s_out):
+    return _dense_linear('aten.relu.default',shape,[('x',shape,np.arange(_numel(shape)),Q(s_x)/Q(s_out))],relu=True)
 
 
-def add_scalar(op: str, shape, c: float, *, s_x: float, s_out: float, w: float = 1.0, relu: bool = False) -> Kernel:
-    """y = act(w x + c): ACC = G x + B exactly with B = round(G c / (w s_x)) (Q9), one rounding."""
-    n = _numel(shape)
-    k = w * s_x
-    G = best_int_multiplier(c / k)
-    B = int(round(G * c / k))
-    sc = k / (G * s_out)
-    if sc < 0:                         # keep the readout scale positive (ReLU before scale, C7)
-        G, B, sc = -G, -B, -sc
-    prove_affine([Q(w) * Q(s_x) / Q(s_out)], Q(c) / Q(s_out), [G], B, Q(sc), relu)
-    s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(shape), "output")])
-    rows, cols = (n // 64, 64) if n % 64 == 0 else (n // shape[-1], shape[-1])
-    ew.lincomb(s, [("x", cols, parts127(G))], "y", rows, cols, sc, bias=B, relu=relu)
-    return _end(op, s, G=G, B=B, readout_scale=sc)
+def add_tensor(op, shape, b_shape, *, alpha=1, s_a, s_b, s_out, wa=1, c=0, relu=False, b_lead=None):
+    shape,b_shape = tuple(shape),tuple(b_shape)
+    bidx = np.broadcast_to(np.arange(_numel(b_shape)).reshape(b_shape),shape).reshape(-1)
+    return _dense_linear(op,shape,[('a',shape,np.arange(_numel(shape)),Q(wa)*Q(s_a)/Q(s_out)),
+                                   ('b',b_shape,bidx,Q(alpha)*Q(s_b)/Q(s_out))],Q(c)/Q(s_out),relu)
+
+
+def add_scalar(op, shape, c, *, s_x, s_out, w=1, relu=False):
+    return _dense_linear(op,shape,[('x',shape,np.arange(_numel(shape)),Q(w)*Q(s_x)/Q(s_out))],Q(c)/Q(s_out),relu)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -281,15 +310,15 @@ def mean_dim(shape, dims, keepdim: bool, *, s_x: float, s_out: float, w: float |
     I = _numel([shape[d] for d in range(eff[-1] + 1, r) if d not in dims])
     oshape = [1 if d in dims else shape[d] for d in range(r)] if keepdim else \
         [shape[d] for d in range(r) if d not in dims]
-    s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(oshape), "output")])
+    s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i32", tuple(oshape), "output")])
     exact_scale = (Q(1) / L if w is None else Q(w)) * Q(s_x) / Q(s_out)
     accumulator_bound(L * 128)
-    prove_readout(exact_scale, -L * 128, L * 127)
-    sc = float(exact_scale)
+    _readout(s,"y",exact_scale)
+    sc = 1.0
     if I == 1:
-        rd.mean_last(s, "x", "y", O, L, sc)
+        rd.mean_last(s, "x", "y", O, L, sc, out_i32=True)
     else:
-        rd.mean_middle(s, "x", "y", O, L, I, sc)
+        rd.mean_middle(s, "x", "y", O, L, I, sc, out_i32=True)
     return _end(op, s, readout_scale=sc, reduced=L)
 
 
@@ -303,26 +332,13 @@ def _plan_kernel(op, args, plan: mv.Plan, **meta) -> Kernel:
     return _end(op, s, **meta)
 
 
-def clone(shape, *, s_x: float = 1.0, s_out: float = 1.0) -> Kernel:
-    prove_readout(Q(s_x) / Q(s_out), -128, 127)
-    n = _numel(shape)
-    plan = mv.Plan()
-    mv.flat_copy(plan.stage(), ("x", 0), ("y", 0), n, Q(s_x) / Q(s_out))
-    return _plan_kernel("aten.clone.default", [Arg("x", "i8", tuple(shape), "input"),
-                                                Arg("y", "i8", tuple(shape), "output")], plan)
+def clone(shape, *, s_x=1, s_out=1):
+    return _dense_linear('aten.clone.default',shape,[('x',shape,np.arange(_numel(shape)),Q(s_x)/Q(s_out))])
 
 
-def permute(shape, perm, *, s_x: float = 1.0, s_out: float = 1.0) -> Kernel:
-    prove_readout(Q(s_x) / Q(s_out), -128, 127)
-    perm = [p % len(shape) for p in perm]
-    oshape = tuple(shape[p] for p in perm)
-    args = [Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", oshape, "output")]
-    if perm[-1] == len(shape) - 1:
-        plan, _ = mv.permute_plan("x", shape, "y", perm, Q(s_x) / Q(s_out))
-        return _plan_kernel("aten.permute.default", args, plan, form="strided_dma")
-    s = _begin(args)
-    mv.emit_transpose(s, "x", list(shape), "y", perm, Q(s_x) / Q(s_out))
-    return _end("aten.permute.default", s, form="transposer")
+def permute(shape, perm, *, s_x=1, s_out=1):
+    index = np.arange(_numel(shape)).reshape(shape).transpose(perm)
+    return _dense_linear('aten.permute.default',index.shape,[('x',shape,index,Q(s_x)/Q(s_out))])
 
 
 def _permute_into(s: Stream, x: str, shape, out: str, perm) -> None:
@@ -335,43 +351,46 @@ def _permute_into(s: Stream, x: str, shape, out: str, perm) -> None:
         mv.emit_transpose(s, x, list(shape), out, perm)
 
 
-def cat(shapes, dim: int, *, s_in=None, s_out: float = 1.0) -> Kernel:
-    for si in s_in or [s_out] * len(shapes):
-        prove_readout(Q(si) / Q(s_out), -128, 127)
-    names = [f"x{i}" for i in range(len(shapes))]
-    scales = None if s_in is None else [si / s_out for si in s_in]
-    plan = mv.Plan()
-    oshape = mv.cat(plan, list(zip(names, [tuple(sh) for sh in shapes])), "y", dim, scales)
-    args = [Arg(nm, "i8", tuple(sh), "input") for nm, sh in zip(names, shapes)] + \
-        [Arg("y", "i8", tuple(oshape), "output")]
-    return _plan_kernel("aten.cat.default", args, plan)
+def cat(shapes, dim, *, s_in=None, s_out=1):
+    scales = [1]*len(shapes) if s_in is None else s_in
+    dim %= len(shapes[0])
+    out_shape = list(shapes[0]); out_shape[dim] = sum(sh[dim] for sh in shapes)
+    # Separate components have zero outside their source interval.
+    inputs = []
+    offset = 0
+    for sid,(sh,sc) in enumerate(zip(shapes,scales)):
+        index = np.zeros(out_shape,np.int64)
+        factor = np.full(out_shape,Q(0),dtype=object)
+        sl = [slice(None)]*len(out_shape); sl[dim] = slice(offset,offset+sh[dim])
+        index[tuple(sl)] = np.arange(_numel(sh)).reshape(sh)
+        factor[tuple(sl)] = Q(sc)/Q(s_out)
+        inputs.append((f'x{sid}',sh,index,factor.reshape(-1)))
+        offset += sh[dim]
+    return _dense_linear('aten.cat.default',out_shape,inputs)
 
 
-def constant_pad_nd(shape, pad, value: float, *, s_x: float = 1.0, s_out: float = 1.0) -> Kernel:
-    """``pad`` in ATen order: (last lo, last hi, second-to-last lo, ...)."""
-    prove_readout(Q(s_x) / Q(s_out), -128, 127)
-    r = len(shape)
-    lohi = [(0, 0)] * r
-    for i in range(len(pad) // 2):
-        lohi[r - 1 - i] = (pad[2 * i], pad[2 * i + 1])
-    plan = mv.Plan()
-    oshape = mv.constant_pad(plan, "x", list(shape), "y", lohi, code(value, s_out), Q(s_x) / Q(s_out))
-    args = [Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(oshape), "output")]
-    return _plan_kernel("aten.constant_pad_nd.default", args, plan, fill_code=code(value, s_out))
+def constant_pad_nd(shape, pad, value, *, s_x=1, s_out=1):
+    lohi = [(0,0)]*len(shape)
+    for i in range(len(pad)//2): lohi[-1-i] = (pad[2*i],pad[2*i+1])
+    # Negative padding is a source slice; positive padding is an exact constant.
+    slices = tuple(slice(max(-lo,0),d-max(-hi,0)) for d,(lo,hi) in zip(shape,lohi))
+    index = np.arange(_numel(shape)).reshape(shape)[slices]
+    positive = [(max(lo,0),max(hi,0)) for lo,hi in lohi]
+    mask = np.pad(np.ones(index.shape,bool),positive)
+    index = np.pad(index,positive)
+    return _dense_linear('aten.constant_pad_nd.default',index.shape,
+        [('x',shape,index,np.where(mask,Q(s_x)/Q(s_out),Q(0)).reshape(-1))],
+        np.where(mask,Q(0),Q(value)/Q(s_out)).reshape(-1))
 
 
-def slice_scatter(shape, src_shape, dim: int, start, end, step: int, *, s_self: float = 1.0, s_src: float = 1.0,
-                  s_out: float = 1.0) -> Kernel:
-    prove_readout(Q(s_self) / Q(s_out), -128, 127)
-    prove_readout(Q(s_src) / Q(s_out), -128, 127)
-    D = shape[dim % len(shape)]
-    start = 0 if start is None else start
-    end = D if end is None else end
-    plan = mv.Plan()
-    mv.slice_scatter(plan, "self", list(shape), "src", "y", dim, start, end, step, s_self / s_out, s_src / s_out)
-    args = [Arg("self", "i8", tuple(shape), "input"), Arg("src", "i8", tuple(src_shape), "input"),
-            Arg("y", "i8", tuple(shape), "output")]
-    return _plan_kernel("aten.slice_scatter.default", args, plan)
+def slice_scatter(shape, src_shape, dim, start, end, step, *, s_self=1, s_src=1, s_out=1):
+    sel = [slice(None)]*len(shape); sel[dim] = slice(start,end,step)
+    index = np.arange(_numel(shape)).reshape(shape)
+    mask = np.ones(shape,bool); mask[tuple(sel)] = False
+    src_index = np.zeros(shape,np.int64); src_index[tuple(sel)] = np.arange(_numel(src_shape)).reshape(src_shape)
+    return _dense_linear('aten.slice_scatter.default',shape,
+      [('self',shape,index,np.where(mask,Q(s_self)/Q(s_out),Q(0)).reshape(-1)),
+       ('src',src_shape,src_index,np.where(mask,Q(0),Q(s_src)/Q(s_out)).reshape(-1))])
 
 
 def full(op: str, shape, value: float, *, s_out: float, like: bool = False) -> Kernel:
@@ -388,3 +407,108 @@ def to_copy_widen(shape) -> Kernel:
     s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i32", tuple(shape), "output")])
     mv.emit_widen(s, "x", "y", n)
     return _end("aten._to_copy.default", s)
+
+
+def contraction_zero_points(kernel, qa, qb, M, K, N, batch=0):
+    """Exact centered-byte contraction plus integer row/column corrections.
+
+    q-z = (q-128)+(128-z) for uint8; signed int8 needs only -z.
+    No early byte saturation or float conversion participates in the folding.
+    """
+    from dataclasses import replace
+    from .stream import Ins
+    s=kernel.stream
+    names=['a','b']
+    for pos,q in enumerate((qa,qb)):
+        if not q.unsigned: continue
+        source=names[pos]; packed=source+'__signed'
+        original=s._index[source]
+        target=len(s.args)
+        s.args.append(Arg(packed,'i8',s.args[original].shape,'scratch'));s._index[packed]=target
+        s.packs.append((source,packed))
+        s.ins=[Ins(i.kind,i.attrs,target if i.arg==original else i.arg,i.off) for i in s.ins]
+        names[pos]=packed
+    oa=(128 if qa.unsigned else 0)-qa.zero_point
+    ob=(128 if qb.unsigned else 0)-qb.zero_point
+    if not oa and not ob: return
+    readout=s.readouts[-1]
+    scale=readout.terms[0][1]
+    lead=(batch,) if batch else ()
+    B=max(batch,1)
+    for name,shp in [('row_sum',lead+(M,1)),('column_sum',lead+(1,N))]:
+        s._index[name]=len(s.args);s.args.append(Arg(name,'i32',shp,'scratch'))
+    # Appended after a completed kernel fence: raw matmul tiles are in DRAM.
+    for bi in range(B):
+        # The mean recipes address dense bases; use a temporary stream then
+        # relocate its operand byte offsets for this independent batch.
+        for axis,source,dest in [('row',names[0],'row_sum'),('column',names[1],'column_sum')]:
+            temporary=Stream(s.args.copy(),consts=s.consts.copy())
+            if axis=='row': rd.mean_last(temporary,source,dest,M,K,1,out_i32=True)
+            else: rd.mean_middle(temporary,source,dest,1,K,N,1,out_i32=True)
+            for arg in temporary.args[len(s.args):]:
+                s._index[arg.name]=len(s.args);s.args.append(arg);s.consts[arg.name]=temporary.consts[arg.name]
+            aoff=bi*(M*K if axis=='row' else K*N)
+            ooff=bi*(M if axis=='row' else N)*4
+            for ins in temporary.ins:
+                extra=aoff if ins.arg==s._index[source] else ooff if ins.arg==s._index[dest] else 0
+                s.ins.append(Ins(ins.kind,ins.attrs,ins.arg,ins.off+extra))
+    s.fence()
+    if ob: readout.terms.append(('row_sum',Q(ob)*scale))
+    if oa: readout.terms.append(('column_sum',Q(oa)*scale))
+    readout.constant=readout.constant+K*oa*ob*scale
+    readout.broadcasts={**(readout.broadcasts or {}),'row_sum':lead+(M,1),'column_sum':lead+(1,N)}
+
+
+def convolution_zero_points(kernel, left, right, g, mode='forward'):
+    """Integer zero-point correction maps, including spatial border masks.
+
+    Main MACs consume centered signed bytes. Additional full-i32 sums implement
+    (a+offset_a)*(b+offset_b), counting only actual (nonpadding) source products.
+    Shapes, taps and strides derive from the proved convolution geometry.
+    """
+    from .recipes.asm import accumulate_sum
+    s=kernel.stream
+    qa,qb=left[1],right[1]
+    oa=(128 if qa.unsigned else 0)-qa.zero_point
+    ob=(128 if qb.unsigned else 0)-qb.zero_point
+    if not oa and not ob: return
+    output=next(a for a in kernel.args if a.role=='output')
+    nout=int(np.prod(output.shape));p=np.arange(nout,dtype=np.int64)
+    if mode=='forward':
+        n,f,oh,ow=np.unravel_index(p,output.shape)
+        c,kh,kw=np.indices((g.cin,g.kh,g.kw)).reshape(3,-1)
+        ih=oh[:,None]*g.sh-g.ph+kh*g.dh
+        iw=ow[:,None]*g.sw-g.pw+kw*g.dw
+        valid=(ih>=0)&(ih<g.h)&(iw>=0)&(iw<g.w)
+        ai=((n[:,None]*g.cin+c)*g.h+ih)*g.w+iw
+        bi=((f[:,None]*g.cin+c)*g.kh+kh)*g.kw+kw
+    elif mode=='input':
+        n,c,ih,iw=np.unravel_index(p,output.shape)
+        f,kh,kw=np.indices((g.cout,g.kh,g.kw)).reshape(3,-1)
+        h=ih[:,None]+g.ph-kh*g.dh;w=iw[:,None]+g.pw-kw*g.dw
+        oh,ow=h//g.sh,w//g.sw
+        valid=(h%g.sh==0)&(w%g.sw==0)&(oh>=0)&(oh<g.oh)&(ow>=0)&(ow<g.ow)
+        ai=((n[:,None]*g.cout+f)*g.oh+oh)*g.ow+ow
+        bi=((f*g.cin+c[:,None])*g.kh+kh)*g.kw+kw
+    else:
+        f,c,kh,kw=np.unravel_index(p,output.shape)
+        n,oh,ow=np.indices((g.n,g.oh,g.ow)).reshape(3,-1)
+        ih=oh*g.sh-g.ph+kh[:,None]*g.dh
+        iw=ow*g.sw-g.pw+kw[:,None]*g.dw
+        valid=(ih>=0)&(ih<g.h)&(iw>=0)&(iw<g.w)
+        ai=((n*g.cout+f[:,None])*g.oh+oh)*g.ow+ow
+        bi=((n*g.cin+c[:,None])*g.h+ih)*g.w+iw
+    rows=np.broadcast_to(p[:,None],valid.shape)[valid]
+    counts=valid.sum(1)
+    readout=s.readouts[-1];scale=readout.terms[0][1]
+    for name,q,indices,coefficient in [(left[0],qa,ai,ob),(right[0],qb,bi,oa)]:
+        if not coefficient:continue
+        source=name+'__signed' if q.unsigned else name
+        raw=name+'__zero_sum';s._index[raw]=len(s.args)
+        s.args.append(Arg(raw,'i32',output.shape,'scratch'))
+        indices=np.broadcast_to(indices,valid.shape)[valid].astype(np.int64)
+        accumulator_bound(int(counts.max(initial=0))*128)
+        accumulate_sum(s,source,raw,1,nout,rows,indices,np.ones(rows.size,np.int64),np.ones(nout),out_i32=True)
+        readout.terms.append((raw,Q(coefficient)*scale))
+    readout.constant=readout.constant+counts.reshape(output.shape)*oa*ob*scale
+    s.fence()
