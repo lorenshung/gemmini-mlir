@@ -17,9 +17,9 @@ PLUGINS = {
 }
 
 
-def generated(source):
+def generated(source, plugins=None):
     result = {}
-    for name, plugin in PLUGINS.items():
+    for name, plugin in (PLUGINS if plugins is None else plugins).items():
         original = (source / name).read_bytes()
         document = yaml.safe_load(original)
         document['plugin'] = plugin
@@ -49,9 +49,32 @@ def sync(source, *, check=False):
     (ROOT / 'contract_sync_migration.json').write_text(json.dumps(receipt, indent=2) + '\n')
 
 
+
+HARNESS_ROOT = ROOT.parent / 'support/gemmini_gsim'
+
+
+def sync_harness(source, *, check=False):
+    original, data = generated(Path(source), {
+        'target_contract.yaml': {'backend': 'backend.py'},
+    })['target_contract.yaml']
+    path = HARNESS_ROOT / 'contracts/target_contract.yaml'
+    if check:
+        if path.read_bytes() != data:
+            raise ValueError('GSIM provider contract drift: target_contract.yaml')
+        return
+    receipt = dict(schema='gemmini.gsim_contract_sync.v1',
+        source='Merlin selected target contract; only provider plugin adapted',
+        source_sha256=hashlib.sha256(original).hexdigest(),
+        previous_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+        destination_sha256=hashlib.sha256(data).hexdigest())
+    path.write_bytes(data)
+    (HARNESS_ROOT / 'contract_sync.json').write_text(json.dumps(receipt, indent=2) + '\n')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source', type=Path, required=True)
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
     sync(args.source, check=args.check)
+    sync_harness(args.source, check=args.check)
