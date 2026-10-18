@@ -1501,7 +1501,9 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     if not quantized_module:
         arithmetic = {'arith.addf', 'arith.subf', 'arith.mulf', 'arith.divf', 'arith.negf',
                       'arith.addi', 'arith.subi', 'arith.muli', 'arith.fptosi', 'arith.sitofp',
-                      'arith.truncf', 'arith.extsi', 'arith.trunci'}
+                      'arith.extf', 'arith.truncf', 'arith.extsi', 'arith.extui', 'arith.trunci',
+                      'arith.uitofp', 'arith.fptoui', 'arith.divsi', 'arith.divui',
+                      'arith.andi', 'arith.ori', 'arith.xori', 'arith.cmpi'}
         reported = {d['ordinal'] for d in declines}
         for ordinal, candidate in enumerate(module.walk()):
             if id(candidate) in taken or ordinal in reported or any(k.startswith('prov.quant.') for k in candidate.attributes):

@@ -66,6 +66,25 @@ def test_float_add_zero_is_not_bitwise_movement():
     assert not matches and not manifest['bindings']
 
 
+def test_native_numeric_widening_has_a_clean_refusal_reason():
+    text = '''builtin.module {
+      func.func @forward(%x: tensor<3xf32>) -> tensor<3xf64> {
+        %e = tensor.empty() : tensor<3xf64>
+        %y = linalg.generic {indexing_maps = [affine_map<(d0)->(d0)>, affine_map<(d0)->(d0)>], iterator_types = ["parallel"]}
+          ins(%x : tensor<3xf32>) outs(%e : tensor<3xf64>) {
+          ^bb0(%a: f32, %b: f64):
+            %wide = arith.extf %a : f32 to f64
+            linalg.yield %wide : f64
+          } -> tensor<3xf64>
+        func.return %y : tensor<3xf64>
+      }
+    }'''
+    _, manifest, matches = build(text)
+    assert not matches
+    assert any(d['reason'] == 'no exact integer schedule for unquantized data arithmetic or numeric conversion'
+               for d in manifest['declines'])
+
+
 @pytest.mark.parametrize('dtype', ['i8', 'f16', 'i64'])
 def test_native_selector_is_bound_once_including_byte_elements(dtype):
     text = f'''builtin.module {{
