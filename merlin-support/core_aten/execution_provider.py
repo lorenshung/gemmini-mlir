@@ -303,7 +303,8 @@ def _admit_quantized_linear_regions(source, *, package, numeric_policy):
     from merlin.targetgen.operation_numerics import integer_split_k_limit
     catalog_module = _core_aten_module(package, 'catalog')
     _, catalog, matches = catalog_module.build(source)
-    if not any(m.kernel.meta.get('form') == 'exact_linear_i32' or 'reduced' in m.kernel.meta for m in matches):
+    if not any(m.kernel.meta.get('form') == 'exact_linear_i32' or 'reduced' in m.kernel.meta
+               or m.numeric.get('readout') == 'storage_codes' for m in matches):
         return None
     parsed = catalog_module.parse_module(source)
     operations = list(parsed.walk())
@@ -320,6 +321,20 @@ def _admit_quantized_linear_regions(source, *, package, numeric_policy):
     kernels = {k['symbol']: k for k in catalog['kernels']}
     for binding, match in zip(catalog['bindings'], matches):
         meta, stream = match.kernel.meta, match.kernel.stream
+        if meta.get('readout') == 'storage_codes':
+            transfers = [i for i in stream.ins if i.kind in ('mvin', 'mvout')]
+            if (stream.readouts or stream.packs or not transfers
+                    or any(i.a('local') & (1 << 31) for i in transfers)
+                    or any(i.kind not in ('fence', 'flush', 'config_ld', 'config_st', 'mvin', 'mvout')
+                           for i in stream.ins)
+                    or any(i.a('scale') != 1 for i in stream.ins if i.kind == 'config_ld')
+                    or any(i.a('acc_scale') != 1 for i in stream.ins if i.kind == 'config_st')
+                    or meta.get('identical_qparam_proof') != binding['numeric'].get('identical_qparam_proof')):
+                return decline('storage-code movement is not a proved scratchpad byte stream')
+            proofs[binding['symbol']] = dict(symbol=binding['symbol'], status='proven', exact_arithmetic=True,
+                device_readout='storage_codes', schedule=meta, requantization=[],
+                emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest())
+            continue
         if not (meta.get('form') == 'exact_linear_i32' or 'reduced' in meta):
             return decline('closed linear proof cannot authenticate a different numeric schedule')
         try:

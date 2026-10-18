@@ -6,6 +6,72 @@ changes, exact recombination and final dtype semantics. The provider owns the
 integer device schedules and proves their accumulator bounds. No family grants
 permission to replace a native operation with lossy quantization.
 
+## F3: quantized movement storage codes
+
+Closed movement selectors between per-tensor byte DQ and Q boundaries use
+`bindings[].numeric.readout="storage_codes"` when **every** input and the output
+have identical reduced scale rationals, zero points, quantization ranges and
+storage dtypes. This is a semantic selector proof; provenance names never
+choose the schedule. It covers the same static selectors as F1, plus lossless
+float widening inside a quantized dtype copy. Arithmetic identities, reductions,
+data-dependent selectors and lossy conversions do not qualify.
+
+For legal incoming codes `qmin <= c <= qmax`, with positive scale `s` and
+integer zero point `z`, `clamp(RNE((c-z)*s/s)+z) = c`. The device therefore
+loads and stores byte codes through scratchpad with unit scales. There is no
+accumulator access, signed/unsigned repacking, i32 scratch/readout or runtime
+requantization. Unsigned byte storage retains its original bits. Literal
+elements (pads and constant-only fills) are quantized once during compilation,
+using exact rational RNE, zero point and clamp, then loaded as literal bytes.
+Constant-only selectors have an empty input proof. Different qparams retain
+the existing full-i32 device schedule and exact rational host requantization.
+The original input quantization and final dequantization remain source host work.
+
+The binding numeric record and kernel metadata contain:
+
+- `family="movement"`, `readout="storage_codes"`, `requantization="none"`,
+  `exact_arithmetic=true`;
+- `identical_qparam_proof.method="closed_static_selectors_identical_qparams"`;
+- `identical_qparam_proof.inputs`, indexed by kernel input name, and `.output`.
+  Each records `operation_ordinal` of the source DQ/Q, reduced decimal-string
+  `scale_numerator`/`scale_denominator`, `zero_point`, `quant_min`, `quant_max`,
+  `storage_dtype`, and `source_quant_attributes` containing the original printed
+  `prov.quant.*` attributes. Historical IR without rational provenance derives
+  its rational from the authenticated constant operand; current captures carry
+  the rational attributes. Known schema, operand/provenance consistency and
+  placement policies are still checked;
+- the identity equation, declared input-code range precondition, and
+  `literal_quantization="exact_rational_RNE_once"`.
+
+`source_sha256` authenticates the original bytes; `source_operation_ordinal`
+identifies the final selector carrier, `root_ordinal` the Q boundary, and
+`replaced_ordinals` the closed selector island and consumed Q/DQ operations.
+Shared DQ uses outside the island remain live after rewriting. These proofs
+participate in the kernel digest so deduplication cannot substitute another
+quantization contract. `kernels[].requantization` is empty. The provider's
+`admit_numeric_schedule` returns `device_readout="storage_codes"` and the same
+proof in `kernels[].schedule`, after auditing the emitted scratchpad stream.
+
+### Merlin consumer requirement
+
+The current non-contraction region route already accepts these catalog records:
+`merlin/targetgen/core_aten_device.py::region_routing_for_bundle` delegates to
+the provider, and `merlin/llvmlower/device_build.py::apply_region_offload` checks
+nonempty bindings and authenticates the artifacts. No Merlin edit is necessary
+to execute this route. To independently enforce the new numeric record, that
+region-admission boundary must validate `bindings[].numeric.readout`, re-read
+the recorded DQ/Q ordinals from the source with matching `source_sha256`, compare
+all six qparam fields (rational scale as a pair), and authenticate the closed
+selector and scratchpad-only kernel proof. It must retain input Q/final DQ and
+require no runtime requantization for `storage_codes`.
+
+`merlin/targetgen/core_aten_spec_int8.py::provider_coverage` currently requires
+`kernels[].schedule.readout="full_i32"` for arithmetic integer readouts. Keep
+that check for arithmetic. If this checker is extended to movement islands,
+accept `schedule.readout="storage_codes"` only with the identity proof above;
+do not treat a byte result type or an `exact_arithmetic` flag as sufficient.
+This change does not authorize arithmetic narrowing or floating readout scales.
+
 ## F1: opaque element movement
 
 The provider recognizes closed tensor selectors: copies, concatenation, static

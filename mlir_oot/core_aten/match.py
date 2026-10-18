@@ -175,6 +175,8 @@ def dequant(v: SSAValue) -> QIn | None:
         raise Decline('per-tensor DQ has inconsistent granularity')
     storage=getattr(p.attributes.get('prov.quant.storage_dtype'),'data',None) or getattr(p.properties.get('input_dtype'),'data',None)
     declared=getattr(p.properties.get('input_dtype'),'data',None)
+    if etype(src) == 'i8' and storage is not None and storage not in ('int8', 'uint8'):
+        raise Decline('unsupported DQ byte storage dtype')
     if declared in ('int8','uint8') and storage in ('int8','uint8') and declared!=storage:
         raise Decline('DQ storage dtype differs from its source operand contract')
     unsigned=etype(src)=='i8' and storage=='uint8'
@@ -228,6 +230,8 @@ def quant_sink(v: SSAValue) -> QOut | None:
         raise Decline('per-tensor Q has inconsistent granularity')
     storage=getattr(q.attributes.get('prov.quant.storage_dtype'),'data',None) or getattr(q.properties.get('output_dtype'),'data',None)
     declared=getattr(q.properties.get('output_dtype'),'data',None)
+    if storage is not None and storage not in ('int8', 'uint8'):
+        raise Decline('unsupported Q byte storage dtype')
     if declared in ('int8','uint8') and storage in ('int8','uint8') and declared!=storage:
         raise Decline('Q storage dtype differs from its source result contract')
     unsigned=storage=='uint8'
@@ -1474,6 +1478,7 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     from .bitwise import match as match_bitwise
     from .limbs import match as match_limb
     from .liveness import live_source_ops, live_bindings
+    from .quantized_movement import match as match_quantized_movement
     live = live_source_ops(module)
     matches, declines = [], []
     quantized_module = any(name_of(o).startswith('quant_ext.') for o in module.walk())
@@ -1481,6 +1486,21 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         (splat_value(o.operands[2]) != 0 or _prop_int(o,'quant_min') != -128 or _prop_int(o,'quant_max') != 127)
         for o in module.walk() if len(o.operands)>=3 and etype(o.operands[0])!='i32')
     taken: set[int] = set()
+    # Prove whole selector islands before older local matchers consume their
+    # carriers. A failed identity proof leaves the existing exact path intact.
+    ordinals = {op: i for i, op in enumerate(module.walk())}
+    for op in module.walk():
+        if op not in live:
+            continue
+        try:
+            m = match_quantized_movement(op, ordinals)
+            if m is not None and not any(id(o) in taken for o in m.consumed
+                                        if name_of(o) != 'quant_ext.dequantize_per_tensor'):
+                _bind_dense_layouts(m)
+                matches.append(m)
+                taken.update(id(o) for o in m.consumed)
+        except (Decline, ValueError, OverflowError, ZeroDivisionError):
+            pass  # The normal matcher records malformed/unsupported contracts.
     for ordinal, op in enumerate(module.walk()):
         if op not in live or id(op) in taken:
             continue
@@ -1536,4 +1556,4 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                 declines.append(dict(ordinal=ordinal, op=candidate.name,
                     reason='no exact integer schedule for unquantized data arithmetic or numeric conversion',
                     aten=getattr(candidate.attributes.get('prov.aten'), 'data', '')))
-    return live_bindings(matches, live), declines
+    return live_bindings(sorted(matches, key=lambda m: ordinals[m.root]), live), declines

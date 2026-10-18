@@ -48,6 +48,8 @@ def _stream_digest(kernel) -> str:
         # A symbol's metadata authenticates one representation plan. Identical
         # instructions with different host weights need distinct records.
         h.update(json.dumps(kernel.meta['limb_plan'], sort_keys=True).encode())
+    if 'identical_qparam_proof' in kernel.meta:
+        h.update(json.dumps(kernel.meta['identical_qparam_proof'], sort_keys=True).encode())
     h.update(json.dumps([(a.name, a.dtype, list(a.shape), a.role) for a in kernel.stream.args]).encode())
     for name, data in sorted(kernel.stream.consts.items()):
         h.update(name.encode() + data.tobytes())
@@ -117,7 +119,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                     abi=dict(argument_order="kernels[].args", pointee_layout="dense_row_major",
                              scratch="caller-allocated, uninitialized, private to the call",
                              aliasing="none", completion="kernel fences before returning",
-                             quantization="per-binding numeric contract: F1 opaque bytes without quantization; F2/F4 full-i32 components and retained exact host recombination; F3 exact rational host RNE, zero point and declared clamp"),
+                             quantization="per-binding numeric contract: F1 opaque bytes without quantization; F2/F4 full-i32 components and retained exact host recombination; F3 identical-qparam movement storage codes or exact rational host RNE, zero point and declared clamp"),
                     kernels=list(kernels.values()), bindings=bindings, declines=declines,
                     matched=len(bindings), unique_kernels=len(kernels))
     return device, manifest, accepted
