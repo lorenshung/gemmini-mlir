@@ -90,8 +90,14 @@ class SourceOracle(linmap.Region):
                     raw=int.from_bytes(struct.pack('<f' if width==32 else '<d',float(value)),'little')
                     return raw-(1<<width) if raw >= (1<<(width-1)) else raw
                 width=32 if str(target_type)=='f32' else 64
-                return F(struct.unpack('<f' if width==32 else '<d',(int(value)%(1<<width)).to_bytes(width//8,'little'))[0])
+                result=struct.unpack('<f' if width==32 else '<d',(int(value)%(1<<width)).to_bytes(width//8,'little'))[0]
+                return F(result) if np.isfinite(result) else result
             return np.array([cast(v) for v in np.asarray(vals[0]).flat],dtype=object).reshape(np.shape(vals[0]))
+        if name=='math.fma':
+            return np.asarray(vals[0],object)*np.asarray(vals[1],object)+np.asarray(vals[2],object)
+        if name=='arith.cmpf' and op.properties['predicate'].value.data==14:
+            a,b=np.broadcast_arrays(*[np.asarray(v,object) for v in vals])
+            return np.array([np.isnan(float(x)) or np.isnan(float(y)) for x,y in zip(a.flat,b.flat)]).reshape(a.shape)
         if name=='arith.extui':
             width=op.operands[0].type.width.data
             return np.asarray(vals[0],dtype=object)%(1<<width)

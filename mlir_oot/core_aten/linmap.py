@@ -29,6 +29,26 @@ class NotLinear(Exception):
     pass
 
 
+class _UninterpretedBits:
+    """A pure bit manipulation which must be discarded by a proved selector."""
+
+
+def _finite_byte_form(value, dtype):
+    """Prove no NaN/Inf for a rational affine form over finite storage bytes."""
+    formats = {'f16': (11,15), 'bf16': (8,127), 'f32': (24,127), 'f64': (53,1023)}
+    if dtype not in formats or isinstance(value, _UninterpretedBits):
+        return False
+    if isinstance(value, Sym):
+        bound = np.abs(np.asarray(value.const, object))
+        for _,_,coefficient in value.terms:
+            bound = bound + 128*np.abs(coefficient)
+    else:
+        bound = np.abs(np.asarray(value, object))
+    precision, exponent = formats[dtype]
+    maximum = (Q(2)-Q(1,1 << (precision-1)))*(1 << exponent)
+    return all(abs(v) <= maximum for v in np.asarray(bound).flat)
+
+
 def exact_float_widening(source, target):
     formats = {'f16': (11, -24, 15), 'bf16': (8, -133, 127),
                'f32': (24, -149, 127), 'f64': (53, -1074, 1023)}
@@ -242,6 +262,8 @@ class Region:
             raise NotLinear("unbound block argument")
         op = v.owner
         val = self._eval_op(op, list(op.results).index(v))
+        if isinstance(val, _UninterpretedBits):
+            raise NotLinear('unproved floating payload bits affect tensor output')
         self.memo[v] = val
         if op not in self.ops:
             self.ops.append(op)
@@ -520,6 +542,47 @@ class Region:
         return self.tensor(v)
 
     def _scalar(self, op, vals, env, ivs, mask):
+        # Native frontend add/sub now carries FMA and NaN payload selectors.
+        # Under this interpreter's exact-rational quantized contract FMA is a
+        # product plus an add, with no extra rounding boundary. Payload bit
+        # manipulation may disappear only behind a statically proved choice.
+        if op.name == 'arith.select' and not isinstance(vals[0], (Sym, _UninterpretedBits)):
+            condition = np.asarray(vals[0], bool)
+            if np.all(condition):
+                return vals[1]
+            if not np.any(condition):
+                return vals[2]
+        if op.name == 'arith.cmpf' and int(_attr(op, 'predicate').value.data) == 14:
+            dtype = str(op.operands[0].type)
+            if all(_finite_byte_form(v,dtype) for v in vals):
+                return np.zeros(np.broadcast_shapes(*(v.shape if isinstance(v,Sym) else np.shape(v) for v in vals)),bool)
+            raise NotLinear('unordered float comparison has no finite byte-domain proof')
+        if op.name == 'arith.bitcast':
+            if isinstance(vals[0], (Sym, _UninterpretedBits)):
+                return _UninterpretedBits()
+            import struct
+            source, target = str(op.operands[0].type), str(op.results[0].type)
+            formats = {'f16': ('e',16), 'f32': ('f',32), 'f64': ('d',64)}
+            if source in formats or target in formats:
+                fmt,bits = formats.get(source,formats.get(target))
+                def cast(v):
+                    if source in formats:
+                        raw = int.from_bytes(struct.pack('<'+fmt,float(v)), 'little')
+                        return raw-(1 << bits) if raw >= (1 << (bits-1)) else raw
+                    result = struct.unpack('<'+fmt,(int(v) % (1 << bits)).to_bytes(bits//8,'little'))[0]
+                    return Q(result) if np.isfinite(result) else _UninterpretedBits()
+                result = np.asarray([cast(v) for v in np.asarray(vals[0]).flat],object).reshape(np.shape(vals[0]))
+                return _UninterpretedBits() if any(isinstance(v,_UninterpretedBits) for v in result.flat) else result
+        if any(isinstance(v, _UninterpretedBits) for v in vals):
+            if op.name == 'arith.ori':
+                return _UninterpretedBits()
+            raise NotLinear('unproved floating payload bits affect data')
+        if op.name == 'math.fma':
+            a,b,c = vals
+            if isinstance(a,Sym) and isinstance(b,Sym):
+                raise NotLinear('product of two inputs')
+            product = a.scale(np.asarray(b,object)) if isinstance(a,Sym) else b.scale(np.asarray(a,object)) if isinstance(b,Sym) else np.asarray(a,object)*np.asarray(b,object)
+            return (product if isinstance(product,Sym) else Sym([],product)).add(c) if isinstance(product,Sym) or isinstance(c,Sym) else product+c
         # Index arithmetic must not silently wrap numpy int64 or round through
         # floating division. A static cast/wrap we do not prove stays on host.
         integer_ops = {'arith.addi', 'arith.subi', 'arith.muli', 'arith.divsi', 'arith.divui',
@@ -647,7 +710,13 @@ class Region:
         if nm == "arith.xori":
             return ia ^ ib
         if nm == "arith.cmpi":
-            return _CMPI[int(_attr(op, "predicate").value.data)](ia, ib)
+            predicate = int(_attr(op, "predicate").value.data)
+            if predicate >= 6:
+                dtype = str(op.operands[0].type)
+                bits = 64 if dtype == 'index' else op.operands[0].type.width.data
+                unsigned = np.frompyfunc(lambda x: int(x) % (1 << bits),1,1)
+                ia,ib = unsigned(np.asarray(ia,object)),unsigned(np.asarray(ib,object))
+            return _CMPI[predicate](ia, ib)
         if nm == "arith.cmpf":
             return _CMPF[int(_attr(op, "predicate").value.data)](ia, ib)
         raise NotLinear(f"unsupported body op {nm}")

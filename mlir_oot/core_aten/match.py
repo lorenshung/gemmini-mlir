@@ -1034,6 +1034,9 @@ def _unpad(v: SSAValue):
 
 
 def match_conv_wgrad(op: Operation) -> Match | None:
+    if name_of(op) == 'quant_ext.quantize_per_tensor':
+        from .conv_wgrad import match as match_gather_wgrad
+        return match_gather_wgrad(op)
     if op.name != "linalg.generic" or iterators(op) != ["parallel"] * 4 + ["reduction"] * 3:
         return None
     if [o.name for o in op.regions[0].blocks[0].ops] != ["arith.mulf", "arith.addf", "linalg.yield"]:
