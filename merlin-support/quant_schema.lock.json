@@ -1,6 +1,6 @@
 {
   "repository": "model2mlir",
-  "revision": "cb1a3da5800026389444b994fd3779b0ffd28121",
+  "revision": "23b0cd5f5d1ff0c052bbc344e196b843b5faf1ea",
   "path": "m2m/ir/quant_schema.json",
   "sha256": "af385e278adb4f16eed416114b1d3f24e0ab8ea2406e74248ca976790b402214"
 }
