@@ -476,6 +476,7 @@ class Chain:
     c: float = 0.0
     relu: bool = False
     bias: tuple | None = None            # (QIn or constant ndarray, weight, trailing-block index, map coeffs)
+    perm: list | None = None             # a final layout transpose before the quantize
 
 
 def follow_chain(v: SSAValue) -> Chain:
@@ -490,6 +491,13 @@ def follow_chain(v: SSAValue) -> Chain:
             continue
         if name_of(u) == "quant_ext.quantize_per_tensor":
             return ch
+        if u.name == "linalg.transpose" and ch.perm is None:
+            ch.perm = [int(p) for p in u.properties["permutation"].iter_values()]
+            ch.ops.append(u)
+            ch.final = u.results[0]
+            continue
+        if ch.perm is not None:
+            raise Decline("epilogue after a layout transpose")
         if u.name != "linalg.generic" or ch.relu:
             raise Decline(f"unsupported epilogue {name_of(u)}")
         if any(i != "parallel" for i in iterators(u)):
@@ -592,9 +600,11 @@ def match_contraction(op: Operation) -> Match | None:
     qa, qb = dequant(a), dequant(b)
     if qa is None or qb is None or qa.dtype != "i8" or qb.dtype != "i8":
         return None
-    if _is_conv_cols(b):
-        return None           # the convolution matcher owns im2col operands
+    if _is_conv_cols(b) or _im2col_rows(a) is not None:
+        return None           # the convolution matchers own im2col operands
     ch = follow_chain(op.results[0])
+    if ch.perm is not None:
+        raise Decline("contraction result is transposed")
     q = quant_sink(ch.final)
     s_acc = qa.scale * qb.scale
     out_shape = shape(q.value)
@@ -641,6 +651,71 @@ def _im2col(v: SSAValue):
 
 def _is_conv_cols(v: SSAValue) -> bool:
     return _im2col(v) is not None
+
+
+def _im2col_rows(v: SSAValue):
+    p = producer(_through_reshapes(v))
+    if p is None or p.name != "linalg.generic" or any(i != "parallel" for i in iterators(p)):
+        return None
+    if len(p.operands) != 2 or [o.name for o in p.regions[0].blocks[0].ops] != ["linalg.yield"]:
+        return None
+    if p.regions[0].blocks[0].ops.first.operands[0] is not p.regions[0].blocks[0].args[0]:
+        return None
+    maps = generic_maps(p)
+    if not identity_map(maps[1]) or len(maps[0].results) != 4 or maps[0].num_dims != 7:
+        return None
+    return p
+
+
+def match_convolution_rows(op: Operation) -> Match | None:
+    """Weight-RHS rows form: im2col rows [N*OH*OW, G*C*KH*KW] x W^T -> [pixels, F], bias row, NCHW view."""
+    if op.name != "linalg.matmul" or len(op.operands) != 3:
+        return None
+    im = _im2col_rows(op.operands[0])
+    if im is None or splat_value(op.operands[2]) != 0.0:
+        return None
+    co = map_coeffs(generic_maps(im)[0])
+    N_, OH, OW, G, C_, KH, KW = shape(im.results[0])
+    if G != 1:
+        raise Decline("grouped convolution rows form")
+    # (d0, d3*C + d4, d1*sh + d5*dh, d2*sw + d6*dw)
+    if co is None or co[0] != [1, 0, 0, 0, 0, 0, 0] or co[1][4] != 1 or any(co[1][j] for j in (0, 1, 2, 5, 6)):
+        raise Decline("im2col rows dims")
+    if any(co[2][j] for j in (0, 2, 3, 4, 6)) or any(co[3][j] for j in (0, 1, 3, 4, 5)):
+        raise Decline("im2col window couples spatial axes")
+    sh, dh, sw, dw = co[2][1], co[2][5], co[3][2], co[3][6]
+    xsrc, ph, pw, pad_op = _unpad(im.operands[0])
+    tr = producer(op.operands[1])
+    if tr is None or tr.name != "linalg.transpose" or [int(p) for p in tr.properties["permutation"].iter_values()] != [1, 0]:
+        raise Decline("weight operand is not W^T")
+    qx, qw = dequant(xsrc), dequant(_through_reshapes(tr.operands[0]))
+    if qx is None or qw is None or qx.dtype != "i8" or qw.dtype != "i8":
+        return None
+    N, C, H, W = shape(qx.value)
+    F = shape(qw.value)[0]
+    if shape(qw.value) != (F, C, KH, KW) or (N, C) != (N_, C_):
+        raise Decline("convolution operand extents")
+    g = ConvGeom(N, H, W, C, F, KH, KW, sh, sw, ph, pw, dh, dw, 1)
+    if (g.oh, g.ow) != (OH, OW):
+        raise Decline("convolution output extent")
+    ch = follow_chain(op.results[0])
+    q = quant_sink(ch.final)
+    if ch.perm != [0, 3, 1, 2] or shape(q.value) != (N, F, OH, OW):
+        raise Decline("convolution result is not viewed NCHW")
+    s_acc = qx.scale * qw.scale
+    bias = _bias_operand(ch, s_acc, F, lambda m: trailing_block(m) == m.num_dims - 1)
+    if ch.c:
+        raise Decline("constant epilogue offset")
+    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=bias is not None,
+                             relu=ch.relu, bias_const=bias[1] if bias and bias[0] == "const" else None)
+    operands = [("x", qx.value), ("w", qw.value)]
+    if bias and bias[0] == "arg":
+        operands.append(("bias", bias[1].value))
+    consumed = [op, im, tr, *ch.ops, q.op, qx.dq, qw.dq] + ([pad_op] if pad_op else []) + \
+        ([bias[1].dq] if bias and bias[0] == "arg" else [])
+    return Match("aten.convolution.default", q.op, consumed, operands, ("y", q.value), k,
+                 layout=dict(source="NCHW,OIHW", device="NHWC,HWIO", transposes="on-device"),
+                 numeric=dict(s_x=qx.scale, s_w=qw.scale, s_out=q.scale, geometry=g.__dict__))
 
 
 def match_convolution(op: Operation) -> Match | None:
@@ -815,27 +890,45 @@ def _numpy_grad_input(gv, wv, g: ConvGeom):
     return out
 
 
-def match_conv_input(op: Operation) -> Match | None:
-    """grad_input as a gather loop: verified against every consistent transposed-conv geometry."""
-    from . import linmap
-    if op.name != "linalg.generic" or len(op.operands) != 1 or etype(op.results[0]) != "f32":
-        return None
-    nested = {id(x) for x in op.walk()}
-    extracted = []
-    for o in op.walk():
-        if o.name != "tensor.extract":
+def _dq_leaves(root: SSAValue, limit: int = 4000) -> list[QIn]:
+    """Dequantized tensors the producers of ``root`` read (stopping at dequantize ops)."""
+    seen, out, stack = set(), [], [root]
+    while stack and len(seen) < limit:
+        v = stack.pop()
+        if id(v) in seen:
             continue
-        t = o.operands[0]
-        outside = (isinstance(t, OpResult) and id(t.owner) not in nested) or (
-            not isinstance(t, OpResult) and id(t.owner.parent_op()) not in nested)
-        if outside and t not in extracted:
-            extracted.append(t)
-    qs = [dequant(v) for v in extracted]
-    if len(qs) != 2 or any(q is None for q in qs):
+        seen.add(id(v))
+        q = dequant(v)
+        if q is not None:
+            if all(x.value is not q.value for x in out):
+                out.append(q)
+            continue
+        p = producer(v)
+        if p is None:
+            continue
+        for o in p.walk():
+            stack.extend(o.operands)
+    return out
+
+
+def match_conv_input(op: Operation) -> Match | None:
+    """grad_input (gather loop, or per-tap contractions with shifted insert-adds): the region is
+    bilinear in (grad_output, weight); with a random concrete weight it is linear in the grad, and
+    it is verified by evaluation against every transposed-convolution geometry consistent with
+    the shapes."""
+    from . import linmap
+    if name_of(op) != "quant_ext.quantize_per_tensor":
         return None
-    if not any(o.name == "arith.mulf" for o in op.walk()):
+    q0 = quant_sink(op.operands[0])
+    if q0 is None or q0.op is not op:
         return None
-    N, C, H, W = shape(op.results[0])
+    root = op.operands[0]
+    if shape(root) is None or len(shape(root)) != 4 or etype(root) != "f32":
+        return None
+    qs = [q for q in _dq_leaves(root) if q.dtype == "i8" and len(shape(q.value)) == 4]
+    if len(qs) != 2:
+        return None
+    N, C, H, W = shape(root)
     a, b = qs
     qg, qw = (a, b) if shape(a.value)[0] == N and shape(b.value)[1] == C else (b, a)
     Ng, F, OH, OW = shape(qg.value)
@@ -857,9 +950,9 @@ def match_conv_input(op: Operation) -> Match | None:
         return None
 
     try:
-        lm, region = linmap.extract(op.results[0], leaf)
-    except linmap.NotLinear as exc:
-        raise Decline(f"grad_input region: {exc}")
+        lm, region = linmap.extract(root, leaf)
+    except linmap.NotLinear:
+        return None
     got = np.zeros(int(np.prod((N, C, H, W))))
     np.add.at(got, lm.out, lm.coef * gv.reshape(-1)[lm.idx])
     got += lm.const
@@ -883,10 +976,10 @@ def match_conv_input(op: Operation) -> Match | None:
             break
     if found is None:
         raise Decline("gather loop is not a transposed convolution of a square geometry")
-    q = _sandwich_out(op.results[0])
+    q = q0
     k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q.scale)
-    aten = getattr(op.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
-    return Match(aten, q.op, [op, q.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)], ("y", q.value), k,
+    aten = getattr(root.owner.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
+    return Match(aten, q.op, [*region, q.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)], ("y", q.value), k,
                  layout=dict(source="NCHW,OIHW->NCHW", transposes="on-device"),
                  numeric=dict(output="grad_input", s_g=qg.scale, s_w=qw.scale, s_out=q.scale,
                               geometry=found.__dict__))
@@ -1094,7 +1187,7 @@ def match_linear(op: Operation) -> Match | None:
                  numeric=dict(s_out=s_out, terms=int(lm.out.size), form=kernel.meta.get("form")))
 
 
-MATCHERS = (match_convolution, match_conv_wgrad, match_conv_input, match_contraction, match_mean, match_elementwise,
+MATCHERS = (match_convolution, match_convolution_rows, match_conv_wgrad, match_conv_input, match_contraction, match_mean, match_elementwise,
             match_movement, match_linear)
 
 

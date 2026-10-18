@@ -67,6 +67,47 @@ def routing(directory, *, target, package, facts, eligible):
     )
 
 
+def _core_aten_module(package, name):
+    identity = hashlib.sha256(str(Path(package).resolve()).encode()).hexdigest()
+    return load_module(package, f"mlir_oot.core_aten.{name}", package_name=f"core_aten_backend_{identity}")
+
+
+def core_aten_catalog(prepared, workdir, *, package, llvm_bin=None):
+    """Bind and compile every supported Core ATen region of ``prepared`` (all 39 support-set ops).
+
+    Returns (manifest path, object path).  The manifest (schema gemmini_core_aten_catalog_v1)
+    lists each kernel's argument table and each binding's root ordinal, replaced ordinals and
+    operand sources; regions it cannot implement exactly are listed under ``declines``.  This is
+    opt-in beside ``routing``: the integer GEMM catalog and its bindings are unchanged.
+    """
+    catalog = _core_aten_module(package, "catalog")
+    workdir = Path(workdir)
+    catalog.compile_catalog(Path(prepared), workdir,
+                            llvm_bin=Path(llvm_bin) if llvm_bin else toolchain.llvm_install() / "bin")
+    return workdir / "core_aten_catalog.json", workdir / "core_aten.o"
+
+
+def core_aten_offload(prepared, workdir, *, package, llvm_bin=None):
+    """Rewrite the bound regions of ``prepared`` into C-interface calls.
+
+    Returns (rewritten MLIR, shim C source, kernel object, manifest).  After any lowering with
+    function-boundary bufferization and ``llvm.emit_c_interface`` lowering, the rewritten model calls
+    ``_mlir_ciface_ca_<symbol>``, which the shim defines over the kernel object.  The host image
+    must link both (and provide malloc for the call results' destinations).
+    """
+    import json
+
+    manifest_path, obj = core_aten_catalog(prepared, workdir, package=package, llvm_bin=llvm_bin)
+    offload = _core_aten_module(package, "offload")
+    manifest = json.loads(Path(manifest_path).read_text())
+    workdir = Path(workdir)
+    rewritten = workdir / "core_aten_offloaded.mlir"
+    rewritten.write_text(offload.rewrite(Path(prepared).read_text(), manifest) + "\n")
+    shim = workdir / "core_aten_shim.c"
+    shim.write_text(offload.shim_source(manifest))
+    return rewritten, shim, obj, manifest_path
+
+
 def runner_options():
     from merlin.runtime.backends.spike import spike_path
 

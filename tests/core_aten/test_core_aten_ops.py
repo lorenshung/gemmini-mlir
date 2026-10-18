@@ -15,7 +15,8 @@ from mlir_oot.core_aten.catalog import build  # noqa: E402
 from mlir_oot.core_aten.lint import lint  # noqa: E402
 from mlir_oot.core_aten.stream import simulate  # noqa: E402
 
-FIXTURES = HERE.parent / "fixtures" / "core_aten"
+FIXTURES = HERE.parent / "fixtures" / "core_aten"            # model2MLIR 9c8b69f structural forms
+LEGACY = HERE.parent / "fixtures" / "core_aten_legacy"      # earlier gather-loop and LHS-weight forms
 SUPPORT_39 = {
     "aten._adaptive_avg_pool2d.default", "aten._adaptive_avg_pool2d_backward.default",
     "aten._adaptive_avg_pool3d.default", "aten._to_copy.default", "aten.adaptive_avg_pool1d.default",
@@ -81,10 +82,15 @@ class TestCatalogOnCaptures(unittest.TestCase):
     """Every model2MLIR capture binds completely and its chained models meet gate 3."""
 
     def test_every_fixture_binds_and_matches_eager(self):
-        dirs = sorted(p for p in FIXTURES.iterdir() if (p / "model.mlir").exists())
+        for root in (FIXTURES, LEGACY):
+            with self.subTest(str(root.name)):
+                self._check(root)
+
+    def _check(self, root):
+        dirs = sorted(p for p in root.iterdir() if (p / "model.mlir").exists())
         covered = set()
         for d in dirs:
-            with self.subTest(d.name):
+            with self.subTest(f"{root.name}/{d.name}"):
                 manifest, outs, exp = chained_model(d)
                 self.assertFalse(manifest["declines"], manifest["declines"])
                 self.assertTrue(manifest["bindings"])
@@ -93,6 +99,25 @@ class TestCatalogOnCaptures(unittest.TestCase):
                     ok, mx, ex = gate3(got, ref)
                     self.assertTrue(ok, f"{d.name}: max {mx} exact {ex}")
         self.assertTrue(SUPPORT_39 <= covered, sorted(SUPPORT_39 - covered))
+
+
+
+class TestOffloadRewrite(unittest.TestCase):
+    """Bound regions become C-interface calls; nothing of the quantized sandwich remains."""
+
+    def test_rewrite_every_fixture(self):
+        from mlir_oot.core_aten.offload import rewrite, shim_source
+        for d in sorted(p for p in FIXTURES.iterdir() if (p / "model.mlir").exists()):
+            with self.subTest(d.name):
+                text = (d / "model.mlir").read_text()
+                _, manifest, _ = build(text)
+                out = rewrite(text, manifest)
+                self.assertNotIn("quant_ext.", out)
+                self.assertEqual(out.count("func.call @ca_gemmini_ca_"), len(manifest["bindings"]))
+                self.assertIn("llvm.emit_c_interface", out)
+                shim = shim_source(manifest)
+                for k in manifest["kernels"]:
+                    self.assertIn(f"_mlir_ciface_ca_{k['symbol']}(", shim)
 
 
 if __name__ == "__main__":
