@@ -8,7 +8,7 @@ import pytest
 
 from mlir_oot.core_aten import ops
 from mlir_oot.core_aten.linmap import LinearMap
-from mlir_oot.core_aten.linmatch import gather_jobs
+from mlir_oot.core_aten.linmatch import copy_kernel
 from mlir_oot.core_aten.match import Decline
 from mlir_oot.core_aten.offload import shim_source
 
@@ -23,7 +23,7 @@ def test_empty_gather_declines_before_stride_division():
     z = np.zeros(0, dtype=np.int64)
     lm = LinearMap((2, 0), z, z, z, z.astype(float), z.astype(float), {})
     with pytest.raises(Decline, match='empty'):
-        gather_jobs(lm, {}, 1, 'y')
+        copy_kernel('gather', lm, {}, 1)
 
 
 def test_nonzero_memref_offsets_are_elements_for_i32_inputs_and_outputs(tmp_path):
@@ -75,7 +75,8 @@ def test_contraction_readout_view_keeps_source_descriptor_rank():
         if '%19 = "quant_ext.quantize_per_tensor"' in line:
             lines[index]=line.replace('(%14,','(%flat,').replace('tensor<37x45xf32>','tensor<1665xf32>')
     text='\n'.join(lines).replace('tensor<37x45xi8>','tensor<1665xi8>')
-    _,manifest,matches=build(text)
+    from fixture_source import source_text
+    _,manifest,matches=build(source_text(text))
     assert len(matches)==1,manifest['declines']
     match,=matches
     output=next(arg for arg in match.kernel.args if arg.role=='output')
@@ -84,3 +85,18 @@ def test_contraction_readout_view_keeps_source_descriptor_rank():
     inputs=dict(np.load(fixture/'inputs.npz'))
     feed={'a':inputs['arg0'],'b':inputs['arg1']}
     assert np.array_equal(simulate(match.kernel.stream,feed)['out'],evaluate(match,feed)['out'])
+
+
+def test_quasi_affine_maps_are_not_proved_by_basis_samples():
+    from xdsl.ir.affine import AffineExpr as A,AffineMap
+    from mlir_oot.core_aten.match import map_coeffs,identity_map
+    from mlir_oot.core_aten.linmap import _affine
+    d=A.dimension(0)
+    mapping=AffineMap(1,0,(d+d//2,))
+    assert map_coeffs(mapping) is None
+    assert not identity_map(mapping)
+    points=np.arange(9)
+    assert np.array_equal(_affine(mapping,[points],(9,))[0],points+points//2)
+    bounded=AffineMap(1,0,(d+(d//24)*20,))
+    assert map_coeffs(bounded,(24,))==[[1]]
+    assert map_coeffs(bounded,(25,)) is None

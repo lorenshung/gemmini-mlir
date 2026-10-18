@@ -113,3 +113,20 @@ class TestGoldenConvPadding(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_repeated_accumulates_preserve_overwrite_hazard():
+    import pytest
+    s=Stream([Arg('x','i8',(16,16),'input')])
+    s.config_ld(2,0,shrink=False)
+    s.mvin(None,ACC(0),16,16,2)
+    s.config_ld(0,16,shrink=True)
+    for _ in range(1000):
+        s.mvin(s.at('x'),ACC(0,accumulate=True),16,16)
+    lint(s)
+    s.mvin(s.at('x'),ACC(0),16,16)
+    with pytest.raises(HazardError,match='HW3'):
+        lint(s)
+    s.ins.pop();s.fence()
+    s.mvin(s.at('x'),ACC(0),16,16)
+    lint(s)

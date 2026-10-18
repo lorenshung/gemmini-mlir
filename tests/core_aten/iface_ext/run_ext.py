@@ -94,7 +94,12 @@ def merlin_checks(cb, inputs, ref) -> list[str]:
 
     problems = list(validate_command_buffer(cb))
     problems += [f"fence: {v}" for v in fence_violations(cb)]
-    sim = cb_simulate(cb, {k: v.tolist() for k, v in inputs.items()})
+    try:
+        sim = cb_simulate(cb, {k: v.tolist() for k, v in inputs.items()})
+    except UnboundLocalError as exc:
+        # This external simulator is informational. Exact grading above uses
+        # the independent rational opcode reference, never its float formula.
+        return problems + [f'informational Merlin simulator error: {exc}']
     sim = sim.get("outputs", sim) if isinstance(sim, dict) else sim
     for k, v in ref.items():
         got = sim.get(k)

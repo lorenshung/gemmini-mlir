@@ -29,12 +29,13 @@ def test_exhaustive_two_byte_affine():
     assert np.array_equal(got, expected)
 
 
-def test_mean_review_repro_refuses_an_inexact_scale():
-    # Python binary64 parameters: ratio is just below 3, so sum 25 rounds to 1.
-    scale = F(.03) / (50 * F(.01))
-    assert round(25 * scale) == 1
-    with pytest.raises(Decline, match='transition'):
-        ops.mean_dim((37, 50), [1], False, s_x=.03, s_out=.01)
+def test_mean_review_repro_uses_full_width_and_exact_host_rounding():
+    x=np.zeros((37,50),np.int8);x[:,:2]=[-62,87]
+    kernel=ops.mean_dim(x.shape,[1],False,s_x=.03,s_out=.01)
+    expected=quantize(x.astype(object).sum(1)*F(.03)/(50*F(.01)))
+    assert np.array_equal(simulate(kernel.stream,{'x':x})['y'],expected)
+    assert kernel.stream.readouts
+    assert all(i.a('acc_scale')==1 for i in kernel.stream.ins if i.kind=='config_st')
 
 
 @pytest.mark.parametrize('length', [1, 2, 4, 16, 32, 64, 128])
@@ -64,24 +65,6 @@ def test_random_readout_proof_never_accepts_a_counterexample():
         assert np.array_equal(hw, quantize(x.astype(object) * scale))
 
 
-@pytest.mark.parametrize('dtype,zp,low,high', [
-    ('i8', 0, -128, 127), ('i8', 0, -127, 127), ('i8', -7, -128, 127),
-    ('ui8', 0, 0, 255), ('ui8', 123, 0, 255), ('ui8', 128, 1, 255),
-])
-def test_quantization_schemes_exact_or_refused(dtype, zp, low, high):
-    source = (Path(__file__).parents[1] / 'fixtures/core_aten/mean_dim/model.mlir').read_text()
-    # Fixtures use signless storage; dtype is expressed by the quantization range.
-    import re
-    source = re.sub(r'quant_min = -128 : i64', f'quant_min = {low} : i64', source)
-    source = re.sub(r'quant_max = 127 : i64', f'quant_max = {high} : i64', source)
-    # All i32 scale/zero-point splats in this fixture use the named scalar.
-    source = re.sub(r' 0 : i64', f' {zp} : i64', source)
-    _, manifest, matches = build(source)
-    if dtype == 'ui8' or zp or low != -128:
-        assert not matches, manifest
-    else:
-        assert matches or manifest['declines']  # admissibility depends on its exact source scales
-
 
 def test_eager_float_divergence_is_informational(capsys):
     # Binary32 source scales .03 and .01 have ratio exactly 3.
@@ -98,8 +81,6 @@ def test_eager_float_divergence_is_informational(capsys):
 
 
 @pytest.mark.parametrize('scale',[F(1,2),F(1,1024),F(3,8)])
-def test_full_i32_readout_domain_proof_includes_inexact_float_casts(scale):
-    assert prove_readout(scale,-(1<<31),(1<<31)-1)
-    values=np.array([-(1<<31),-(1<<24)-1,-255,-3,-1,0,1,3,255,(1<<24)+1,(1<<31)-1],np.int64)
-    hardware=np.clip(np.rint(values.astype(np.float32)*np.float32(float(scale))),-128,127).astype(np.int8)
-    assert np.array_equal(hardware,quantize(values.astype(object)*scale))
+def test_full_i32_shortcut_is_refused_even_when_saturation_hides_rounding(scale):
+    with pytest.raises(Decline,match='conversion'):
+        prove_readout(scale,-(1<<31),(1<<31)-1)

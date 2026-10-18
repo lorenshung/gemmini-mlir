@@ -27,7 +27,7 @@ QD = torch.ops.quantized_decomposed
 
 
 def sc(x):
-    return max(float(x.abs().max()), 1e-8) / 127.5
+    return float(np.float32(max(float(x.abs().max()), 1e-8) / 127.5))
 
 
 def qz(x, s, dtype=torch.int8):
@@ -68,12 +68,12 @@ def case(name, fn, floats, kinds=None, s_out=None, bias_of=None):
     scales = [sc(x) if k == "i8" else None for x, k in zip(floats, kinds)]
     for i, k in enumerate(kinds):
         if k != "i8":
-            scales[i] = k[1](scales)
+            scales[i] = float(np.float32(k[1](scales)))
     ints = [qz(x, s, torch.int8 if k == "i8" else torch.int32) for x, s, k in zip(floats, scales, kinds)]
     dts = ["i8" if k == "i8" else "i32" for k in kinds]
     deq = [i.to(torch.float32) * s for i, s in zip(ints, scales)]
     y = fn(*deq)
-    so = s_out if s_out is not None else sc(y)
+    so = float(np.float32(s_out)) if s_out is not None else sc(y)
     return name, Q(fn, scales, dts, so), ints
 
 
@@ -175,4 +175,6 @@ if __name__ == "__main__":
         sets["all_small"] = lambda: paper_set(small=True) + rest_set(small=True)
     except ImportError:
         pass
+    from capture_rtl import rtl_set
+    sets["rtl"] = rtl_set
     print(json.dumps(run(sets[a.set](), a.out, a.only), indent=1))

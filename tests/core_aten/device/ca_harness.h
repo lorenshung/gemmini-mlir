@@ -1,6 +1,6 @@
 // ca_harness.h - bare-metal checks for compiler-emitted Core ATen Gemmini kernels.
-// The CPU only fills output sentinels and compares results; every value is computed by the
-// linked device kernel.  Protocol: PASS <check> / FAIL <check> <idx> <got> <exp> /
+// The linked kernels perform integer device computation and exact CPU requantization.
+// The driver fills sentinels and compares every output bit.  Protocol: PASS <check> / FAIL <check> <idx> <got> <exp> /
 // INFO <check> mismatches=<n>/<total> / PERF <label> cycles=<n> / HARNESS_DONE pass=<n> fail=<m>.
 #ifndef CA_HARNESS_H
 #define CA_HARNESS_H

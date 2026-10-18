@@ -3,7 +3,7 @@
 For every captured case directory (``capture.py``) this parses ``model.mlir``, binds and
 compiles every matched region through ``mlir_oot.core_aten.catalog``, wires the kernels by
 the manifest's operand sources (function arguments, earlier kernel results), links one
-bare-metal ELF and runs it.  The function result is checked against the eager PyTorch
+bare-metal ELF and runs it.  The function result is checked against the independent source-graph
 exact-rational reference and the instruction model, with equality of every output code.
 Eager float output is logged separately as informational divergence. Unsupported
 regions are reported as device refusals.
@@ -54,7 +54,8 @@ class DeviceRefusal(Exception):
 
 
 def prepare(case_dir: Path, prefix: str, wd: Path):
-    text = (case_dir / "model.mlir").read_text()
+    from fixture_source import read
+    text = read(case_dir / "model.mlir")
     device, manifest, matches = build(text)
     if not manifest["bindings"]:
         raise DeviceRefusal(f"{case_dir.name}: no exact region matched; declines={manifest['declines']}")

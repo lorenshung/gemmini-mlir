@@ -35,7 +35,8 @@ class TestCatalogOnCaptures(unittest.TestCase):
             covered, refused = set(), set()
             for d in sorted(p for p in root.iterdir() if (p / "model.mlir").exists()):
                 with self.subTest(f"{root.name}/{d.name}"):
-                    text = (d / "model.mlir").read_text()
+                    from fixture_source import read
+                    text = read(d / "model.mlir")
                     _, manifest, matches = build(text)
                     values = {("arg", int(k[3:])): v for k, v in np.load(d / "inputs.npz").items()}
                     key = lambda src: ("arg", src["func_arg"]) if "func_arg" in src else ("op", src["op_ordinal"], src["result"])
@@ -66,7 +67,8 @@ class TestCatalogOnCaptures(unittest.TestCase):
                     for kernel in manifest['kernels']:
                         self.assertIn('_mlir_ciface_ca_' + kernel['symbol'], shim)
             self.assertTrue(covered)
-            self.assertTrue(refused)
+            if root == FIXTURES:
+                self.assertFalse(refused, "all current supported captures must remain on the device")
             print(root.name, 'exactly covered:', sorted(covered), 'device refusals:', sorted(refused))
 
 

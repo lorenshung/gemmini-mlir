@@ -4,7 +4,7 @@ from fractions import Fraction as F
 import numpy as np
 
 from mlir_oot.core_aten import linmap
-from mlir_oot.core_aten.match import dequant, producer, name_of
+
 
 
 def quantize(values, scale=1, lo=-128, hi=127):
@@ -12,69 +12,113 @@ def quantize(values, scale=1, lo=-128, hi=127):
     return np.array([min(hi, max(lo, round(F(v) / F(scale)))) for v in values.flat], dtype=np.int8).reshape(values.shape)
 
 
+class SourceOracle(linmap.Region):
+    """Concrete rational interpretation of source SSA, independent of matching.
+
+    The interpreter reads Q/DQ operands and operation attributes itself. It
+    never reads match.numeric, kernel metadata or extracted coefficient maps.
+    The gather-loop executor supplies control flow only; concrete data values
+    and each quantization decision remain exact rationals.
+    """
+    def __init__(self, inputs):
+        super().__init__(lambda value: inputs.get(value),max_points=1 << 26)
+
+    def _eval_op(self, op, result):
+        from fractions import Fraction
+        name = getattr(getattr(op,'op_name',None),'data',op.name)
+        if name.startswith('quant_ext.'):
+            values,scale,zp = [self.tensor(v) for v in op.operands[:3]]
+            scale,zp = Fraction(np.asarray(scale).item()),int(np.asarray(zp).item())
+            if getattr(op.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8': zp=zp%256
+            low = op.properties['quant_min'].value.data
+            high = op.properties['quant_max'].value.data
+            storage=getattr(op.attributes.get('prov.quant.storage_dtype'),'data',None) or getattr(op.properties.get('output_dtype'),'data',None) or getattr(op.properties.get('input_dtype'),'data',None)
+            unsigned=storage=='uint8'
+            if 'dequantize' in name:
+                unsigned = str(op.operands[0].type.get_element_type())=='i8' and unsigned
+                codes = np.asarray(values)
+                if unsigned: codes=codes.astype(np.int64).astype(np.uint8)
+                return (codes.astype(object)-zp)*scale
+            dt = np.uint8 if unsigned else np.int8
+            return np.array([min(high,max(low,round(Fraction(x)/scale)+zp)) for x in np.asarray(values).flat],dtype=dt).reshape(np.shape(values))
+        if name in ('linalg.matmul','linalg.batch_matmul'):
+            a,b,init=[self.tensor(v).astype(object) for v in op.operands]
+            return a@b+init
+        if name=='linalg.reduce':
+            value,init=[self.tensor(v).astype(object) for v in op.operands]
+            dims=tuple(op.properties['dimensions'].iter_values())
+            return value.sum(axis=dims)+init
+        if name=='linalg.fill':
+            return np.full(op.results[0].type.get_shape(),np.asarray(self.tensor(op.operands[0])).item(),dtype=object)
+        return super()._eval_op(op,result)
+
+    def _generic(self,op):
+        from xdsl.ir.affine import AffineDimExpr
+        maps=[m.data for m in op.properties['indexing_maps']]
+        kinds=[getattr(t.data,'value',t.data) for t in op.properties['iterator_types']]
+        dims=[None]*len(kinds)
+        for value,mapping in zip(op.operands,maps):
+            for size,expr in zip(value.type.get_shape(),mapping.results):
+                if isinstance(expr,AffineDimExpr): dims[expr.position]=int(size)
+        assert all(d is not None for d in dims),'unbounded source iteration'
+        ivs=list(np.indices(dims,dtype=np.int64))
+        block=op.regions[0].blocks[0]
+        env={}
+        n_in=len(op.operands)-len(op.results)
+        reductions=tuple(i for i,k in enumerate(kinds) if k=='reduction')
+        for ordinal,(value,mapping,arg) in enumerate(zip(op.operands,maps,block.args)):
+            indices=tuple(mapping.eval(ivs,[]))
+            if reductions and ordinal>=n_in:
+                env[arg]=np.zeros(dims,dtype=object)
+            else:
+                env[arg]=np.asarray(self.tensor(value),dtype=object)[indices]
+        result=self._block(block,env,ivs,np.ones(dims,bool))[0]
+        result=np.broadcast_to(result,dims)
+        if reductions:
+            result=result.sum(axis=reductions)+self.tensor(op.operands[n_in])
+        return np.asarray(result,dtype=object)
+
+    def _scalar(self,op,vals,env,ivs,mask):
+        name=op.name
+        if name=='arith.bitcast':
+            import struct
+            source_type=op.operands[0].type
+            target_type=op.results[0].type
+            def cast(value):
+                if str(source_type) in ('f32','f64'):
+                    width=32 if str(source_type)=='f32' else 64
+                    raw=int.from_bytes(struct.pack('<f' if width==32 else '<d',float(value)),'little')
+                    return raw-(1<<width) if raw >= (1<<(width-1)) else raw
+                width=32 if str(target_type)=='f32' else 64
+                return F(struct.unpack('<f' if width==32 else '<d',(int(value)%(1<<width)).to_bytes(width//8,'little'))[0])
+            return np.array([cast(v) for v in np.asarray(vals[0]).flat],dtype=object).reshape(np.shape(vals[0]))
+        if name=='arith.extui':
+            width=op.operands[0].type.width.data
+            return np.asarray(vals[0],dtype=object)%(1<<width)
+        if name=='arith.trunci':
+            width=op.results[0].type.width.data
+            result=np.asarray(vals[0],dtype=object)%(1<<width)
+            return np.where(result >= (1<<(width-1)),result-(1<<width),result)
+        if name in ('arith.shli','arith.shrsi','arith.shrui'):
+            a,b=np.asarray(vals[0],dtype=object),np.asarray(vals[1],dtype=object)
+            if name=='arith.shrui':a=a%(1<<op.operands[0].type.width.data)
+            return a << b if name=='arith.shli' else a >> b
+        if name=='math.roundeven':
+            return np.array([round(F(x)) for x in np.asarray(vals[0]).flat],dtype=object).reshape(np.shape(vals[0]))
+        if name=='cf.assert':
+            assert np.all(vals[0]),'source assertion failed'
+            return []
+        return super()._scalar(op,vals,env,ivs,mask)
+
+
 def evaluate(match, inputs):
-    numeric = match.numeric
-    result_name, result_value = match.result
-    output = next(a for a in match.kernel.args if a.role == 'output')
-    if numeric.get('integer_readout'):
-        result = inputs['a'].astype(object) @ inputs['b'].astype(object)
-        if numeric.get('runtime_seed'):
-            result += inputs['bias'].astype(object)
-        if numeric['seed'] is not None:
-            result += np.asarray(numeric['seed'], dtype=object)
-        if numeric['relu']:
-            result = np.maximum(result, 0)
-        return {result_name: quantize(result * F(numeric['scale']))}
-    if 'wa' in numeric:
-        a = inputs['a'].astype(object) * F(numeric['wa']) * F(numeric['s_a'])
-        b = inputs['b'].astype(object) * F(numeric['wb']) * F(numeric['s_b'])
-        return {result_name: quantize(a + b + F(numeric['c']), numeric['s_out'])}
-    if 's_a' in numeric:
-        a, b = inputs['a'].astype(object), inputs['b'].astype(object)
-        values = a @ b
-        scale = F(numeric['alpha']) * F(numeric['s_a']) * F(numeric['s_b']) / F(numeric['s_out'])
-        assert 'bias' not in inputs
-        return {result_name: quantize(values * scale).reshape(output.shape)}
-    if 'dims' in numeric:
-        values = np.sum(inputs['x'].astype(object), axis=tuple(numeric['dims']))
-        scale = F(numeric['w']) * F(numeric['s_x']) / F(numeric['s_out'])
-        return {result_name: quantize(values * scale).reshape(output.shape)}
-    if 's_x' in numeric and 'w' in numeric:
-        values = inputs['x'].astype(object) * F(numeric['w']) * F(numeric['s_x']) + F(numeric['c'])
-        if match.op == 'aten.relu.default':
-            values = np.maximum(values, 0)
-        return {result_name: quantize(values, numeric['s_out'])}
-    if 's_a' not in numeric and 'wa' in numeric:
-        raise AssertionError('affine oracle needs operand scales')
-    # Structural movement only: extract source indices and literal constants.
-    # Its coefficients are unchanged source binary32 scales, exactly representable
-    # in binary64. No float arithmetic is allowed in the extracted region.
-    sources = {v: i for i, (_, v) in enumerate(match.operands)}
-    scales = {}
-    def leaf(value):
-        dq = dequant(value)
-        src, scale = (dq.value, dq.scale) if dq else (value, 1)
-        if src not in sources:
-            return None
-        scales[sources[src]] = scale
-        return sources[src], scale
-    root = result_value
-    q = producer(root)
-    s_out = 1
-    if q is not None and name_of(q) == 'quant_ext.quantize_per_tensor':
-        from mlir_oot.core_aten.match import splat_value
-        s_out = splat_value(q.operands[1])
-        root = q.operands[0]
-    lm, region = linmap.extract(root, leaf)
-    assert not any(x.name in ('arith.addf', 'arith.subf', 'arith.mulf', 'arith.divf', 'linalg.reduce')
-                   for op in region for x in op.walk()), 'oracle requires rational arithmetic dispatch'
-    values = np.array([F(float(c)) for c in lm.const], dtype=object)
-    arrays = [inputs[name].reshape(-1) for name, _ in match.operands]
-    for out, sid, idx, coefficient in zip(lm.out, lm.src, lm.idx, lm.coef):
-        values[out] += F(float(coefficient)) * int(arrays[sid][idx])
-    if output.dtype == 'i32':
-        return {result_name: np.asarray(values, np.int32).reshape(output.shape)}
-    return {result_name: quantize(values, s_out).reshape(output.shape)}
+    sources={value:np.asarray(inputs[name],dtype=object) for name,value in match.operands}
+    result_name,result_value=match.result
+    values=SourceOracle(sources).tensor(result_value)
+    # Public tensor byte signedness is carried by Q, not signless MLIR i8.
+    output=next(a for a in match.kernel.args if a.role=='output')
+    dtype=np.int32 if output.dtype=='i32' else np.int8
+    return {result_name:np.asarray(values,dtype=np.int64).astype(dtype).reshape(output.shape)}
 
 
 def command_reference(cb, inputs):

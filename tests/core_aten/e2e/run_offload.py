@@ -50,31 +50,48 @@ void ca_abort(const char *why) { printf("FAIL abort %s\n", why); exit(1); }
 
 
 def _ctype(dt):
-    return {"int8": "int8_t", "int32": "int32_t"}[dt]
+    return {"int8": "int8_t", "uint8": "uint8_t", "int32": "int32_t", "float32": "float"}[dt]
 
 
 def build_case(case: Path, wd: Path) -> Path:
     wd.mkdir(parents=True, exist_ok=True)
-    manifest = compile_catalog(case / "model.mlir", wd)
-    (wd / "offloaded.mlir").write_text(rewrite((case / "model.mlir").read_text(), manifest) + "\n")
+    sys.path.insert(0,str(HERE.parent))
+    from fixture_source import read
+    source=read(case / "model.mlir")
+    input_path=wd / "source.mlir"
+    input_path.write_text(source+"\n")
+    manifest = compile_catalog(input_path, wd)
+    rewritten=rewrite(source,manifest)
+    if 'quant_ext.' in rewritten:
+        from mlir_oot.frontend.parse import context
+        from xdsl.parser import Parser
+        from m2m.ir.quant import Quant
+        from m2m.transforms.expand_quant import expand_quant_to_standard
+        ctx=context();ctx.load_dialect(Quant)
+        rewritten=str(expand_quant_to_standard(Parser(ctx,rewritten).parse_module()))
+    (wd / 'offloaded.mlir').write_text(rewritten+'\n')
     (wd / "shim.c").write_text(shim_source(manifest))
     sys.path.insert(0, str(HERE.parent))
     from exact_oracle import evaluate, host_guard_values
     from mlir_oot.core_aten.catalog import build
     from run_e2e import _key, _return_sources, DeviceRefusal
-    text = (case / "model.mlir").read_text()
+    text = source
     _, _, matches = build(text)
-    values = {("arg", int(k[3:])): v for k,v in np.load(case / "inputs.npz").items()}
-    values.update(host_guard_values(text, dict(np.load(case / "inputs.npz"))))
-    for binding, match in zip(manifest["bindings"], matches):
-        if not all(_key(src) in values for src in binding["operands"].values()):
-            raise DeviceRefusal(str(manifest["declines"]))
-        exact = evaluate(match, {name: values[_key(src)] for name,src in binding["operands"].items()})
-        (name, src), = binding["result"].items()
-        values[_key(src)] = exact[name]
-    if not all(src in values for src in _return_sources(text)):
-        raise DeviceRefusal(str(manifest["declines"]))
-    exact_outputs = [values[src] for src in _return_sources(text)]
+    from exact_oracle import SourceOracle
+    from mlir_oot.frontend.parse import parse_module
+    original=parse_module(text)
+    function=next(o for o in original.walk() if o.name=='func.func')
+    arguments=list(function.body.blocks[0].args)
+    inputs=dict(np.load(case/'inputs.npz'))
+    reference=SourceOracle({v:np.asarray(inputs['arg'+str(i)],dtype=object) for i,v in enumerate(arguments)})
+    returned=next(o for o in function.walk() if o.name=='func.return')
+    exact_outputs=[]
+    for value in returned.operands:
+        dtype=str(value.type.get_element_type())
+        array=reference.tensor(value)
+        if dtype=='f32': array=np.asarray(array,dtype=np.float32)
+        else: array=np.asarray(array,dtype=np.int64).astype(np.int32 if dtype=='i32' else np.int8)
+        exact_outputs.append(array)
     bindir = llvm_bin_dir()
     subprocess.run([str(bindir / "mlir-opt"), str(wd / "offloaded.mlir"), *PIPELINE, "-o", str(wd / "host.mlir")],
                    check=True, capture_output=True, text=True)
@@ -118,7 +135,8 @@ def build_case(case: Path, wd: Path) -> Path:
         field = "res" if len(exps) == 1 else f"res.r{k}"
         tag = case.name if len(exps) == 1 else f"{case.name}.out{k}"
         c.append(f'  ca_check_{"i8" if e.dtype == np.int8 else "i32"}("{tag}_offload_vs_exact_arithmetic", '
-                 f"({_ctype(str(e.dtype))} *){field}.aligned + {field}.offset, ca_expected{k}, {e.size}, 0);")
+                 f"({"int8_t" if e.dtype == np.int8 else "int32_t"} *){field}.aligned + {field}.offset, "
+                 f"(const {"int8_t" if e.dtype == np.int8 else "int32_t"} *)ca_expected{k}, {e.size}, 0);")
     c.append("  return ca_finish();")
     c.append("}")
     (wd / "main.c").write_text("\n".join(c) + "\n")
