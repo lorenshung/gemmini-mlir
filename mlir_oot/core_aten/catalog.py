@@ -40,6 +40,10 @@ def _stream_digest(kernel) -> str:
     h = hashlib.sha256()
     if kernel.stream.bitwise:
         h.update(b'bitwise')
+    if 'limb_plan' in kernel.meta:
+        # A symbol's metadata authenticates one representation plan. Identical
+        # instructions with different host weights need distinct records.
+        h.update(json.dumps(kernel.meta['limb_plan'], sort_keys=True).encode())
     h.update(json.dumps([(a.name, a.dtype, list(a.shape), a.role) for a in kernel.stream.args]).encode())
     for name, data in sorted(kernel.stream.consts.items()):
         h.update(name.encode() + data.tobytes())
@@ -98,7 +102,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
         provs = [p for p in provs if p and not p.startswith("quantized_decomposed.")]
         bindings.append(dict(
             op=m.op, aten=provs[0] if provs else "", symbol=symbol, root_ordinal=ordinals[m.root],
-            source_operation_ordinal=ordinals[m.consumed[0]],
+            source_operation_ordinal=ordinals[m.root] if 'limb_plan' in m.numeric else ordinals[m.consumed[0]],
             replaced_ordinals=sorted({ordinals[o] for o in m.consumed if o is not None}),
             operands=argmap, result={out_name: _source(out_val, ordinals, func_args)},
             result_type=str(out_val.type), operand_types={n: str(v.type) for n, v in m.operands},
@@ -109,7 +113,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                     abi=dict(argument_order="kernels[].args", pointee_layout="dense_row_major",
                              scratch="caller-allocated, uninitialized, private to the call",
                              aliasing="none", completion="kernel fences before returning",
-                             quantization="int8/uint8 storage, exact integer device math, full-i32 readout; one exact rational host RNE, then zero point and declared clamp"),
+                             quantization="per-binding numeric contract: F1 opaque bytes without quantization; F2/F4 full-i32 components and retained exact host recombination; F3 exact rational host RNE, zero point and declared clamp"),
                     kernels=list(kernels.values()), bindings=bindings, declines=declines,
                     matched=len(bindings), unique_kernels=len(kernels))
     return device, manifest, accepted

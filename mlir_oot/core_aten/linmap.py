@@ -47,6 +47,10 @@ def inverse_float_widening(op):
         parent = block.parent_op()
         if parent is None or parent.name != 'linalg.generic' or len(parent.results) != 1:
             return False
+        if (value.index >= len(parent.operands)-1 or
+                not all(_identity_like(m.data) for m in _attr(parent, 'indexing_maps')) or
+                _shape(parent.operands[value.index]) != _shape(parent.results[0])):
+            return False
         value = parent.operands[value.index]
     if not isinstance(value, OpResult):
         return False
@@ -208,6 +212,8 @@ class Region:
     dequantized tensor: coefficient = its scale; a plain integer tensor: 1), or None.
     """
 
+    sum_operations = ('arith.addf',)
+
     def __init__(self, leaf, max_points: int = 1 << 23):
         self.leaf = leaf
         self.memo: dict[SSAValue, object] = {}
@@ -283,7 +289,7 @@ class Region:
         if nm == 'linalg.reduce':
             block=op.regions[0].blocks[0]
             body=list(block.ops)
-            if [o.name for o in body]!=['arith.addf','linalg.yield'] or set(body[0].operands)!=set(block.args) or list(body[1].operands)!=[body[0].results[0]]:
+            if len(body)!=2 or body[0].name not in self.sum_operations or body[1].name!='linalg.yield' or set(body[0].operands)!=set(block.args) or list(body[1].operands)!=[body[0].results[0]]:
                 raise NotLinear('reduction is not a closed sum')
             value=self.tensor(op.operands[0]);init=self.tensor(op.operands[1])
             dims=tuple(_attr(op,'dimensions').iter_values())
@@ -440,6 +446,8 @@ class Region:
                 continue
             t = self.tensor(x)
             idx = tuple(_affine(m, ivs, dims))
+            if any(np.any((i < 0) | (i >= extent)) for i, extent in zip(idx, _shape(x))):
+                raise NotLinear('out-of-bounds generic input map')
             env[block.args[k]] = t.take(idx) if isinstance(t, Sym) else np.asarray(t)[idx]
         if not red:
             res = self._block(block, env, ivs, np.ones(dims, bool))
@@ -508,6 +516,30 @@ class Region:
         return self.tensor(v)
 
     def _scalar(self, op, vals, env, ivs, mask):
+        # Index arithmetic must not silently wrap numpy int64 or round through
+        # floating division. A static cast/wrap we do not prove stays on host.
+        integer_ops = {'arith.addi', 'arith.subi', 'arith.muli', 'arith.divsi', 'arith.divui',
+                       'arith.floordivsi', 'arith.ceildivsi', 'arith.remsi', 'arith.remui',
+                       'arith.extsi', 'arith.extui', 'arith.trunci', 'arith.index_cast', 'arith.index_castui'}
+        checked = op.name in integer_ops and not any(isinstance(v, Sym) for v in vals)
+        if checked:
+            vals = [np.asarray(v, object) for v in vals]
+            if op.name in ('arith.extui', 'arith.index_castui') and np.any(vals[0] < 0):
+                raise NotLinear('static unsigned cast needs a nonnegative range proof')
+            if op.name in ('arith.divsi', 'arith.divui', 'arith.floordivsi', 'arith.ceildivsi', 'arith.remsi', 'arith.remui') and np.any(vals[1] == 0):
+                raise NotLinear('zero divisor in static integer index arithmetic')
+        value = self._scalar_impl(op, vals, env, ivs, mask)
+        if checked and op.results:
+            dtype = str(op.results[0].type)
+            bits = 64 if dtype == 'index' else int(dtype[1:]) if dtype.startswith('i') and dtype[1:].isdigit() else None
+            if bits is not None:
+                lower, upper = (0, 2) if bits == 1 else (-(1 << (bits-1)), 1 << (bits-1))
+                data = np.asarray(value, object)
+                if np.any(data < lower) or np.any(data >= upper):
+                    raise NotLinear('static integer cast/arithmetic needs a nonoverflow proof')
+        return value
+
+    def _scalar_impl(self, op, vals, env, ivs, mask):
         nm = op.name
         f = _is_float(op.results[0]) if op.results else False
         if nm == "arith.constant":
@@ -589,13 +621,15 @@ class Region:
         if nm == "arith.negf":
             return -ia
         if nm in ("arith.divsi",):
-            return np.where(ib != 0, np.trunc(ia / np.where(ib == 0, 1, ib)), 0).astype(np.int64)
+            quotient = np.frompyfunc(lambda x, y: 0 if y == 0 else (abs(x)//abs(y)) * (-1 if (x < 0) != (y < 0) else 1), 2, 1)
+            return quotient(ia, ib)
         if nm in ("arith.divui", "arith.floordivsi"):
             return np.floor_divide(ia, np.where(ib == 0, 1, ib))
         if nm == "arith.ceildivsi":
             return -np.floor_divide(-ia, np.where(ib == 0, 1, ib))
         if nm in ("arith.remsi",):
-            return np.fmod(ia, np.where(ib == 0, 1, ib))
+            remainder = np.frompyfunc(lambda x, y: 0 if y == 0 else (abs(x) % abs(y)) * (-1 if x < 0 else 1), 2, 1)
+            return remainder(ia, ib)
         if nm == "arith.remui":
             return np.mod(ia, np.where(ib == 0, 1, ib))
         if nm in ("arith.minsi", "arith.minui", "arith.minimumf", "arith.minnumf"):
@@ -636,7 +670,16 @@ class Region:
 
 def _affine(amap, ivs, dims):
     """Evaluate the actual affine expressions, including floor/mod, exactly."""
-    return [np.broadcast_to(np.asarray(v,dtype=np.int64),dims) for v in amap.eval(ivs,[])]
+    if amap.num_symbols:
+        raise NotLinear('unbound affine symbols')
+    values = amap.eval([np.asarray(iv, object) for iv in ivs], [])
+    out = []
+    for value in values:
+        data = np.asarray(value, object)
+        if np.any(data < -(1 << 63)) or np.any(data >= (1 << 63)):
+            raise NotLinear('affine index exceeds the signed 64-bit address range')
+        out.append(np.broadcast_to(np.asarray(data, dtype=np.int64), dims))
+    return out
 
 
 def _identity_like(amap) -> bool:
@@ -658,8 +701,8 @@ class LinearMap:
     sources: dict
 
 
-def extract(root: SSAValue, leaf) -> tuple[LinearMap, list[Operation]]:
-    reg = Region(leaf)
+def extract(root: SSAValue, leaf, *, region_type=Region) -> tuple[LinearMap, list[Operation]]:
+    reg = region_type(leaf)
     val = reg.tensor(root)
     shp = _shape(root)
     n = int(np.prod(shp)) if shp else 1

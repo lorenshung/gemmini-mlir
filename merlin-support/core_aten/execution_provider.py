@@ -29,11 +29,13 @@ def routing(directory, *, target, package, facts, eligible):
     # A closed seeded MAC + byte readout needs the region ABI: its seed and
     # result types differ from the old two-input/raw-i32 contraction ABI.
     regions = _core_aten_module(package, "integer_regions")
+    limbs = _core_aten_module(package, "limbs")
     parsing = _core_aten_module(package, "catalog")
     source = (Path(directory) / "model.mlir").read_text()
-    if regions.has_integer_readout(parsing.parse_module(source)):
+    parsed = parsing.parse_module(source)
+    if regions.has_integer_readout(parsed) or limbs.has_limb_plan(parsed):
         _, inventory, matches = parsing.build(source)
-        selected = [m for m in matches if m.kernel.meta.get("integer_readout")]
+        selected = [m for m in matches if m.kernel.meta.get("integer_readout") or m.kernel.meta.get('limb_plan')]
         if not selected:
             return None
         def region_builder(prepared, workdir):
@@ -177,6 +179,9 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
 
     regions = _core_aten_module(package, "integer_regions")
     catalog_module = _core_aten_module(package, "catalog")
+    limbs = _core_aten_module(package, "limbs")
+    if limbs.has_limb_plan(catalog_module.parse_module(source)):
+        return _admit_limb_regions(source, package=package, numeric_policy=numeric_policy)
     if regions.has_integer_readout(catalog_module.parse_module(source)):
         return _admit_integer_regions(source, package=package, numeric_policy=numeric_policy)
     identity = hashlib.sha256(str(Path(package).resolve()).encode()).hexdigest()
@@ -260,6 +265,51 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
     if not proofs or not catalog["coverage_complete"]:
         raise ValueError("provider did not cover every proposed integer contraction")
     return dict(status="proven", source_sha256=catalog["source_sha256"], kernels=proofs, bindings=catalog["bindings"])
+
+
+def _admit_limb_regions(source, *, package, numeric_policy):
+    """Authenticate the actual F2/F4 stream against the selected MAC facts."""
+    from merlin.targetgen.operation_numerics import integer_split_k_limit
+    catalog_module = _core_aten_module(package, 'catalog')
+    _, catalog, matches = catalog_module.build(source)
+    parsed = catalog_module.parse_module(source)
+    proposed = sum('gemmini.limb' in o.attributes for o in parsed.walk())
+    proofs, covered = {}, 0
+    for binding, match in zip(catalog['bindings'], matches):
+        meta = match.kernel.meta
+        if 'limb_plan' not in meta:
+            continue
+        try:
+            bound = integer_split_k_limit(numeric_policy, tile_dim=16,
+                                          full_k=meta.get('dimensions', {}).get('k', 1))
+        except ValueError as exc:
+            return dict(status='declined', reason=str(exc), kernels=[], bindings=[],
+                        source_sha256=catalog['source_sha256'])
+        if bound is None:
+            return dict(status='declined', reason='no reviewed signed integer MAC bound for limb schedule',
+                        kernels=[], bindings=[], declines=catalog['declines'], source_sha256=catalog['source_sha256'])
+        stream = match.kernel.stream
+        computes = [i for i in stream.ins if i.kind == 'compute']
+        proof = meta['bound_proof']
+        valid = (bound['signed_operand_bits'] == 8 and
+                 proof['required_signed_mac_bits'] <= bound['mac_result_bits'] and
+                 all(i.a('a_cols') <= proof['primitive_k'] and i.a('bd') == 0xffffffff for i in computes) and
+                 all(i.a('dataflow') == 1 for i in stream.ins if i.kind == 'config_ex') and
+                 all(i.a('local') & (1 << 29) for i in stream.ins if i.kind == 'mvout') and
+                 all(i.a('scale') == 1 for i in stream.ins if i.kind == 'config_ld') and
+                 all(i.a('acc_scale') == 1 for i in stream.ins if i.kind == 'config_st'))
+        if not valid:
+            return dict(status='declined', reason='limb schedule exceeds selected exact MAC/readout contract',
+                        kernels=[], bindings=[], source_sha256=catalog['source_sha256'])
+        covered += 1
+        proofs[binding['symbol']] = dict(symbol=binding['symbol'], status='proven', schedule=meta,
+                                        exact_arithmetic=True, device_readout='full_i32', bound=bound,
+                                        emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest())
+    if not proofs or covered != proposed:
+        return dict(status='declined', reason='provider did not cover every exact limb producer: ' + str(catalog['declines']),
+                    kernels=[], bindings=[], declines=catalog['declines'], source_sha256=catalog['source_sha256'])
+    return dict(status='proven', source_sha256=catalog['source_sha256'], kernels=list(proofs.values()),
+                bindings=catalog['bindings'], declines=catalog['declines'], abi='gemmini_core_aten_catalog_v1')
 
 
 def _admit_integer_regions(source, *, package, numeric_policy):

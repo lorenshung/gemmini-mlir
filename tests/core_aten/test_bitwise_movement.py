@@ -66,6 +66,19 @@ def test_float_add_zero_is_not_bitwise_movement():
     assert not matches and not manifest['bindings']
 
 
+@pytest.mark.parametrize('dtype', ['i8', 'f16', 'i64'])
+def test_native_selector_is_bound_once_including_byte_elements(dtype):
+    text = f'''builtin.module {{
+      func.func @forward(%x: tensor<3x{dtype}>, %y: tensor<2x{dtype}>) -> tensor<5x{dtype}> {{
+        %z = tensor.concat dim(0) %x, %y : (tensor<3x{dtype}>, tensor<2x{dtype}>) -> tensor<5x{dtype}>
+        func.return %z : tensor<5x{dtype}>
+      }}
+    }}'''
+    _, manifest, matches = build(text)
+    assert len(matches) == 1, manifest
+    assert manifest['bindings'][0]['numeric']['family'] == 'F1'
+
+
 @pytest.mark.parametrize('dtype', ['bf16', 'i64', 'complex<f32>'])
 def test_shim_offsets_and_strides_remain_in_logical_elements(dtype, tmp_path):
     width = itemsize(dtype)

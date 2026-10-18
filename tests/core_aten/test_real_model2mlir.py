@@ -16,6 +16,80 @@ from mlir_oot.core_aten.stream import simulate, FULL_BIT, ACC_BIT
 from exact_oracle import evaluate
 
 
+@pytest.mark.parametrize('dtype_name', ['float16', 'bfloat16'])
+def test_native_dyadic_limb_pairs_meet_exact_host_floor(dtype_name):
+    from fractions import Fraction
+    from test_limbs import split, FIXTURE, annotate, selected
+    torch = pytest.importorskip('torch')
+    dtype = getattr(torch, dtype_name)
+    generator = torch.Generator().manual_seed(151)
+    a = (torch.randint(-1500, 1501, (3, 17), generator=generator).double()/512).to(dtype)
+    b = (torch.randint(-1500, 1501, (17, 5), generator=generator).double()/512).to(dtype)
+    # All actual rounded input values are exact multiples of 2^-9.
+    left, right = (t.double().numpy()*512 for t in (a, b))
+    assert np.all(left == left.astype(np.int64)) and np.all(right == right.astype(np.int64))
+    left, right = left.astype(object), right.astype(object)
+    left, right = np.vectorize(int, otypes=[object])(left), np.vectorize(int, otypes=[object])(right)
+    exact = np.zeros((3, 5), object)
+    for j, aa in enumerate(split(left)):
+        for k, bb in enumerate(split(right)):
+            _, match = selected(annotate(FIXTURE.read_text(), indices=(j, k), exponents=(-9, -9)))
+            exact += simulate(match.kernel.stream, dict(a=aa, b=bb))['out'].astype(object)*256**(j+k)
+    assert np.array_equal(exact, left @ right)
+    # Numerators here have <53 bits, so f64 represents the exact dyadic before
+    # this test-only final dtype conversion. Production rounding belongs to Merlin.
+    assert max(abs(int(x)) for x in exact.flat) < 1 << 53
+    actual = torch.tensor(exact.astype(np.float64)/(512*512)).to(dtype)
+    host = a @ b
+    for result, eager, numerator in zip(actual.flatten().double().tolist(), host.flatten().double().tolist(), exact.flat):
+        rational = Fraction(int(numerator), 512*512)
+        assert abs(Fraction(result)-rational) <= abs(Fraction(eager)-rational)
+
+
+@pytest.mark.parametrize('kind', ['mm', 'bmm', 'mul', 'sum'])
+def test_real_limb_component_capture(kind):
+    torch = pytest.importorskip('torch')
+    m2m = pytest.importorskip('m2m')
+    from xdsl.dialects.builtin import StringAttr
+    from mlir_oot.core_aten.catalog import parse_module
+
+    class Component(torch.nn.Module):
+        def forward(self, x, w):
+            if kind == 'mm':
+                return torch.ops.aten._int_mm.default(x, w)
+            if kind == 'bmm':
+                return torch.bmm(x.to(torch.int32), w.to(torch.int32))
+            if kind == 'mul':
+                return x.to(torch.int32)*-3
+            return x.to(torch.int32).sum(dim=1, dtype=torch.int32)
+
+    x = torch.arange(-8, 7, dtype=torch.int8).reshape(3, 5)
+    w = torch.arange(-10, 10, dtype=torch.int8).reshape(5, 4)
+    if kind == 'bmm':
+        x, w = x.unsqueeze(0).repeat(2, 1, 1), w.unsqueeze(0).repeat(2, 1, 1)
+    model = Component()
+    result = m2m.convert(model, (x, w), backend='fx_importer')
+    assert result.ok, result.diagnostics
+    module = parse_module(result.mlir_text)
+    op = [o for o in module.walk() if o.name in ('linalg.matmul', 'linalg.generic', 'linalg.reduce')][-1]
+    op.attributes['gemmini.limb'] = StringAttr(json.dumps(dict(version=1, family='F2', radix=256,
+        inputs=[dict(operand=i, index=0, count=4, exponent=0) for i in range(2 if kind in ('mm', 'bmm') else 1)])))
+    from io import StringIO
+    from xdsl.printer import Printer
+    buffer = StringIO()
+    Printer(stream=buffer, print_generic_format=True).print_op(module)
+    text = buffer.getvalue()
+    _, manifest, matches = build(text)
+    limb_matches = [m for m in matches if m.numeric.get('family') == 'F2']
+    assert len(limb_matches) == 1, manifest['declines']
+    selected, = limb_matches
+    inputs = {'a': x.numpy(), 'b': w.numpy()} if kind in ('mm', 'bmm') else {'x0': x.numpy()}
+    actual = simulate(selected.kernel.stream, inputs)['out']
+    assert np.array_equal(actual, model(x, w).numpy())
+    assert not selected.kernel.stream.readouts
+    assert 'func.call @ca_' in rewrite(text, manifest)
+
+
 @pytest.mark.parametrize('dtype', ['float16', 'bfloat16', 'int32', 'int64', 'complex64', 'bool'])
 @pytest.mark.parametrize('name', ['cat', 'clone', 'constant_pad_nd', 'reflection_pad1d',
     'reflection_pad2d', 'reflection_pad3d', 'replication_pad2d', 'replication_pad3d',

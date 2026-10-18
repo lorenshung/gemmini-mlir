@@ -22,8 +22,10 @@ model2mlir may expose complex64 as `tensor<...x2xf32>`; its explicit real/imag
 selector maps, rather than a guessed complex layout, govern those 4-byte lanes.
 Incoming bytes are opaque, including NaN payloads, subnormals, negative zero and
 int64 values outside the floating exact range. Finite literals are encoded once
-at their declared IEEE/integer width; nonfinite literal payloads lacking a
-preservation proof decline. Bool literals store 0 or 1 in one ABI byte.
+at their declared IEEE/integer width; infinities use their exact signed IEEE
+encoding. NaN literals lacking a payload proof decline with
+`NaN movement literal has no preserved payload proof`. Bool literals store 0
+or 1 in one ABI byte.
 
 For each F1 binding:
 
@@ -87,6 +89,14 @@ dyadic exponent **before** the radix weight. These integers are mathematical
 metadata, not device fp32 scales. Inputs always have the full possible signed
 byte range [-128,127]; no narrower range is trusted from a label.
 
+An input operand may alternatively be the i32 result of a closed, parallel,
+identity-map generic containing just `arith.extsi i8 to i32` and its yield.
+The entry then describes its underlying signed-byte tensor. The provider checks
+the cast's body/maps and binds the byte tensor directly. Literal i32 coefficient
+tensors need no plan entry. Arbitrary runtime i32 inputs are not byte limbs.
+Duplicate SSA limb inputs must be represented once, with explicit coefficients.
+Quantized `prov.quant.*` and `gemmini.limb` contracts cannot share a producer.
+
 ### Bilinear source form
 
 Use static dense `linalg.matmul` or the canonical rank-2/rank-3 integer contraction
@@ -110,11 +120,16 @@ initialization. Pool/window adjoints, folds, sum/mean numerators and affine maps
 are expressed by these actual integer index/coefficient maps. Divisors and
 nonlinear/final dtype work follow on the host. Any intermediate unproved
 wrapping, data-dependent coefficient/index, division or narrowing declines.
+Literal seeds/constants are in the returned component's units and receive its
+binary exponent too. Merlin must distribute a native bias correctly across
+components or retain it as a separate exact host term; it must not replicate
+that bias at every radix position.
 
 All inputs combined in one linear output must have the same
 `8*index + exponent`. Otherwise emit separate component producers and combine
-their differently weighted outputs on the host. Integer coefficient alignment
-may instead be explicit in the source body, subject to the bound checks.
+their differently weighted outputs on the host. Alternatively the frontend may
+rebase the component representation to a common exponent and make integer
+alignment explicit in the source body, subject to the bound checks.
 
 ### F4 real/imag components
 
@@ -135,11 +150,49 @@ and the proof method. Bilinear schedules split K into <=16 independent WS dot
 products with exact accumulator SRAM addition. Linear schedules use signed-byte
 coefficient parts and exact i32 addition, never scaled MVIN or fp32 readout.
 Every possible device partial sum is bounded, not merely the final result.
+Linear maps currently use K=1 signed products with a fence between reused tiles;
+their instruction-part capacity is 262,144 products. Larger maps decline with
+`limb linear instruction-part capacity exceeded`. Common exponent alignment is
+a frontend obligation. General runtime i32 seeds, division, data-dependent
+indices/predicates, nonlinear bodies and unproved wrapping decline. Use separate
+bounded producers and retained host terms when an i32 bound fails.
 
 The source digest/ordinal binding authenticates the exact producer and plan.
+For F2/F4, `source_operation_ordinal` equals `root_ordinal` and identifies the
+marked integer producer; `replaced_ordinals` also lists its proved carriers.
 The plan's host representation/dtype interpretation remains a **Merlin
 obligation**, independently of this device proof. The provider neither emits
 nor removes the explicit host recombination, clamp, modulo wrap, integer
 division/promotion, or correctly rounded final float conversion. In particular,
 integer true-division may require reproducing eager's compute-dtype casts;
 an exact rational quotient is not automatically the same source operation.
+Nonfinite values and signed-zero semantics require an explicit frontend proof
+or retained host handling; the limb representation alone describes finite
+dyadic numbers and does not preserve NaN payloads or a zero's sign. F1 retains
+those bits without interpreting them. A native unquantized arithmetic module
+without the checked component form declines with
+`no exact integer schedule for unquantized data arithmetic or numeric conversion`.
+
+For `linalg.reduce`, serialize the attribute in generic operation syntax; some
+xdsl custom `linalg.reduce` printers omit additional attributes. The provider
+uses the bytes it receives and never reconstructs a missing plan from provenance.
+
+## Coverage by source form
+
+These are semantic families, not operator-name dispatch rules. Native arithmetic
+must first be represented by the explicit component/host boundary above.
+
+| Operations | f16/bf16/i32/i64 | complex64 | bool |
+| --- | --- | --- | --- |
+| cat, clone, constant_pad_nd, repeat, slice_scatter, select_scatter, full, full_like, fill.Scalar, same-dtype _to_copy | Native F1 | Native F1 | Native F1 |
+| reflection_pad1d/2d/3d, replication_pad2d/3d | Native F1 | Native F1 | Eager CPU raises before capture |
+| add.Scalar/Tensor, sub.Scalar/Tensor, mul.Scalar, neg | Explicit F2 linear components | Explicit F4 real/imag linear components | No native arithmetic admission here |
+| adaptive/ordinary average pools (1d/2d/3d), supported pool adjoints, col2im, mean.dim | Explicit F2 integer numerator/index maps; host divisors | F4 components when native semantics permit | No native arithmetic admission here |
+| mm, bmm, addmm, convolution, convolution_backward | Explicit F2 limb-pair GEMMs; host bias | Four F4 real/imag limb-pair families | No native arithmetic admission here |
+| div.Scalar, relu | Host semantic step after exact components | Only where native semantics permit | No native arithmetic admission here |
+
+Convolution spatial packing/unpacking is explicit selector IR and per-tap/patch
+GEMMs; this interface does not accept an arbitrary unexpanded convolution body.
+Numeric dtype-changing `_to_copy` is not an F1 selector; retain it after exact
+components or supply a separately proved source conversion. The existing F3
+quantized support is independent of this table.

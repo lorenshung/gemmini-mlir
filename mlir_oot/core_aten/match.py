@@ -1378,6 +1378,8 @@ def match_linear(op: Operation) -> Match | None:
         if len(cands) != 1:
             return None
         root, out_val, s_out, integer = cands[0], cands[0], 1.0, True
+        if 'gemmini.limb' in producer(root).attributes:
+            return None  # A refused explicit component contract has no fallback.
     else:
         return None
     srcs: dict[int, linmatch.Src] = {}
@@ -1459,6 +1461,7 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     """Every matched region in program order, plus recorded declines (with reasons)."""
     from .integer_regions import match_integer_region
     from .bitwise import match as match_bitwise
+    from .limbs import match as match_limb
     matches, declines = [], []
     quantized_module = any(name_of(o).startswith('quant_ext.') for o in module.walk())
     generalized_quant = any(name_of(o).startswith('quant_ext.') and
@@ -1474,10 +1477,14 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         selected_matchers = (match_integer_region,match_convolution,match_convolution_rows,match_conv_wgrad,match_conv_input,match_contraction,match_elementwise,match_linear) if generalized_quant else (match_integer_region,*MATCHERS)
         if not quantized_module:
             selected_matchers = (match_bitwise, *selected_matchers)
+        if 'gemmini.limb' in op.attributes:
+            selected_matchers = (match_limb,)
         for fn in selected_matchers:
             try:
                 m = fn(op)
                 if m is not None:
+                    if id(m.root) in taken:
+                        break
                     _configure_quant(m)
                     _bind_dense_layouts(m)
             except (Decline, ValueError, OverflowError, ZeroDivisionError) as exc:
@@ -1498,6 +1505,8 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         reported = {d['ordinal'] for d in declines}
         for ordinal, candidate in enumerate(module.walk()):
             if id(candidate) in taken or ordinal in reported or any(k.startswith('prov.quant.') for k in candidate.attributes):
+                continue
+            if candidate.results and all(not list(r.uses) for r in candidate.results):
                 continue
             if candidate.name in ('linalg.matmul', 'linalg.batch_matmul') or (
                     candidate.name == 'linalg.generic' and any(o.name in arithmetic for o in candidate.walk())):
