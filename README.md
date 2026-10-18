@@ -1,5 +1,16 @@
 # gemmini-mlir
 
+## Phase 1 generated checkpoint, October 18, 2026
+
+The current agent-generated FireSim-aligned Phase 1 output is retained in
+[phase1_generated/el4_fire_aligned_v23_20261018](phase1_generated/el4_fire_aligned_v23_20261018/README.md).
+Its original 21-file compiler package is preserved byte for byte, with a portable
+manifest, dependency versions and a separate qualification record. This is a
+provisional checkpoint: complete TinyLlama and SmolVLA chains have executed, but
+formal qualification, selected ResNet fused readout and remaining reference
+comparisons are incomplete. The handwritten implementation below remains a
+separate implementation.
+
 ## Handwritten implementation
 
 The `main` branch contains the handwritten xDSL Gemmini backend, source-bound

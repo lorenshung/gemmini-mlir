@@ -1,0 +1,173 @@
+{
+  "schema": "gemmini.phase1.provisional_checkpoint.v1",
+  "published_at": "2026-10-18T19:41:01.832550+00:00",
+  "source_run": "el4-frozen-v23-qualification-20261018-v5",
+  "package_sha256": "b847c973da82f408a32c7622d0c49fb6902f0a58d0f716f131d8501e34175338",
+  "n_files": 21,
+  "qualification": "provisional_not_formally_complete",
+  "selected_hardware": {
+    "config": "FireSimGemminiRocketConfig",
+    "clock_hz": 30000000,
+    "facts_sha256": "b8ff28edc096392cec356f9fececdf17ba70cd3e4b02e6c5931aedc43bb117af",
+    "target_contract_sha256": "8e4e6eb5aff7e0f92012b9c306f5cc22978342c02fb8cafafee8788d8c517be4",
+    "firrtl_sha256": "b7d9826b1c9f16fd00bc757b4334a7f330a842c6a494e0c28608dc351b305bf0",
+    "spike_sha256": "5df9c82ca3e921823da8606284a258b491541defbafee4586fb938639e03c6b9",
+    "gsim_sha256": "76ddbfdc5b3beadef6b6b37768a08522122327057b92d71d3539a9529e4ea651"
+  },
+  "models": {
+    "smolvla": {
+      "status": "complete_chain_executed",
+      "all_steps_completed": true,
+      "program_counts": {
+        "prefix_encode": 1,
+        "flow_denoise": 10,
+        "action_decode": 1
+      },
+      "elapsed_s": 2534.341172371991,
+      "quantized_reference_comparison": {
+        "shape": [
+          1,
+          50,
+          32
+        ],
+        "bit_identical": false,
+        "max_abs_error": 0.3015758991241455,
+        "rel_l2": 0.13358568277481506
+      },
+      "compiler_correctness_qualified": false
+    },
+    "tiny_llama": {
+      "status": "complete_chain_executed",
+      "all_steps_completed": true,
+      "program_counts": {
+        "prefill": 1,
+        "decode": 32
+      },
+      "elapsed_s": 3442.9012305180077,
+      "quantized_reference_comparison": "Pending new32/32 chain reference; old128/32 reference is not substituted.",
+      "compiler_correctness_qualified": false
+    },
+    "resnet50_historical": {
+      "status": "historical_full_model_executed",
+      "historical_recipe_sha256": "8c0182c0317277b9a465ecad985cacf6edab18a15747679b49399f79771babf1",
+      "elf_sha256": "5e4541d739b73d8267f2b7f46169c5ea13bbb89f4b2f81e87ebebfce9ed497e5",
+      "simulator_wall_s": 29.03584424802102,
+      "all_outputs_read_back": true,
+      "finite": true,
+      "own_capture_comparison": {
+        "shape": [
+          1,
+          1000
+        ],
+        "bit_identical": true,
+        "max_abs_error": 0.0,
+        "rel_l2": 0.0,
+        "cosine": 1.0
+      },
+      "selected_recipe_qualified": false
+    }
+  },
+  "source_evidence": {
+    ".tmp/handoff/functional-phase1-baseline-v1/smolvla-full-readback-spike-v1/status.json": "3666b50a5dc53d508d06f53495ad6b1f744ddb410a38b4661ec46b3a6bea216a",
+    ".tmp/handoff/functional-phase1-baseline-v1/tiny_llama-full-readback-spike-v1/status.json": "d781a9ff9f08626255352210a92dc003761309f30df51d0fa83f8f3f94c8584a",
+    ".tmp/handoff/functional-phase1-baseline-v1/resnet-retained-spike-v1/status.json": "4ef185fb7ff5ae06b5922f59d5a2e671c372c580131165e7a573de7241140a42",
+    ".tmp/handoff/functional-phase1-baseline-v1/smolvla-stage-differential-v1/status.json": "661e90eb3e65df5596981b5c3d77282c675f6d9b97d2ef4ae9f1a274c46b4179"
+  },
+  "limits": [
+    "Full official source/protocol/whole-model qualification is incomplete.",
+    "Selected ResNet block-dependent fused readout is unsupported by this compiler.",
+    "Tiny32/32 reference comparison remains pending.",
+    "SmolVLA complete-chain output differs from selected quantized reference; the observed approximation was accepted by the user for iteration.",
+    "Historical ResNet exact execution uses an older capture recipe and raw accumulator output plus host processing.",
+    "Spike is untuned; recorded cycles and simulator walltime are not calibrated target latency."
+  ],
+  "smolvla_same_input_stage_comparisons": {
+    "action_decode": [
+      {
+        "output": 0,
+        "shape": [
+          1,
+          50,
+          32
+        ],
+        "finite": true,
+        "bit_identical": true,
+        "different_elements": 0,
+        "max_abs_error": 0.0,
+        "rel_l2": 0.0
+      }
+    ],
+    "flow_denoise": [
+      {
+        "output": 0,
+        "shape": [
+          1,
+          50,
+          32
+        ],
+        "finite": true,
+        "bit_identical": false,
+        "different_elements": 1535,
+        "max_abs_error": 0.006931036710739136,
+        "rel_l2": 0.0015032943094307812
+      },
+      {
+        "output": 1,
+        "shape": [
+          2,
+          16,
+          1,
+          113,
+          5,
+          64
+        ],
+        "finite": true,
+        "bit_identical": true,
+        "different_elements": 0,
+        "max_abs_error": 0.0,
+        "rel_l2": 0.0
+      },
+      {
+        "output": 2,
+        "shape": [
+          1
+        ],
+        "finite": true,
+        "bit_identical": true,
+        "different_elements": 0,
+        "max_abs_error": 0.0,
+        "rel_l2": 0.0
+      }
+    ],
+    "prefix_encode": [
+      {
+        "output": 0,
+        "shape": [
+          1,
+          113
+        ],
+        "finite": true,
+        "bit_identical": false,
+        "different_elements": 0,
+        "max_abs_error": 0.0,
+        "rel_l2": 0.0
+      },
+      {
+        "output": 1,
+        "shape": [
+          2,
+          16,
+          1,
+          113,
+          5,
+          64
+        ],
+        "finite": true,
+        "bit_identical": false,
+        "different_elements": 1149805,
+        "max_abs_error": 2.185230255126953,
+        "rel_l2": 0.10731511553367792
+      }
+    ]
+  }
+}

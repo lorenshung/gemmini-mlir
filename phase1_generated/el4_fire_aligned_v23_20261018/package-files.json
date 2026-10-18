@@ -1,0 +1,92 @@
+{
+  "schema": "gemmini.phase1.package_files.v1",
+  "hash_algorithm": "sha256(sorted(relative_path + NUL + bytes + NUL)); ignore build, __pycache__, .git",
+  "package_sha256": "b847c973da82f408a32c7622d0c49fb6902f0a58d0f716f131d8501e34175338",
+  "n_files": 21,
+  "files": {
+    "REPORT.md": {
+      "sha256": "8267d55fd1cafe6ea6bd4079bf027ef5d8f38f3fc98bdc5598d5756e6ddef684",
+      "bytes": 5418
+    },
+    "bias_validation.py": {
+      "sha256": "43cb76f1cf77918e7ac796bb1a71bc5118557612764acf66fb5052b43a4521fb",
+      "bytes": 2381
+    },
+    "compiler.py": {
+      "sha256": "75cea1f10234728f5f24b572d7b49da8d54ac68aeb6c927cc1ca98498e89ffde",
+      "bytes": 2260
+    },
+    "conv_codegen.py": {
+      "sha256": "64ad47086bedf4ea42138719dd924e41b4e63fb7ed4733d51551b3ff371760f8",
+      "bytes": 15577
+    },
+    "device_fast.py": {
+      "sha256": "4eb3a3dc869ef2ec6bde146e7d4b1e0859c88cf99b4eb464cfd3ae96cf8f5147",
+      "bytes": 2332
+    },
+    "device_runtime.py": {
+      "sha256": "58be975aa625957e6bfa9dae093af80a10b8e6cc3743f9ff29a9f54f42496695",
+      "bytes": 4569
+    },
+    "direct_codegen.py": {
+      "sha256": "3c41dc993c36d91a1b828e8f9ceafb95aa68b48eb8f3e43d20a10063bb0c9715",
+      "bytes": 7204
+    },
+    "docs/iteration_notes.md": {
+      "sha256": "82189fd2fbb55137dab54b7daeda4e4b4be9810d7451023fd9d32dc092437a2e",
+      "bytes": 14654
+    },
+    "elementwise.py": {
+      "sha256": "9b8581ac882d690eb64b02a654c9222353daebe5a92f227b205bf3ec2ed8ee70",
+      "bytes": 2712
+    },
+    "emitter.py": {
+      "sha256": "9a9a6af2941dee91a989946dc5588382e1595297ab480a173ba2b87524cfdb24",
+      "bytes": 10450
+    },
+    "epilogue_validation.py": {
+      "sha256": "3c74535f779774d28f0dfa6c87402fddf213d2be2532c5191ed59e2ed104cd33",
+      "bytes": 1955
+    },
+    "frontend.py": {
+      "sha256": "064377206663c8413f0861879b5e91ef7986dd2362a6a995c0259b0953d29e56",
+      "bytes": 10123
+    },
+    "kernel_abi.py": {
+      "sha256": "a410ff1e0b4d6e9bea2dd1e79b2a073e4aa5c0de0ae77071b79b956534df6276",
+      "bytes": 2493
+    },
+    "linalg_frontend.py": {
+      "sha256": "d668ed6ee3c0da29c7604355ff95600e452d8db277c6ae45625c6dbf5c825201",
+      "bytes": 15264
+    },
+    "manifest.yaml": {
+      "sha256": "bb1bad4cb82c4b6d31a156748feac86b4f4daec0deaabd6bb47423303a94d37d",
+      "bytes": 1108
+    },
+    "mixed_codegen.py": {
+      "sha256": "0bedc5e43ab7f011537226fbc1be7c2945d7b85660084a974a3b51b4e9a40711",
+      "bytes": 14963
+    },
+    "pool_codegen.py": {
+      "sha256": "67cedf1164028af6f8703a05035fbc6f015135f8326c403e22c134ec66e32089",
+      "bytes": 2590
+    },
+    "pool_runtime.py": {
+      "sha256": "6ae11e977f4a66eabbb45d2d0021a28c7132fa3529e7f71261bb4504da430cc9",
+      "bytes": 3447
+    },
+    "provenance.py": {
+      "sha256": "c5702a1b0d5f5917d10670373f1def402ee48e8bd43b4d4294120dbb52e86f2c",
+      "bytes": 6180
+    },
+    "scalar_codegen.py": {
+      "sha256": "4b700466b1e1d977c3da37055b9213de3164da0bd73e24b4b31bb420d9ffb24b",
+      "bytes": 18831
+    },
+    "tensor_codegen.py": {
+      "sha256": "8bdb74cc41ecf52e5da84d24068d1d979589ad37ad76f4540326e16218db7a23",
+      "bytes": 9075
+    }
+  }
+}

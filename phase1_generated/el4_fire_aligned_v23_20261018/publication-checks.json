@@ -1,0 +1,68 @@
+{
+  "at": "2026-10-18T19:42:57.522150+00:00",
+  "scope": "Publication portability and preserved-source integrity checks only; no new numerical or qualification result.",
+  "source_tree_sha256": "b847c973da82f408a32c7622d0c49fb6902f0a58d0f716f131d8501e34175338",
+  "original_package_files": 21,
+  "python_syntax_files": 18,
+  "python": "3.12",
+  "xdsl": "0.73.0",
+  "llvm_install_revision": "a47bddcc",
+  "checks": [
+    {
+      "check": "help",
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout_bytes": 436,
+      "stdout_sha256": "8a5fb7fedec91d36504fad4e11949f8fa6ed4b8cc44b633459db23ea4442820b",
+      "stderr": ""
+    },
+    {
+      "check": "parse",
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr": ""
+    },
+    {
+      "check": "lower_interface_to_target",
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout_bytes": 776,
+      "stdout_sha256": "00e338993a46dc6b953a7869468635f7b41143564b1940c3e801ebd316512b89",
+      "stderr": ""
+    },
+    {
+      "check": "emit_command_buffer",
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr": ""
+    },
+    {
+      "check": "lower_target_to_llvm",
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout_bytes": 17655,
+      "stdout_sha256": "578a631560db6d1d85faae0cf2a5e318e4849ab118725d98bac26772330d010a",
+      "stderr": ""
+    },
+    {
+      "check": "emit_analysis_bundle",
+      "returncode": 0,
+      "expected_returncode": 0,
+      "stdout_bytes": 17655,
+      "stdout_sha256": "578a631560db6d1d85faae0cf2a5e318e4849ab118725d98bac26772330d010a",
+      "stderr": ""
+    },
+    {
+      "check": "block_readout_expected_refusal",
+      "returncode": 1,
+      "expected_returncode": 1,
+      "stdout_bytes": 0,
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stderr": "gemmini compiler: acc_scale epilogue requires an explicit acc_scale multiplier"
+    }
+  ]
+}
