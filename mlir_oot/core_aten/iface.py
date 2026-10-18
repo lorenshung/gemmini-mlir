@@ -23,7 +23,6 @@ earlier one is still writing.
 from __future__ import annotations
 
 import re
-from math import lcm
 
 import numpy as np
 from xdsl.dialects.builtin import ArrayAttr, FloatAttr, IntegerAttr, IntegerType, StringAttr, TensorType
@@ -342,7 +341,7 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
             np.zeros((0, 1), np.int64)
         grid = list(np.ndindex(*[len(w) for w in per_dim]))
         counts = {g: (divisor or int(np.prod([per_dim[k][g[k]][2] for k in range(spatial)]))) for g in grid}
-        L = lcm(*counts.values()) if transpose else 1
+
         rho_full = np.full(int(np.prod(dst_shape)), Q(0), dtype=object)
         for g in grid:
             box = [range(per_dim[k][g[k]][0], per_dim[k][g[k]][1]) for k in range(spatial)]
@@ -362,7 +361,7 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
                 if transpose:
                     terms_o.append(c_flat)
                     terms_i.append(w_flat)
-                    terms_w.append(np.full(w_flat.size, L // counts[g]))
+                    terms_w.append(np.full(w_flat.size, Q(1) / counts[g], dtype=object))
                 else:
                     terms_o.append(w_flat)
                     terms_i.append(c_flat)
@@ -376,10 +375,8 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
                 rho_full[np.ravel_multi_index(full_w, window_shape)] = scale / counts[g]
         o = np.concatenate(terms_o)
         i = np.concatenate(terms_i)
-        W = np.concatenate(terms_w).astype(np.int64)
-        rho = np.full(int(np.prod(dst_shape)), scale / L, dtype=object) if transpose else rho_full
-    if W.size and W.max() > 16:
-        raise IfaceDecline("WINDOW_SUM weight L/count above 16 is not implemented", "WINDOW_SUM", dst_shape)
+        W = np.concatenate(terms_w)
+        rho = np.full(int(np.prod(dst_shape)), scale, dtype=object) if transpose else rho_full
     lm = LinearMap(dst_shape, o, np.zeros(o.size, np.int64), i, W * rho[o], np.zeros(int(np.prod(dst_shape))), {})
     return _sum(lm, src_shape, W, rho, dst_shape)
 

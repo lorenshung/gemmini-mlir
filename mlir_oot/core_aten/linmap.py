@@ -312,6 +312,9 @@ class Region:
         for o in body.ops:
             nm = o.name
             if nm == "cf.assert":
+                condition=env[o.operands[0]] if o.operands[0] in env else self._outer(o.operands[0])
+                if isinstance(condition,Sym) or np.any(mask & ~np.asarray(condition,dtype=bool)):
+                    raise NotLinear('source assertion is not proved for every active lane')
                 continue
             if nm == "scf.yield":
                 if upd is None or env.get(o.operands[0]) != ("inserted",):
@@ -427,6 +430,9 @@ class Region:
             if nm in ("linalg.yield", "scf.yield"):
                 return [env[v] for v in op.operands]
             if nm == "cf.assert":
+                condition=env[op.operands[0]] if op.operands[0] in env else self._outer(op.operands[0])
+                if isinstance(condition,Sym) or np.any(mask & ~np.asarray(condition,dtype=bool)):
+                    raise NotLinear('source assertion is not proved for every active lane')
                 continue
             vals = [env[v] if v in env else self._outer(v) for v in op.operands]
             out = self._scalar(op, vals, env, ivs, mask)
@@ -562,32 +568,14 @@ class Region:
 
 
 def _affine(amap, ivs, dims):
-    """Index arrays of an affine map (linear with constants) over the iteration space."""
-    n = amap.num_dims
-    out = []
-    base = amap.eval([0] * n, [])
-    for r in range(len(base)):
-        acc = np.full(ivs[0].shape if ivs else (), base[r], np.int64)
-        for d in range(n):
-            e = [0] * n
-            e[d] = 1
-            coef = amap.eval(e, [])[r] - base[r]
-            if coef:
-                acc = acc + coef * ivs[d]
-        out.append(acc)
-    return out
+    """Evaluate the actual affine expressions, including floor/mod, exactly."""
+    return [np.broadcast_to(np.asarray(v,dtype=np.int64),dims) for v in amap.eval(ivs,[])]
 
 
 def _identity_like(amap) -> bool:
-    n = amap.num_dims
-    if len(amap.results) != n:
-        return False
-    for d in range(n):
-        e = [0] * n
-        e[d] = 1
-        if list(amap.eval(e, [])) != e:
-            return False
-    return list(amap.eval([0] * n, [])) == [0] * n
+    from xdsl.ir.affine import AffineDimExpr
+    return (amap.num_symbols==0 and len(amap.results)==amap.num_dims and
+            all(isinstance(e,AffineDimExpr) and e.position==d for d,e in enumerate(amap.results)))
 
 
 @dataclass

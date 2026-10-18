@@ -44,11 +44,21 @@ def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool 
     bindings = []
     kernels: dict[str, dict] = {}
     matched_total = 0
+    refusals = []
     for ordinal, op in enumerate(source_module.walk()):
         dims = match_integer_gemm(op)
         if dims is None:
             continue
         matched_total += 1
+        from .core_aten.quant_schema import attributes
+        from .core_aten.match import Decline
+        try:
+            policy=attributes(op,'contraction')
+            if getattr(policy.get('host_only'),'data',None)=='true':
+                raise Decline('host-only source contraction')
+        except Decline as exc:
+            refusals.append(dict(source_operation_ordinal=ordinal,reason=str(exc)))
+            continue
         if dims.k * 16384 > (1 << 31) - 1:
             continue  # unbounded exact dot product does not fit accumulator SRAM
         shape = choose_shape(dims,large_n=large_n,prefetch_b=prefetch_b)
@@ -92,7 +102,8 @@ def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool 
                     "coverage_complete": len(bindings) == matched_total,
                     "unique_kernels": len(kernels),
                     "kernels": list(kernels.values()),
-                    "bindings": bindings}
+                    "bindings": bindings,
+                    **({"declines":refusals} if refusals else {})}
 
 
 def compile_catalog(source_path: Path, llvm_bin: Path, workdir: Path,

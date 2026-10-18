@@ -11,6 +11,8 @@ import numpy as np
 
 
 def rational(value):
+    if isinstance(value,(np.floating,np.integer)):
+        value=value.item()
     return value if isinstance(value, Fraction) else Fraction(value)
 
 
@@ -38,8 +40,7 @@ def prove_readout(scale, lo, hi, relu=False):
     """
     scale = rational(scale)
     require(-(1 << 31) <= lo <= hi < (1 << 31), 'invalid accumulator interval')
-    if relu:
-        lo, hi = max(0, lo), max(0, hi)
+    # ReLU is downstream of the product; negative inputs need the same proof.
     maximum = max(abs(lo), abs(hi))
     require(maximum <= (1 << 24), 'i32 to FP32 conversion is not exact over the interval')
     device = np.float32(float(scale))

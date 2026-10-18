@@ -98,7 +98,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                     abi=dict(argument_order="kernels[].args", pointee_layout="dense_row_major",
                              scratch="caller-allocated, uninitialized, private to the call",
                              aliasing="none", completion="kernel fences before returning",
-                             quantization="per-tensor symmetric int8, zero point 0; int32 bias in accumulator units"),
+                             quantization="int8/uint8 storage, exact integer device math, full-i32 readout; one exact rational host RNE, then zero point and declared clamp"),
                     kernels=list(kernels.values()), bindings=bindings, declines=declines,
                     matched=len(bindings), unique_kernels=len(kernels))
     return device, manifest, matches

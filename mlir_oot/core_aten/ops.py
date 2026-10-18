@@ -163,7 +163,7 @@ def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float
         _readout(s,"y",Q(alpha)*Q(s_x)*Q(s_w)/Q(s_out),relu)
     scale = 1.0
     _conv_body(s, g, "x", "w", "y", "bias" if bias else None, scale, False, out_i32)
-    return _end("aten.convolution.default", s, readout_scale=scale, layout="NHWC,HWIO->NHWC")
+    return _end("aten.convolution.default", s, readout_scale=scale, accumulator_min=-bound, accumulator_max=bound, layout="NHWC,HWIO->NHWC")
 
 
 def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha: float = 1.0,
@@ -203,14 +203,15 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     from .requant import Readout
     s.readouts.append(Readout("y",[("ws_y",scale)],relu=relu,
         permutations={"ws_y":((g.n,g.oh,g.ow,g.cout),(0,3,1,2))}))
-    return _end("aten.convolution.default", s, readout_scale=scale, layout="NCHW,OIHW->NCHW via NHWC")
+    return _end("aten.convolution.default", s, readout_scale=scale, accumulator_min=-bound, accumulator_max=bound, layout="NCHW,OIHW->NCHW via NHWC")
 
 
 def conv_backward_input(g, *, s_g, s_w, s_out):
     from .recipes.backward import conv_transpose
     from .requant import Readout
     g.validate()
-    accumulator_bound(g.kh*g.kw*g.cout*16384)
+    bound=g.kh*g.kw*g.cout*16384
+    accumulator_bound(bound)
     args = [Arg('g','i8',(g.n,g.cout,g.oh,g.ow),'input'),
             Arg('w','i8',(g.cout,g.cin,g.kh,g.kw),'input'),
             Arg('y','i8',(g.n,g.cin,g.h,g.w),'output'),
@@ -224,14 +225,15 @@ def conv_backward_input(g, *, s_g, s_w, s_out):
     conv_transpose(s,g,'ws_g','ws_w','acc',1,out_i32=True)
     s.readouts.append(Readout('y',[('acc',Q(s_g)*Q(s_w)/Q(s_out))],
        permutations={'acc':((g.n,g.h,g.w,g.cin),(0,3,1,2))}))
-    return _end('aten.convolution_backward.default',s,output='grad_input')
+    return _end('aten.convolution_backward.default',s,output='grad_input',accumulator_min=-bound,accumulator_max=bound)
 
 
 def conv_backward_weight(g, *, s_g, s_x, s_out):
     from .recipes.backward import conv_wgrad
     from .requant import Readout
     g.validate()
-    accumulator_bound(g.n*g.oh*g.ow*16384)
+    bound=g.n*g.oh*g.ow*16384
+    accumulator_bound(bound)
     args = [Arg('g','i8',(g.n,g.cout,g.oh,g.ow),'input'),
             Arg('x','i8',(g.n,g.cin,g.h,g.w),'input'),
             Arg('y','i8',(g.cout,g.cin,g.kh,g.kw),'output'),
@@ -242,7 +244,7 @@ def conv_backward_weight(g, *, s_g, s_x, s_out):
     conv_wgrad(s,g,'g','ws_x','acc',1,out_i32=True)
     s.readouts.append(Readout('y',[('acc',Q(s_g)*Q(s_x)/Q(s_out))],
        permutations={'acc':((g.kh,g.kw,g.cout,g.cin),(2,3,0,1))}))
-    return _end('aten.convolution_backward.default',s,output='grad_weight')
+    return _end('aten.convolution_backward.default',s,output='grad_weight',accumulator_min=-bound,accumulator_max=bound)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -319,7 +321,7 @@ def mean_dim(shape, dims, keepdim: bool, *, s_x: float, s_out: float, w: float |
         rd.mean_last(s, "x", "y", O, L, sc, out_i32=True)
     else:
         rd.mean_middle(s, "x", "y", O, L, I, sc, out_i32=True)
-    return _end(op, s, readout_scale=sc, reduced=L)
+    return _end(op, s, readout_scale=sc, reduced=L, accumulator_min=-L*128, accumulator_max=L*127)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -460,55 +462,84 @@ def contraction_zero_points(kernel, qa, qb, M, K, N, batch=0):
 
 
 def convolution_zero_points(kernel, left, right, g, mode='forward'):
-    """Integer zero-point correction maps, including spatial border masks.
+    """Exact zero-point folding through two auxiliary integer contractions.
 
-    Main MACs consume centered signed bytes. Additional full-i32 sums implement
-    (a+offset_a)*(b+offset_b), counting only actual (nonpadding) source products.
-    Shapes, taps and strides derive from the proved convolution geometry.
+    (a+oa)*(b+ob) = a*b + ob*sum(a) + oa*sum(b) + oa*ob*count.
+    Unit tensors retain the spatial padding mask. Singleton channel/batch
+    dimensions share the auxiliary sums through host broadcast; no source
+    product is rounded, approximated or redundantly enumerated per channel.
     """
-    from .recipes.asm import accumulate_sum
+    from dataclasses import replace
+    from .recipes.backward import conv_transpose,conv_wgrad
+    from .requant import Readout
     s=kernel.stream
     qa,qb=left[1],right[1]
     oa=(128 if qa.unsigned else 0)-qa.zero_point
     ob=(128 if qb.unsigned else 0)-qb.zero_point
-    if not oa and not ob: return
+    if not oa and not ob:return
     output=next(a for a in kernel.args if a.role=='output')
-    nout=int(np.prod(output.shape));p=np.arange(nout,dtype=np.int64)
+    readout=s.readouts[-1]
+    scale=readout.terms[0][1]
+    def scratch(name,shape):
+        s._index[name]=len(s.args)
+        s.args.append(Arg(name,'i32',shape,'scratch'))
+    def ones(name,shape):
+        s.const(name,np.ones(shape,dtype=np.int8))
+    def term(name,factor,shape,perm=None,broadcast=None,bound=0):
+        accumulator_bound(bound)
+        scratch(name,shape)
+        readout.terms.append((name,Q(factor)*scale))
+        if perm is not None:
+            readout.permutations={**(readout.permutations or {}),name:(shape,perm)}
+        if broadcast is not None:
+            readout.broadcasts={**(readout.broadcasts or {}),name:broadcast}
+        kernel.meta.setdefault('zero_point_corrections',[]).append(dict(tile=name,accumulator_min=-bound,accumulator_max=bound))
     if mode=='forward':
-        n,f,oh,ow=np.unravel_index(p,output.shape)
-        c,kh,kw=np.indices((g.cin,g.kh,g.kw)).reshape(3,-1)
-        ih=oh[:,None]*g.sh-g.ph+kh*g.dh
-        iw=ow[:,None]*g.sw-g.pw+kw*g.dw
-        valid=(ih>=0)&(ih<g.h)&(iw>=0)&(iw<g.w)
-        ai=((n[:,None]*g.cin+c)*g.h+ih)*g.w+iw
-        bi=((f[:,None]*g.cin+c)*g.kh+kh)*g.kw+kw
+        # ws_x/ws_w are the exact centered NHWC/HWIO operands produced by
+        # convolution_nchw, fenced before this auxiliary schedule begins.
+        if ob:
+            small=replace(g,cout=1)
+            ones('zp_ones_w',(g.kh,g.kw,g.cin,1))
+            term('zp_sum_x',ob,(g.n,g.oh,g.ow,1),broadcast=(g.n,1,g.oh,g.ow),bound=g.kh*g.kw*g.cin*128)
+            _conv_body(s,small,'ws_x','zp_ones_w','zp_sum_x',None,1,False,True);s.fence()
+        if oa:
+            small=replace(g,n=1)
+            ones('zp_ones_x',(1,g.h,g.w,g.cin))
+            term('zp_sum_w',oa,(1,g.oh,g.ow,g.cout),perm=(0,3,1,2),bound=g.kh*g.kw*g.cin*128)
+            _conv_body(s,small,'zp_ones_x','ws_w','zp_sum_w',None,1,False,True);s.fence()
+        oh,ow,kh,kw=np.indices((g.oh,g.ow,g.kh,g.kw))
+        ih=oh*g.sh-g.ph+kh*g.dh;iw=ow*g.sw-g.pw+kw*g.dw
+        counts=((ih>=0)&(ih<g.h)&(iw>=0)&(iw<g.w)).sum(axis=(2,3))*g.cin
+        counts=counts.reshape((1,1,g.oh,g.ow))
     elif mode=='input':
-        n,c,ih,iw=np.unravel_index(p,output.shape)
-        f,kh,kw=np.indices((g.cout,g.kh,g.kw)).reshape(3,-1)
-        h=ih[:,None]+g.ph-kh*g.dh;w=iw[:,None]+g.pw-kw*g.dw
+        if ob:
+            small=replace(g,cin=1)
+            ones('zp_ones_w',(g.kh,g.kw,g.cout,1))
+            term('zp_sum_g',ob,(g.n,g.h,g.w,1),broadcast=(g.n,1,g.h,g.w),bound=g.kh*g.kw*g.cout*128)
+            conv_transpose(s,small,'ws_g','zp_ones_w','zp_sum_g',1,out_i32=True);s.fence()
+        if oa:
+            small=replace(g,n=1)
+            ones('zp_ones_g',(1,g.oh,g.ow,g.cout))
+            term('zp_sum_w',oa,(1,g.h,g.w,g.cin),perm=(0,3,1,2),bound=g.kh*g.kw*g.cout*128)
+            conv_transpose(s,small,'zp_ones_g','ws_w','zp_sum_w',1,out_i32=True);s.fence()
+        ih,iw,kh,kw=np.indices((g.h,g.w,g.kh,g.kw))
+        h=ih+g.ph-kh*g.dh;w=iw+g.pw-kw*g.dw
         oh,ow=h//g.sh,w//g.sw
-        valid=(h%g.sh==0)&(w%g.sw==0)&(oh>=0)&(oh<g.oh)&(ow>=0)&(ow<g.ow)
-        ai=((n[:,None]*g.cout+f)*g.oh+oh)*g.ow+ow
-        bi=((f*g.cin+c[:,None])*g.kh+kh)*g.kw+kw
+        counts=((h%g.sh==0)&(w%g.sw==0)&(oh>=0)&(oh<g.oh)&(ow>=0)&(ow<g.ow)).sum(axis=(2,3))*g.cout
+        counts=counts.reshape((1,1,g.h,g.w))
     else:
-        f,c,kh,kw=np.unravel_index(p,output.shape)
-        n,oh,ow=np.indices((g.n,g.oh,g.ow)).reshape(3,-1)
-        ih=oh*g.sh-g.ph+kh[:,None]*g.dh
-        iw=ow*g.sw-g.pw+kw[:,None]*g.dw
-        valid=(ih>=0)&(ih<g.h)&(iw>=0)&(iw<g.w)
-        ai=((n*g.cout+f[:,None])*g.oh+oh)*g.ow+ow
-        bi=((n*g.cin+c[:,None])*g.h+ih)*g.w+iw
-    rows=np.broadcast_to(p[:,None],valid.shape)[valid]
-    counts=valid.sum(1)
-    readout=s.readouts[-1];scale=readout.terms[0][1]
-    for name,q,indices,coefficient in [(left[0],qa,ai,ob),(right[0],qb,bi,oa)]:
-        if not coefficient:continue
-        source=name+'__signed' if q.unsigned else name
-        raw=name+'__zero_sum';s._index[raw]=len(s.args)
-        s.args.append(Arg(raw,'i32',output.shape,'scratch'))
-        indices=np.broadcast_to(indices,valid.shape)[valid].astype(np.int64)
-        accumulator_bound(int(counts.max(initial=0))*128)
-        accumulate_sum(s,source,raw,1,nout,rows,indices,np.ones(rows.size,np.int64),np.ones(nout),out_i32=True)
-        readout.terms.append((raw,Q(coefficient)*scale))
-    readout.constant=readout.constant+counts.reshape(output.shape)*oa*ob*scale
-    s.fence()
+        if ob:
+            small=replace(g,cin=1)
+            ones('zp_ones_x',(g.n,g.h,g.w,1))
+            term('zp_sum_g',ob,(g.kh,g.kw,g.cout,1),perm=(2,3,0,1),bound=g.n*g.oh*g.ow*128)
+            conv_wgrad(s,small,'g__signed' if qa.unsigned else 'g','zp_ones_x','zp_sum_g',1,out_i32=True);s.fence()
+        if oa:
+            small=replace(g,cout=1)
+            ones('zp_ones_g',(g.n,1,g.oh,g.ow))
+            term('zp_sum_x',oa,(g.kh,g.kw,1,g.cin),perm=(2,3,0,1),bound=g.n*g.oh*g.ow*128)
+            conv_wgrad(s,small,'zp_ones_g','ws_x','zp_sum_x',1,out_i32=True);s.fence()
+        kh,kw,oh,ow=np.indices((g.kh,g.kw,g.oh,g.ow))
+        ih=oh*g.sh-g.ph+kh*g.dh;iw=ow*g.sw-g.pw+kw*g.dw
+        counts=((ih>=0)&(ih<g.h)&(iw>=0)&(iw<g.w)).sum(axis=(2,3))*g.n
+        counts=counts.reshape((1,1,g.kh,g.kw))
+    readout.constant=readout.constant+np.broadcast_to(counts,output.shape)*oa*ob*scale

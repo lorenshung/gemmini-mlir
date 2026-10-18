@@ -4,6 +4,7 @@ Device operations return full-width signed i32. Factors are reduced rationals,
 serialized as decimal numerator/denominator strings; zero point is applied AFTER
 RNE. No floating intermediate participates in a code decision.
 """
+
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -24,20 +25,33 @@ class Readout:
     after: int | None = None
 
 
-def evaluate(values, numerator, denominator, *, zero_point=0, quant_min=-128, quant_max=127, relu=False):
+def evaluate(
+    values,
+    numerator,
+    denominator,
+    *,
+    zero_point=0,
+    quant_min=-128,
+    quant_max=127,
+    relu=False,
+):
     """Pure-Python reference, including negative ties and asymmetric parity."""
     factor = Fraction(int(numerator), int(denominator))
+
     def scalar(x):
         real = int(x) * factor
         if relu:
             real = max(real, 0)
         return min(quant_max, max(quant_min, round(real) + zero_point))
+
     dt = np.uint8 if quant_min >= 0 else np.int8
     a = np.asarray(values)
     return np.array([scalar(x) for x in a.flat], dtype=dt).reshape(a.shape)
 
 
-def thresholds(numerator, denominator, *, zero_point=0, quant_min=-128, quant_max=127, relu=False):
+def thresholds(
+    numerator, denominator, *, zero_point=0, quant_min=-128, quant_max=127, relu=False
+):
     """Exact monotone transition table for any positive rational, full i32 domain.
 
     Thresholds are i64: INT32_MAX+1 denotes an unreachable code transition.
@@ -45,11 +59,11 @@ def thresholds(numerator, denominator, *, zero_point=0, quant_min=-128, quant_ma
     """
     scale = Fraction(int(numerator), int(denominator))
     if scale <= 0:
-        raise ValueError('positive readout factor required')
+        raise ValueError("positive readout factor required")
     result = []
     for code in range(quant_min + 1, quant_max + 1):
         q = code - zero_point
-        boundary = Fraction(2*q-1, 2) / scale
+        boundary = Fraction(2 * q - 1, 2) / scale
         # At the half tie, the upper code wins iff its unshifted code is even.
         t = -(-boundary.numerator // boundary.denominator)
         if boundary.denominator == 1 and q % 2:
@@ -60,9 +74,9 @@ def thresholds(numerator, denominator, *, zero_point=0, quant_min=-128, quant_ma
     return result
 
 
-def c_reference(symbol='gemmini_exact_requant_i32'):
+def c_reference(symbol="gemmini_exact_requant_i32"):
     """C reference ABI: table from thresholds(), output is byte storage bits."""
-    return f'''#include <stdint.h>
+    return f"""#include <stdint.h>
 #include <stddef.h>
 void {symbol}(const int32_t *acc, uint8_t *out, size_t count,
              const int64_t *thresholds, int quant_min, int quant_max) {{
@@ -94,7 +108,7 @@ void {symbol}_ratio(const int32_t *acc, uint8_t *out, size_t count,
     out[i]=(uint8_t)code;
   }}
 }}
-'''
+"""
 
 
 def apply(stream, buffers, readouts=None):
@@ -102,19 +116,34 @@ def apply(stream, buffers, readouts=None):
     by_name = {a.name: buffers[i] for i, a in enumerate(stream.args)}
     for readout in stream.readouts if readouts is None else readouts:
         out = by_name[readout.out]
-        constant=np.asarray(readout.constant,dtype=object)
-        values=(constant.reshape(out.shape) if constant.size==out.size else np.broadcast_to(constant,out.shape)).copy()
+        constant = np.asarray(readout.constant, dtype=object)
+        values = (
+            constant.reshape(out.shape)
+            if constant.size == out.size
+            else np.broadcast_to(constant, out.shape)
+        ).copy()
         for name, factor in readout.terms:
             raw = by_name[name]
             if readout.permutations and name in readout.permutations:
-                shp,perm = readout.permutations[name]
+                shp, perm = readout.permutations[name]
                 raw = raw.reshape(shp).transpose(perm)
             if readout.broadcasts and name in readout.broadcasts:
                 raw = raw.reshape(readout.broadcasts[name])
-            if raw.size==out.size: raw=raw.reshape(out.shape)
-            factor=np.asarray(factor,dtype=object)
-            if factor.size==out.size: factor=factor.reshape(out.shape)
-            values += np.broadcast_to(raw,out.shape).astype(object) * factor
+            if raw.size == out.size:
+                raw = raw.reshape(out.shape)
+            factor = np.asarray(factor, dtype=object)
+            if factor.size == out.size:
+                factor = factor.reshape(out.shape)
+            values += np.broadcast_to(raw, out.shape).astype(object) * factor
         if readout.relu:
             values = np.maximum(values, 0)
-        out.flat[:] = np.array([min(readout.quant_max, max(readout.quant_min, round(Fraction(v))+readout.zero_point)) for v in values.flat],dtype=np.int64).astype(out.dtype)
+        out.flat[:] = np.array(
+            [
+                min(
+                    readout.quant_max,
+                    max(readout.quant_min, round(Fraction(v)) + readout.zero_point),
+                )
+                for v in values.flat
+            ],
+            dtype=np.int64,
+        ).astype(out.dtype)

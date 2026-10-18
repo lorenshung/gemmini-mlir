@@ -124,7 +124,15 @@ def lint(stream: Stream) -> dict:
                                 err(i, f"HW3: MVIN after overlapping MVIN #{pidx} on {space} row {r} with no fence")
                                 break
                     if accumulate:
-                        pending.setdefault((space, r), []).append((c0, c0 + nc, accumulate, zero, i))
+                        history = pending.setdefault((space, r), [])
+                        current = (c0, c0 + nc, accumulate, zero, i)
+                        # Repeated accumulating writes grant exactly the same
+                        # overlap permissions. Keep one fact for an identical
+                        # interval instead of scanning its entire history.
+                        if history and history[-1][:3] == current[:3]:
+                            history[-1] = current
+                        else:
+                            history.append(current)
                     else:
                         pending[(space, r)] = [(c0, c0 + nc, accumulate, zero, i)]
         elif k == "mvout":

@@ -149,13 +149,13 @@ class _Emitter:
 
     def leaf(self, rec: Rec, terms):
         if rec.key == ("fence",):
-            self.fb.add(llvm.InlineAsmOp("fence", "", [], [], has_side_effects=True))
+            self.fb.add(llvm.InlineAsmOp("fence", "~{memory}", [], [], has_side_effects=True))
             return
         funct, arg = rec.key
         rs1 = self._value(rec.values[0], [(iv, s[0]) for iv, s in terms],
                           self.base[arg] if arg is not None else None)
         rs2 = self._value(rec.values[1], [(iv, s[1]) for iv, s in terms])
-        self.fb.add(llvm.InlineAsmOp(isa.asm_string(funct), "r,r", [rs1, rs2], [], has_side_effects=True))
+        self.fb.add(llvm.InlineAsmOp(isa.asm_string(funct), "r,r,~{memory}", [rs1, rs2], [], has_side_effects=True))
 
     def nodes(self, nodes, terms):
         """``terms``: [(iv, [step per flat value of ``nodes``])]."""

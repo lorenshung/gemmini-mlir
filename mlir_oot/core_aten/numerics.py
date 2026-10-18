@@ -14,7 +14,7 @@ def code(value: float, scale: float, lo: int = -128, hi: int = 127) -> int:
 
 
 def parts127(w: int) -> list[int]:
-    """Split |w| <= WMAX into int8 c*I weights; the sign follows w."""
+    """Split |w| <= 12*127 into int8 c*I weights; the sign follows w."""
     from .exactness import require
     require(abs(w) <= 12 * 127, "integer weight exceeds the instruction-part budget")
     sign = -1 if w < 0 else 1

@@ -125,6 +125,10 @@ def dequant(v: SSAValue) -> QIn | None:
     p = producer(v)
     if p is None or name_of(p) != "quant_ext.dequantize_per_tensor":
         return None
+    from .quant_schema import attributes
+    policy=attributes(p,"dequantize")
+    if getattr(policy.get("host_only"),"data",None)=="true":
+        raise Decline("host-only source dequantization")
     s = splat_value(p.operands[1])
     zp = splat_value(p.operands[2])
     if zp is not None and getattr(p.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8':
@@ -134,14 +138,26 @@ def dequant(v: SSAValue) -> QIn | None:
         return None
     if 'prov.quant.scale_numerator' in p.attributes or 'prov.quant.scale_denominator' in p.attributes:
         from .quant_schema import attributes,ratios
-        pair=ratios(attributes(p,'dequantize'))
+        attrs=attributes(p,'dequantize')
+        if getattr(attrs.get('host_only'),'data',None)=='true':
+            raise Decline('host-only source dequantization')
+        pair=ratios(attrs)
         if len(pair)!=1 or pair[0]!=Fraction(s):
             raise Decline('source DQ operands differ from exact scale provenance')
         s=pair[0]
     lo, hi = _prop_int(p, "quant_min"), _prop_int(p, "quant_max")
     if lo is None or hi is None or lo > hi:
         return None
-    unsigned = lo >= 0
+    for key,expected in [('quant_min',lo),('quant_max',hi),('zero_point',zp)]:
+        if key in policy and policy[key].value.data!=expected:
+            raise Decline('DQ provenance differs from source parameters: '+key)
+    if 'granularity' in policy and policy['granularity'].data!='tensor':
+        raise Decline('per-tensor DQ has inconsistent granularity')
+    storage=getattr(p.attributes.get('prov.quant.storage_dtype'),'data',None) or getattr(p.properties.get('input_dtype'),'data',None)
+    declared=getattr(p.properties.get('input_dtype'),'data',None)
+    if declared in ('int8','uint8') and storage in ('int8','uint8') and declared!=storage:
+        raise Decline('DQ storage dtype differs from its source operand contract')
+    unsigned=etype(src)=='i8' and storage=='uint8'
     bounds = (0,255) if unsigned else (-128,127)
     if etype(src)=="i8" and not (bounds[0]<=lo<=hi<=bounds[1] and bounds[0]<=zp<=bounds[1]):
         return None
@@ -166,6 +182,10 @@ def quant_sink(v: SSAValue) -> QOut | None:
     q = us[0]
     if q.operands[0] is not v:
         return None
+    from .quant_schema import attributes
+    policy=attributes(q,"quantize")
+    if getattr(policy.get("host_only"),"data",None)=="true":
+        raise Decline("host-only source quantization")
     s, zp = splat_value(q.operands[1]), splat_value(q.operands[2])
     if zp is not None and getattr(q.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8':
         zp=int(zp)&255
@@ -173,12 +193,24 @@ def quant_sink(v: SSAValue) -> QOut | None:
         return None
     if 'prov.quant.scale_numerator' in q.attributes or 'prov.quant.scale_denominator' in q.attributes:
         from .quant_schema import attributes,ratios
-        pair=ratios(attributes(q,'quantize'))
+        attrs=attributes(q,'quantize')
+        if getattr(attrs.get('host_only'),'data',None)=='true':
+            raise Decline('host-only source quantization')
+        pair=ratios(attrs)
         if len(pair)!=1 or pair[0]!=Fraction(s):
             raise Decline('source Q operands differ from exact scale provenance')
         s=pair[0]
     lo, hi = _prop_int(q, "quant_min"), _prop_int(q, "quant_max")
-    unsigned = getattr(q.properties.get('output_dtype'),'data',None)=='uint8' or (lo is not None and lo>=0)
+    for key,expected in [('quant_min',lo),('quant_max',hi),('zero_point',zp)]:
+        if key in policy and policy[key].value.data!=expected:
+            raise Decline('Q provenance differs from source parameters: '+key)
+    if 'granularity' in policy and policy['granularity'].data!='tensor':
+        raise Decline('per-tensor Q has inconsistent granularity')
+    storage=getattr(q.attributes.get('prov.quant.storage_dtype'),'data',None) or getattr(q.properties.get('output_dtype'),'data',None)
+    declared=getattr(q.properties.get('output_dtype'),'data',None)
+    if declared in ('int8','uint8') and storage in ('int8','uint8') and declared!=storage:
+        raise Decline('Q storage dtype differs from its source result contract')
+    unsigned=storage=='uint8'
     bounds=(0,255) if unsigned else (-128,127)
     if lo is None or hi is None or not bounds[0]<=lo<hi<=bounds[1] or not bounds[0]<=zp<=bounds[1]:
         return None
@@ -333,20 +365,39 @@ def iterators(op: Operation) -> list[str]:
     return [str(x.data.value if hasattr(x.data, "value") else x.data) for x in op.properties["iterator_types"].data]
 
 
-def map_coeffs(amap) -> list[list[int]] | None:
-    """Linear coefficients of each result of an affine map without symbols (None if not linear)."""
-    n = amap.num_dims
-    base = amap.eval([0] * n, [])
-    if any(b != 0 for b in base):
-        return None
-    rows = [[0] * n for _ in base]
-    for d in range(n):
-        e = [0] * n
-        e[d] = 1
-        out = amap.eval(e, [])
-        for r, v in enumerate(out):
-            rows[r][d] = v
-    return rows
+def map_coeffs(amap, bounds=None) -> list[list[int]] | None:
+    """Prove a zero-offset linear map, optionally over declared dimension bounds.
+
+    Sampling the origin and basis vectors does not prove linearity of affine
+    floor/mod expressions. Only structural algebra and range proofs grant it.
+    """
+    from xdsl.ir.affine import AffineDimExpr,AffineConstantExpr,AffineBinaryOpExpr,AffineBinaryOpKind as K
+    n=amap.num_dims
+    if amap.num_symbols: return None
+    def form(expr):
+        if isinstance(expr,AffineDimExpr): return [int(i==expr.position) for i in range(n)]+[0]
+        if isinstance(expr,AffineConstantExpr): return [0]*n+[expr.value]
+        if not isinstance(expr,AffineBinaryOpExpr): raise ValueError('nonlinear affine expression')
+        a,b=form(expr.lhs),form(expr.rhs)
+        if expr.kind==K.Add: return [x+y for x,y in zip(a,b)]
+        if expr.kind==K.Mul:
+            if not any(a[:-1]): return [a[-1]*v for v in b]
+            if not any(b[:-1]): return [b[-1]*v for v in a]
+            raise ValueError('product of dimensions')
+        if any(b[:-1]) or b[-1]<=0: raise ValueError('unproved affine divisor')
+        d=b[-1]
+        if all(v%d==0 for v in a):
+            return [0]*(n+1) if expr.kind==K.Mod else [v//d for v in a]
+        if bounds is not None:
+            lo=a[-1]+sum(min(0,c*(size-1)) for c,size in zip(a[:-1],bounds))
+            hi=a[-1]+sum(max(0,c*(size-1)) for c,size in zip(a[:-1],bounds))
+            if expr.kind in (K.FloorDiv,K.CeilDiv):
+                f=(lambda x:x//d) if expr.kind==K.FloorDiv else (lambda x:-(-x//d))
+                if f(lo)==f(hi): return [0]*n+[f(lo)]
+        raise ValueError('quasi-affine map is not proved linear')
+    try: rows=[form(e) for e in amap.results]
+    except ValueError: return None
+    return [r[:-1] for r in rows] if all(r[-1]==0 for r in rows) else None
 
 
 def identity_map(amap) -> bool:
@@ -636,7 +687,8 @@ def _host_bias(kernel, bias, output_scale, convolution=False):
         kernel.stream._index['bias'] = len(kernel.stream.args)
         kernel.stream.args.append(arg)
         readout.terms.append(('bias',Fraction(bias[2])/Fraction(output_scale)))
-        readout.constant=readout.constant-bias[1].zero_point*Fraction(bias[2])/Fraction(output_scale)
+        if bias[1].zero_point:
+            readout.constant=readout.constant-bias[1].zero_point*Fraction(bias[2])/Fraction(output_scale)
         readout.broadcasts = {'bias':bshape}
 
 
@@ -919,7 +971,7 @@ def match_mean(op: Operation) -> Match | None:
         raise Decline("reduction epilogue beyond a scale")
     q = _sandwich_out(ch.final)
     keepdim = len(shape(q.value)) == len(xshape)
-    is_mean = math.isclose(ch.w * L, 1.0, rel_tol=1e-6)
+    is_mean = Fraction(ch.w) * L == 1
     aten = "aten.mean.dim" if is_mean else (getattr(op.attributes.get("prov.aten"), "data", "") or "aten.sum.dim_IntList")
     try:
         k = ops.mean_dim(xshape, dims, keepdim, s_x=qx.scale, s_out=q.scale, w=ch.w, op=aten)
@@ -959,12 +1011,19 @@ def match_conv_wgrad(op: Operation) -> Match | None:
     if qx is None or qg is None:
         return None
     maps = generic_maps(op)
-    cx, cg, co = map_coeffs(maps[0]), map_coeffs(maps[1]), map_coeffs(maps[2])
-    if cx is None or cg is None or co != [[1 if j == i else 0 for j in range(7)] for i in range(4)]:
-        raise Decline("weight-gradient maps")
     N, C, H, W = shape(qx.value)
     Ng, F, OH, OW = shape(qg.value)
     _, _, KH, KW = shape(op.results[0])
+    bounds=(F,C,KH,KW,N,OH,OW)
+    cx,cg,co=(map_coeffs(m,bounds) for m in maps)
+    if cx is None or cg is None or co != [[1 if j == i else 0 for j in range(7)] for i in range(4)]:
+        raise Decline("weight-gradient maps")
+    block=op.regions[0].blocks[0]
+    multiply,addition,yielded=list(block.ops)
+    if not (set(multiply.operands)==set(block.args[:2]) and
+            set(addition.operands)=={multiply.results[0],block.args[2]} and
+            list(yielded.operands)==[addition.results[0]]):
+        raise Decline('weight-gradient body is not a closed MAC')
     # x: (d4, d1, d5*sh + d2*dh, d6*sw + d3*dw); grad: (d4, d0, d5, d6)
     if cg != [[0, 0, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 1]]:
         raise Decline("grad map")
