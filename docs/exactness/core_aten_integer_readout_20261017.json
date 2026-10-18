@@ -1,0 +1,3021 @@
+{
+  "schema": "gemmini_integer_exactness_qualification_v1",
+  "date": "2026-10-17",
+  "oracle": "Exact rational arithmetic from source integer codes, fp32-canonical Q/DQ scales and source operation bodies; one RNE and clamp. Eager float is informational.",
+  "design": "Exact integer device operations, bounded int32 partial sums, unity data scales and full-int32 accumulator readout by default; exact rational host requantization.",
+  "implementation_commits": [
+    "34aac49",
+    "a292f72",
+    "f61e808",
+    "007ae97"
+  ],
+  "concurrent_preserved_commit": "27e2b46",
+  "quant_schema": {
+    "repository": "model2mlir",
+    "revision": "a38c319d2f036257153e17d7790060e176b21279",
+    "path": "m2m/ir/quant_schema.json",
+    "sha256": "af385e278adb4f16eed416114b1d3f24e0ab8ea2406e74248ca976790b402214"
+  },
+  "merlin_head_at_final_verification": "8f6aabf1405cd70d2b9d3ed4276c2e80a00f84e3",
+  "support_cases": [
+    {
+      "case": "_adaptive_avg_pool2d",
+      "ops": [
+        "aten._adaptive_avg_pool2d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "a6bf98324e15ba08404f6b04cceaf9b7f2786c6d85388eaedd041b391d9323c7",
+      "archived_source_sha256": "183e3b6548ec12a8a7f0bcffa48bdea361bf77afbced459b9f8d878dd5e3cf43",
+      "archived_normalized_source_sha256": "4afa4a2a1d0c34457ce75024232334d343f3345afc0f5ed8b72555c53f685045",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "_adaptive_avg_pool2d_backward",
+      "ops": [
+        "aten._adaptive_avg_pool2d_backward.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "bcf2116afbc7c525798d40d9bcb776202aacb8ad145badad906fddfb81ee6bbd",
+      "archived_source_sha256": "419195de6628a42566036bae693e30bc733719268252c7d823c389d453eca2bf",
+      "archived_normalized_source_sha256": "0d542e2da9a85ddff9aa6c26f58dee4940fbc60a96f1b53b72a1dcd3da9a8033",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "_adaptive_avg_pool3d",
+      "ops": [
+        "aten._adaptive_avg_pool3d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "f5e7ea832dbc3f2983260348037bb0d9573f9ea8aa85bab46c59ed26b374b154",
+      "archived_source_sha256": "d4257b411f1fb96102d3bf7b64a4069b77314238c73921211a9ffcb3abb63360",
+      "archived_normalized_source_sha256": "a893e25bc0726fdff4c1525750fa58abf520e7057f0dfddd540a27bc0f493254",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "_to_copy",
+      "ops": [
+        "aten._to_copy.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "7aae30eff09e31a78e2cfb25b9bb880ea5892399cc5c782b9f1961138f15fcfd",
+      "archived_source_sha256": "539731e5ed55760ce9686dc48d58b06daba3c97d77f851a3b722f466ac6665be",
+      "archived_normalized_source_sha256": "539731e5ed55760ce9686dc48d58b06daba3c97d77f851a3b722f466ac6665be",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "adaptive_avg_pool1d",
+      "ops": [
+        "aten.adaptive_avg_pool1d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "6b7183568d390ba62051d5300281e110d390436ed094694aff3cb946d66367c9",
+      "archived_source_sha256": "08f044f856a9f49231f786cf4050c8e76d74a951b79ccd7ec99615df0ffd1f34",
+      "archived_normalized_source_sha256": "026df0792870e1d68193b722532f3321c784c93132012f16bae6614fb8d45994",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.8888888888888888
+      }
+    },
+    {
+      "case": "add_Scalar",
+      "ops": [
+        "aten.add.Scalar"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "d290f7b5110ecaeb856090298aca60023877d4789305b51458e967eb943a5af9",
+      "archived_source_sha256": "94001415fdbcf2b5566883e4ea223a40db414f145344d2b8b81d10873f1e3201",
+      "archived_normalized_source_sha256": "580b45eaab15e49c4dab49d44cf8296d26679251c065fc0c1f6c08493f74ffbd",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "add_Tensor",
+      "ops": [
+        "aten.add.Tensor"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "ffb001da5e2d077f5b98ca811e2e9a55c081b4fae86515c33c9ad5ecda6b4752",
+      "archived_source_sha256": "67b008fbbe4b88451e5bad2f87ab7e189436fbc49f225d0c04ddb230f819df3f",
+      "archived_normalized_source_sha256": "6dc89de22fb5189c6740c3bdf1b84603eaf3fc9f0f86a3d0132beb7dd45f6331",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9333333333333333
+      }
+    },
+    {
+      "case": "addmm",
+      "ops": [
+        "aten.addmm.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "8522045e4f7baa4fd5bc7923a27116116653e4bb0424a806faf61ae5861e046a",
+      "archived_source_sha256": "1ffb8ffcdc7994485b9cbbceb9ee85a1b06fa6f751ddcce5b0846445363c9055",
+      "archived_normalized_source_sha256": "329e59936be391a889c0f54737d48b72d932790110fb83f1c839aad0f8193fb5",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9333333333333333
+      }
+    },
+    {
+      "case": "avg_pool1d",
+      "ops": [
+        "aten.avg_pool1d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "19d3142a59359bddf06f8b5eb33c286a6021b175b917b30a66d39af0b89bea3e",
+      "archived_source_sha256": "abc2ac5f3f08d9b5d15c0f7c5489ccbe0069ad7d8abe553fc857517f3ccd6a60",
+      "archived_normalized_source_sha256": "0edd9f170e739d58dd8f9981d68235ccc6f1ea7d661b4a2b83005eaa6d027343",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9166666666666666
+      }
+    },
+    {
+      "case": "avg_pool2d",
+      "ops": [
+        "aten.avg_pool2d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "7bac4b8f3bbad7b32d806a554b5bc5c668c38ffcb56d79ef638fdd570dbb915d",
+      "archived_source_sha256": "c47ba20021e3cd6761eafaf4739d1324cb8635e0e514b33a3c96bbab62917996",
+      "archived_normalized_source_sha256": "40b019737bd00a390576bcad18a3851691c6f4a350af322fccac89404b40c84d",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 2,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "avg_pool2d_backward",
+      "ops": [
+        "aten.avg_pool2d_backward.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "5a382bc4a74e2156b2d622cb58edcb99e0c6c06281f6c3825b0b2b3205c6b1f6",
+      "archived_source_sha256": "fa7004b1772cb8fb7790e0b438c5d3ca5ad63d4e50e43d71596f2d40df651e07",
+      "archived_normalized_source_sha256": "119118c39fb7881e11a845b1af516fb84f58943f4323cc92bbed92d66f21e788",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "avg_pool3d",
+      "ops": [
+        "aten.avg_pool3d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "54053b38b399bc310016d7f57b0a2ee556d5ad0df502a4400892ac98b6098ed5",
+      "archived_source_sha256": "b09489a8576fd7f2104dc253c3b6af371e08e568f53ad0a71a91ed43abc74693",
+      "archived_normalized_source_sha256": "4f1d5220ac9577a913178c603ae30769cd6f7640904ce4466ec78ef6ce624d6e",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "bmm",
+      "ops": [
+        "aten.bmm.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "045cbaff2a34d2121eb7a0d705d7e2433f3a14bb5766a7317b6fd80d6e844f1d",
+      "archived_source_sha256": "8f121a3287b74b26644da0ff6ed45e770e49a77ecfe62d710fe61b0c91b21ceb",
+      "archived_normalized_source_sha256": "8bccf27804b589512b41d2843f96de7c65d20c5974d7aa477debaf195ad8bc0b",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "cat",
+      "ops": [
+        "aten.cat.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "16c5e61e052d43f02dbff61bcf860921aa4e98cc142dff817b301fd8e8afd065",
+      "archived_source_sha256": "5a57de853aaebef2e54f60444d23c8d2245d089311db0e1a65faf3f6bce6e921",
+      "archived_normalized_source_sha256": "3fedeca53e0741e7f43cf07ce2bb2f90aaf2371b5ac2fa04ff7db49b538ebcaa",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 1,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "clone",
+      "ops": [
+        "aten.clone.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "1e8bdca3d5043a763943744d992bff99189a752c8cb7d85f7f41984d0c7124a1",
+      "archived_source_sha256": "098aa71c15fa4147b868b383befccb71ea9c14516a12896850ae1340d4df6e02",
+      "archived_normalized_source_sha256": "685810e16ab88748becfb730db360277965313623d0bd4065e5dd83d5070810e",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "col2im",
+      "ops": [
+        "aten.col2im.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "f30953746a8aab3f436412e4a595e866aab07c0a22679d7ba3b62ca0186c2438",
+      "archived_source_sha256": "b5fced5e0632a264f6e53da2f8d6cd31f7a5984a3099454dffe4fce68bb940df",
+      "archived_normalized_source_sha256": "aa1ab8d12902c41d35e156650b07c8e9f30e1f4c2fded532fd5cabd9e2a7c6e8",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 1,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9666666666666667
+      }
+    },
+    {
+      "case": "constant_pad_nd",
+      "ops": [
+        "aten.clone.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "36561a5da266ef0bda76af6cb2529c43b0372974eb059f6bf57ceec7141ff7bb",
+      "archived_source_sha256": "e32f1b4aac15fe4cfc4f6cdbf26c9736abf082b1b170bf07330d55fdef3da483",
+      "archived_normalized_source_sha256": "7dc969348bce23b166802c868c1c29fdd31e42b730a40130291c389d3e0f18ca",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "constant_pad_nd_p1",
+      "ops": [
+        "aten.constant_pad_nd.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "ab9d841d52f3a186ad2fb4be860dab5701d0a8b90cfb4a7630d2c0077fd8da87",
+      "archived_source_sha256": "bbb3339f4e70acbe9a85dff12a1a3334d56b96a8f759b0a5a720257b51bca50a",
+      "archived_normalized_source_sha256": "ef771935f60220418a679e0b9517d2b8cd8cae6fbd50c5de3476bd448d3b982e",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "convolution",
+      "ops": [
+        "aten.convolution.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "9078536250f30431373c322eafeea2062aa07d471b9827dd51ff296f2f3c1115",
+      "archived_source_sha256": "624d66e8adc62fe14c694f87739a89cf6639f9d4cdb639ab16fbb1fab1fa3d32",
+      "archived_normalized_source_sha256": "4a6b7f83b1a57e179372e691970be5d3c9cc1406c7b4a38109b565ef85faf7ba",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.99
+      }
+    },
+    {
+      "case": "convolution_backward",
+      "ops": [
+        "aten.convolution_backward.default",
+        "aten.convolution_backward.default",
+        "aten.convolution_backward.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 3,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "be06c1a8e1b99221cac108ab9b85e8794837c404b30f4256599265014d835d83",
+      "archived_source_sha256": "6e33fd8d98d5b8f5afbb04371fd9f51628ff61334b91e132afc1e357bafaf882",
+      "archived_normalized_source_sha256": "70a97ee3624afe38623caffc4b7c24c56dc85e817c9f13300c1810447afb2fa4",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 1,
+          "max_code_difference": 1
+        },
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        },
+        {
+          "informational": true,
+          "differing_codes": 1,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "convolution_patch16",
+      "ops": [
+        "aten.convolution.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "df442da03b2504f2b3dcf4501a87192c739962fcaaa6bacaafd022d4a24cb250",
+      "archived_source_sha256": "4b16c15213e188fe04f9c62ae362447f9aed6516c040397b03eaab32fdb77ca6",
+      "archived_normalized_source_sha256": "344100466f945c3487fd9521e434a24de2a656331fe40e627f6adf51ed778dc7",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 1,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9666666666666667
+      }
+    },
+    {
+      "case": "div_Scalar",
+      "ops": [
+        "aten.mul.Scalar"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "6ff2a3ba1152205307ecd1b817a9d699f6a9ae46f6b13d539da25000224e26e1",
+      "archived_source_sha256": "3d24d219821a16461ce6d57ec43011c622b1dbe9a26fdb4ede74c2da8f6f4fae",
+      "archived_normalized_source_sha256": "e9c27b0a218e234bbd1b7e47d18bdc1a31bcb7f00cb9db2ce79f8cfc1c5e4cfa",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9333333333333333
+      }
+    },
+    {
+      "case": "fill_Scalar",
+      "ops": [
+        "aten.full.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "7d755c7935b208cebaa9543f7caf731908ecdda0325af7a24da78ee3f5570006",
+      "archived_source_sha256": "74452921a521902ee74527b7479ce96900bff5ab2b9aab3ae055a77cfae22559",
+      "archived_normalized_source_sha256": "51eb997119ed0a08fca9dff570f47c42187249638a279ecd060fbc55a4dc3bab",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "full",
+      "ops": [
+        "aten.full.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "51f99c24ed17b34dc2df47bd18867611ec58fea62bf56b76691ed3b587f23f0b",
+      "archived_source_sha256": "577861cda2f540a0cad40c01f482525830ffef2f4b82d2d66fb08b7c397b204a",
+      "archived_normalized_source_sha256": "4b61dd6821228193d99c5c86f565199dab53881517169160e7c6bc22a441a7aa",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "full_like",
+      "ops": [
+        "aten.full.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "b248b08aa8d9d03f0a8d4a97be43a93ff79c55f7c11e1ff656505655c37a32ea",
+      "archived_source_sha256": "b5c06c04dff507e8c60bdb359ec2eea85a63591a0d1525f401683ffd70923834",
+      "archived_normalized_source_sha256": "ccb1e4c1eaf90e786d31856c0981745903d5461e022054ab67122018342fb0bb",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 777,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.0
+      }
+    },
+    {
+      "case": "mean_dim",
+      "ops": [
+        "aten.mean.dim"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "4c50f6f021bda8ae160a3ad3695cb64493090229c772089cb65b1ff2eff65078",
+      "archived_source_sha256": "f55833f1ffaa9056307949ec9380195859617c02cbf207a1d43ef36ba8542d58",
+      "archived_normalized_source_sha256": "f8db1a6add380ae7700bfbc2521b4e77c650caa461705f981449be341b965950",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "mm",
+      "ops": [
+        "aten.mm.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "476b93d355d9d33f90e38bda670ded47d91605489c02f5775213bc90be44b1d5",
+      "archived_source_sha256": "4e338a9f4b13973c264bc3e79a8ba8609c9af7b3b1fc96d2f968b5888fd3cc5d",
+      "archived_normalized_source_sha256": "98f4851634305b1b02c74ff819f9a7ce23b361288515ee4841f3bbecf6b74f50",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9333333333333333
+      }
+    },
+    {
+      "case": "mul_Scalar",
+      "ops": [
+        "aten.mul.Scalar"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "eff6ee3405e1c12ba5549c6bb089b2ee22051c0b9478c83e369469fb617985e8",
+      "archived_source_sha256": "1c20e0a73c3595e9a2baf8db6c4bf37e74d803367a36e1138665014d48615979",
+      "archived_normalized_source_sha256": "a3bb07a3821b8e7c14d7ea5e1248b3a1043908f53f8b9336a927df85cbcb0c8b",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9333333333333333
+      }
+    },
+    {
+      "case": "neg",
+      "ops": [
+        "aten.neg.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "0967b36eafb239d8a7ae0ccb12f7f2c04e66280a5e133c713a6b3b392227a0ac",
+      "archived_source_sha256": "2c7b5c874e40aa2813cf8c15adf4d96de4af22160b989494e1795839fa6a93f9",
+      "archived_normalized_source_sha256": "ce1059c4814f946efa74824db6bfe0f6e4fa62ea1df23e4fd2cd7ab34147dd35",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 1,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "permute",
+      "ops": [
+        "aten.permute.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "2f7638ba77a93da85b64c7747616ff59b46257e364217d099ae5523d5fdf6ebc",
+      "archived_source_sha256": "30fd89309d6160fde456c617222946458d87b0792c21003f7b46675685cab3fc",
+      "archived_normalized_source_sha256": "1f529526fa661d1244f41e2ace7992e18ecb9e5df39a38b57ead38b835507676",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "reflection_pad1d",
+      "ops": [
+        "aten.reflection_pad1d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "4aae304bc0dd1a1b28b73a1650b31f976190ab1bc69b6190e7782ec876b57718",
+      "archived_source_sha256": "ef14d0b0c32492e744820c547f01b3455248e8d9eea07c9efa514aa202ccdb86",
+      "archived_normalized_source_sha256": "4d039266d2ead33855036ac04f1e7ed3f243a2e5b7f691729241790f26ab20b0",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "reflection_pad2d",
+      "ops": [
+        "aten.reflection_pad2d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "3ab86a58183ffb41568cf5aeaf990c4d05bbaa459d8cd777fc38e26d03d1e560",
+      "archived_source_sha256": "847c6226c3c4545a425748c7c782161777d329fac11a6b95678905cb27bbbd05",
+      "archived_normalized_source_sha256": "5827a50de45e3e7ae7e1fe34410bf606e8a37183d322a8fb88bd7a559f192d66",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "reflection_pad3d",
+      "ops": [
+        "aten.reflection_pad3d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "29c4906f6608e39fd69d8562253f45842a2aef85c8dcd45e43514399206d9249",
+      "archived_source_sha256": "342267c9918d565c3940d9ae01086fef9b8b3133295bb6537058740145023331",
+      "archived_normalized_source_sha256": "77e2076317b80ee22e44191fa37367c622c41f97c996fe2e7fc4dbb1c2116423",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "relu",
+      "ops": [
+        "aten.relu.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "e6045d9240ddc1f0009943dc6a158afc394882b2533e1ee4cb64375f23e0b602",
+      "archived_source_sha256": "b431826150c8b98530460c488e7db0fd151db15e286d2f5e5f6d191908de7f7c",
+      "archived_normalized_source_sha256": "d89c8945b6706f0bc597a4857709380dcc7263ed5c350ba141d9c2330b5e1186",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "repeat",
+      "ops": [
+        "aten.repeat.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "5367505743fa0d31007873854f4d4639a68cc06e6dde7a3d2ee8cd741ecc5a8e",
+      "archived_source_sha256": "8a08871e3728bf663b1f3957a1dc81351469ec450cf8c6e9cc3fc38ea9c93a12",
+      "archived_normalized_source_sha256": "2e9072e5c7f5f980fde3221321b3261c4908bfa41182914540aebb2fcf684c63",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "replication_pad2d",
+      "ops": [
+        "aten.replication_pad2d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "6968db49e54c4a758cf96333fd627902a7102d3ab4f066be70d4a61b56005b0b",
+      "archived_source_sha256": "bca4a25a70a455d9de4736635e23b3bc273b13cdf61ddc43fd7b88b1c582f0ea",
+      "archived_normalized_source_sha256": "2746c2a6444b766099f31d05a19f933a78c6d4beaf0fdefe98a0ea11006cf5b0",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "replication_pad3d",
+      "ops": [
+        "aten.replication_pad3d.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "2b0ee9630775038c17420f4407199a140e6f7a1472e5e5b35326dbe39b6d7f04",
+      "archived_source_sha256": "3793555557530db640f251c53d9e1a80a00d8ebcfd9f5e8fb7119231fe3ac37e",
+      "archived_normalized_source_sha256": "e9959f296c9af907142c5ec0ca75a174f592b5d161d75578bd779dbb90a598c8",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "select_scatter",
+      "ops": [
+        "aten.select_scatter.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "3ce7979bad1d5821003d6e2d58111c360f968e94b192faa40eb6a7c9ae446dad",
+      "archived_source_sha256": "497ebfd7d6c7e958f4b57bdc0d8a779f9f7ca047772e20f85a75d3b38e60734b",
+      "archived_normalized_source_sha256": "f61cd21ca6777365389149e590ab67c3621e8a9a60c5fb4331bff4a24cb44f63",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 1,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.975
+      }
+    },
+    {
+      "case": "slice_scatter",
+      "ops": [
+        "aten.slice_scatter.default"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "167510b52cbc326b4b039240750858488d1a2198c14258c261ac1486d8d69429",
+      "archived_source_sha256": "db200a5a3294a0c5aecb5a2c107d1a4ace5ce2370ad765e87618ebcb3f93ab01",
+      "archived_normalized_source_sha256": "8836efecfa57525c3ce28bdffbd25ec3af6d6696a49e9bff6bc39a42eefeffaf",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 1,
+          "max_code_difference": 1
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9333333333333333
+      }
+    },
+    {
+      "case": "sub_Scalar",
+      "ops": [
+        "aten.sub.Scalar"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "c068194c26068af75d80998e2c99683f2b7e1e04efc1b23f1337fa9ae15fdb82",
+      "archived_source_sha256": "1748f19f86ffc473285598a4caeb3fea79af8a41a119a42f7b81d79166574d33",
+      "archived_normalized_source_sha256": "516f1acb5e130b2fc3ce8625d41e942a6ab387d085c8a939b1e83c34d0d455a5",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9333333333333333
+      }
+    },
+    {
+      "case": "sub_Tensor",
+      "ops": [
+        "aten.sub.Tensor"
+      ],
+      "device_status": "device",
+      "refused": false,
+      "kernels": 1,
+      "spike": "PASS",
+      "verilator": "PASS",
+      "canonical_source_sha256": "daaf46bea6138294aeb656dc9eddd43ed508cb08e0d020d199ba3950c253f1d7",
+      "archived_source_sha256": "48d738fc04219dd0bb73897219b1f37f913080fc63f35fc2f95c00be83352bd3",
+      "archived_normalized_source_sha256": "1e9b94ba535c72f480f6bd4d0539c9a4552b267dd592a4a1032cc53305c2550b",
+      "archived_eager_float_divergence": [
+        {
+          "informational": true,
+          "differing_codes": 0,
+          "max_code_difference": 0
+        }
+      ],
+      "canonical_eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9333333333333333
+      }
+    }
+  ],
+  "scheme_cases": [
+    {
+      "case": "add_Tensor_int8_asymmetric",
+      "parameters": {
+        "quant_min": -127,
+        "quant_max": 127,
+        "zero_point": -7,
+        "storage_dtype": "torch.int8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "faa70310f1ab7330acc3d7d88a953505c1c47cbd06b9abd602a6aa81c98968bd",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "add_Tensor_uint8_narrow",
+      "parameters": {
+        "quant_min": 1,
+        "quant_max": 255,
+        "zero_point": 128,
+        "storage_dtype": "torch.uint8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "937a806768a190a6ccd80e0eb2d3ad49c03cd4036b03f7fe693c7792bd9d5efe",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "cat_int8_asymmetric",
+      "parameters": {
+        "quant_min": -127,
+        "quant_max": 127,
+        "zero_point": -7,
+        "storage_dtype": "torch.int8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "68098ce10446508602c26366e2914c69683069287c8068c42737bb3b22a09586",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "cat_uint8_narrow",
+      "parameters": {
+        "quant_min": 1,
+        "quant_max": 255,
+        "zero_point": 128,
+        "storage_dtype": "torch.uint8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "248e4f69818b76748b9c463774b1f6fecded2bd1b27bf44ae49b72df77c8e8f0",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "convolution_backward_int8_asymmetric",
+      "parameters": {
+        "quant_min": -127,
+        "quant_max": 127,
+        "zero_point": -7,
+        "storage_dtype": "torch.int8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "0d88b6321477a3d422ad2d152f8fc07766ce85d4084a8b92e622fcb3c14fb457",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "convolution_backward_uint8_narrow",
+      "parameters": {
+        "quant_min": 1,
+        "quant_max": 255,
+        "zero_point": 128,
+        "storage_dtype": "torch.uint8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "578f04e83d1ce63e6fdb074d82eab905311164e3513d5a39cbe40a9f3e70ae4c",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "convolution_int8_asymmetric",
+      "parameters": {
+        "quant_min": -127,
+        "quant_max": 127,
+        "zero_point": -7,
+        "storage_dtype": "torch.int8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "57a80ff9450d3c9de9c74acdc9c8f3250ad4138f1d1861a1e37b91081c41a346",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "convolution_uint8_narrow",
+      "parameters": {
+        "quant_min": 1,
+        "quant_max": 255,
+        "zero_point": 128,
+        "storage_dtype": "torch.uint8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "fd3422a74d40c8b618674c38a60db82bf3e200f3bcd63f11dc27f9b9c370dc48",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "mean_dim_int8_asymmetric",
+      "parameters": {
+        "quant_min": -127,
+        "quant_max": 127,
+        "zero_point": -7,
+        "storage_dtype": "torch.int8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "3c53691fafc5f8efbd2b31382c5ab3833966053c0f328a2f982ab86f15207bf3",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "mean_dim_uint8_narrow",
+      "parameters": {
+        "quant_min": 1,
+        "quant_max": 255,
+        "zero_point": 128,
+        "storage_dtype": "torch.uint8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "324a3807f436f2449d092f747f8af095cdcaab91556cb95ef9f631363ff46f28",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "mm_int8_asymmetric",
+      "parameters": {
+        "quant_min": -127,
+        "quant_max": 127,
+        "zero_point": -7,
+        "storage_dtype": "torch.int8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "ef34f24654244cbf4a3450e5f2e84a40d5ff4ee59fca2d0177ec2a66963427dd",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "mm_uint8_narrow",
+      "parameters": {
+        "quant_min": 1,
+        "quant_max": 255,
+        "zero_point": 128,
+        "storage_dtype": "torch.uint8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "78c99cf5b3f8164780d0a6136dedec4c4d514019ad8eca920b7330990b952865",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 0,
+        "exact_fraction": 1.0
+      }
+    },
+    {
+      "case": "neg_int8_asymmetric",
+      "parameters": {
+        "quant_min": -127,
+        "quant_max": 127,
+        "zero_point": -7,
+        "storage_dtype": "torch.int8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "9990e6ff5970122ed634e1f99fb748b01357cd37a7b2908a50525126d2cb9d25",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9453125
+      }
+    },
+    {
+      "case": "neg_uint8_narrow",
+      "parameters": {
+        "quant_min": 1,
+        "quant_max": 255,
+        "zero_point": 128,
+        "storage_dtype": "torch.uint8",
+        "scale_canonicalization": "fp32_once_at_capture"
+      },
+      "source_sha256": "85a870aac6e15a5564b43dce967ff8f6c8ca6a6c8618c87cfc9deeda9e5ea24d",
+      "device_status": "device",
+      "spike": "PASS",
+      "verilator": "PASS",
+      "eager_float_divergence": {
+        "informational": true,
+        "max_code_difference": 1,
+        "exact_fraction": 0.9453125
+      }
+    }
+  ],
+  "simulator_receipts": {
+    "e2e-rtl-support.json": {
+      "receipt": {
+        "path": "out/exact-int32/e2e-rtl-support.json",
+        "sha256": "315905fe97f2eade3a8d882f4846ff469df3053baad2a701121347ab548b4eee"
+      },
+      "results": {
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir/out/exact-int32/device/rtl-support/rtl-support.elf",
+        "cases": {
+          "_adaptive_avg_pool2d": {
+            "ops": [
+              "aten._adaptive_avg_pool2d.default"
+            ],
+            "kernels": 1,
+            "instructions": 64,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "_adaptive_avg_pool2d_backward": {
+            "ops": [
+              "aten._adaptive_avg_pool2d_backward.default"
+            ],
+            "kernels": 1,
+            "instructions": 119,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.6
+          },
+          "_adaptive_avg_pool3d": {
+            "ops": [
+              "aten._adaptive_avg_pool3d.default"
+            ],
+            "kernels": 1,
+            "instructions": 238,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.9
+          },
+          "_to_copy": {
+            "ops": [
+              "aten._to_copy.default"
+            ],
+            "kernels": 1,
+            "instructions": 9,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.1
+          },
+          "adaptive_avg_pool1d": {
+            "ops": [
+              "aten.adaptive_avg_pool1d.default"
+            ],
+            "kernels": 1,
+            "instructions": 17,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.8888888888888888,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.8888888888888888
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "add_Scalar": {
+            "ops": [
+              "aten.add.Scalar"
+            ],
+            "kernels": 1,
+            "instructions": 9,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "add_Tensor": {
+            "ops": [
+              "aten.add.Tensor"
+            ],
+            "kernels": 1,
+            "instructions": 15,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9333333333333333,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9333333333333333
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "addmm": {
+            "ops": [
+              "aten.addmm.default"
+            ],
+            "kernels": 1,
+            "instructions": 16,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9333333333333333,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9333333333333333
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "avg_pool1d": {
+            "ops": [
+              "aten.avg_pool1d.default"
+            ],
+            "kernels": 1,
+            "instructions": 22,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9166666666666666,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9166666666666666
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "avg_pool2d": {
+            "ops": [
+              "aten.avg_pool2d.default"
+            ],
+            "kernels": 1,
+            "instructions": 196,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.5
+          },
+          "avg_pool2d_backward": {
+            "ops": [
+              "aten.avg_pool2d_backward.default"
+            ],
+            "kernels": 1,
+            "instructions": 183,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.7
+          },
+          "avg_pool3d": {
+            "ops": [
+              "aten.avg_pool3d.default"
+            ],
+            "kernels": 1,
+            "instructions": 338,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.6
+          },
+          "bmm": {
+            "ops": [
+              "aten.bmm.default"
+            ],
+            "kernels": 1,
+            "instructions": 24,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "cat": {
+            "ops": [
+              "aten.cat.default"
+            ],
+            "kernels": 1,
+            "instructions": 29,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "clone": {
+            "ops": [
+              "aten.clone.default"
+            ],
+            "kernels": 1,
+            "instructions": 13,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.2
+          },
+          "col2im": {
+            "ops": [
+              "aten.col2im.default"
+            ],
+            "kernels": 1,
+            "instructions": 154,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9666666666666667,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9666666666666667
+            },
+            "declines": [],
+            "build_s": 0.6
+          },
+          "constant_pad_nd": {
+            "ops": [
+              "aten.clone.default"
+            ],
+            "kernels": 1,
+            "instructions": 9,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.2
+          },
+          "constant_pad_nd_p1": {
+            "ops": [
+              "aten.constant_pad_nd.default"
+            ],
+            "kernels": 1,
+            "instructions": 22,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "convolution": {
+            "ops": [
+              "aten.convolution.default"
+            ],
+            "kernels": 1,
+            "instructions": 200,
+            "fences": 3,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.99,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.99
+            },
+            "declines": [],
+            "build_s": 0.5
+          },
+          "convolution_backward": {
+            "ops": [
+              "aten.convolution_backward.default",
+              "aten.convolution_backward.default",
+              "aten.convolution_backward.default"
+            ],
+            "kernels": 3,
+            "instructions": 430,
+            "fences": 8,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 1.3
+          },
+          "convolution_patch16": {
+            "ops": [
+              "aten.convolution.default"
+            ],
+            "kernels": 1,
+            "instructions": 83,
+            "fences": 3,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9666666666666667,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9666666666666667
+            },
+            "declines": [],
+            "build_s": 0.5
+          },
+          "div_Scalar": {
+            "ops": [
+              "aten.mul.Scalar"
+            ],
+            "kernels": 1,
+            "instructions": 9,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9333333333333333,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9333333333333333
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "fill_Scalar": {
+            "ops": [
+              "aten.full.default"
+            ],
+            "kernels": 1,
+            "instructions": 7,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.2
+          },
+          "full": {
+            "ops": [
+              "aten.full.default"
+            ],
+            "kernels": 1,
+            "instructions": 7,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.2
+          },
+          "full_like": {
+            "ops": [
+              "aten.full.default"
+            ],
+            "kernels": 1,
+            "instructions": 7,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.0
+            },
+            "declines": [],
+            "build_s": 0.2
+          },
+          "mean_dim": {
+            "ops": [
+              "aten.mean.dim"
+            ],
+            "kernels": 1,
+            "instructions": 15,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "mm": {
+            "ops": [
+              "aten.mm.default"
+            ],
+            "kernels": 1,
+            "instructions": 16,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9333333333333333,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9333333333333333
+            },
+            "declines": [],
+            "build_s": 0.2
+          },
+          "mul_Scalar": {
+            "ops": [
+              "aten.mul.Scalar"
+            ],
+            "kernels": 1,
+            "instructions": 9,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9333333333333333,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9333333333333333
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "neg": {
+            "ops": [
+              "aten.neg.default"
+            ],
+            "kernels": 1,
+            "instructions": 9,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.2
+          },
+          "permute": {
+            "ops": [
+              "aten.permute.default"
+            ],
+            "kernels": 1,
+            "instructions": 16,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.2
+          },
+          "reflection_pad1d": {
+            "ops": [
+              "aten.reflection_pad1d.default"
+            ],
+            "kernels": 1,
+            "instructions": 48,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "reflection_pad2d": {
+            "ops": [
+              "aten.reflection_pad2d.default"
+            ],
+            "kernels": 1,
+            "instructions": 61,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "reflection_pad3d": {
+            "ops": [
+              "aten.reflection_pad3d.default"
+            ],
+            "kernels": 1,
+            "instructions": 325,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.7
+          },
+          "relu": {
+            "ops": [
+              "aten.relu.default"
+            ],
+            "kernels": 1,
+            "instructions": 9,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.5
+          },
+          "repeat": {
+            "ops": [
+              "aten.repeat.default"
+            ],
+            "kernels": 1,
+            "instructions": 22,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "replication_pad2d": {
+            "ops": [
+              "aten.replication_pad2d.default"
+            ],
+            "kernels": 1,
+            "instructions": 51,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.6
+          },
+          "replication_pad3d": {
+            "ops": [
+              "aten.replication_pad3d.default"
+            ],
+            "kernels": 1,
+            "instructions": 255,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.8
+          },
+          "select_scatter": {
+            "ops": [
+              "aten.select_scatter.default"
+            ],
+            "kernels": 1,
+            "instructions": 26,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.975,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.975
+            },
+            "declines": [],
+            "build_s": 0.6
+          },
+          "slice_scatter": {
+            "ops": [
+              "aten.slice_scatter.default"
+            ],
+            "kernels": 1,
+            "instructions": 19,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9333333333333333,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9333333333333333
+            },
+            "declines": [],
+            "build_s": 0.6
+          },
+          "sub_Scalar": {
+            "ops": [
+              "aten.sub.Scalar"
+            ],
+            "kernels": 1,
+            "instructions": 9,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9333333333333333,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9333333333333333
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "sub_Tensor": {
+            "ops": [
+              "aten.sub.Tensor"
+            ],
+            "kernels": 1,
+            "instructions": 15,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9333333333333333,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9333333333333333
+            },
+            "declines": [],
+            "build_s": 0.3
+          }
+        },
+        "spike": {
+          "status": "PASS",
+          "passed": [
+            "_adaptive_avg_pool2d_vs_exact_arithmetic",
+            "_adaptive_avg_pool2d_backward_vs_exact_arithmetic",
+            "_adaptive_avg_pool3d_vs_exact_arithmetic",
+            "_to_copy_vs_exact_arithmetic",
+            "adaptive_avg_pool1d_vs_exact_arithmetic",
+            "add_Scalar_vs_exact_arithmetic",
+            "add_Tensor_vs_exact_arithmetic",
+            "addmm_vs_exact_arithmetic",
+            "avg_pool1d_vs_exact_arithmetic",
+            "avg_pool2d_vs_exact_arithmetic",
+            "avg_pool2d_backward_vs_exact_arithmetic",
+            "avg_pool3d_vs_exact_arithmetic",
+            "bmm_vs_exact_arithmetic",
+            "cat_vs_exact_arithmetic",
+            "clone_vs_exact_arithmetic",
+            "col2im_vs_exact_arithmetic",
+            "constant_pad_nd_vs_exact_arithmetic",
+            "constant_pad_nd_p1_vs_exact_arithmetic",
+            "convolution_vs_exact_arithmetic",
+            "convolution_backward.out0_vs_exact_arithmetic",
+            "convolution_backward.out1_vs_exact_arithmetic",
+            "convolution_backward.out2_vs_exact_arithmetic",
+            "convolution_patch16_vs_exact_arithmetic",
+            "div_Scalar_vs_exact_arithmetic",
+            "fill_Scalar_vs_exact_arithmetic",
+            "full_vs_exact_arithmetic",
+            "full_like_vs_exact_arithmetic",
+            "mean_dim_vs_exact_arithmetic",
+            "mm_vs_exact_arithmetic",
+            "mul_Scalar_vs_exact_arithmetic",
+            "neg_vs_exact_arithmetic",
+            "permute_vs_exact_arithmetic",
+            "reflection_pad1d_vs_exact_arithmetic",
+            "reflection_pad2d_vs_exact_arithmetic",
+            "reflection_pad3d_vs_exact_arithmetic",
+            "relu_vs_exact_arithmetic",
+            "repeat_vs_exact_arithmetic",
+            "replication_pad2d_vs_exact_arithmetic",
+            "replication_pad3d_vs_exact_arithmetic",
+            "select_scatter_vs_exact_arithmetic",
+            "slice_scatter_vs_exact_arithmetic",
+            "sub_Scalar_vs_exact_arithmetic",
+            "sub_Tensor_vs_exact_arithmetic"
+          ],
+          "failed": [],
+          "info": [],
+          "perf": {
+            "rtl-support": 303862
+          },
+          "seconds": 0.0,
+          "exit": 0,
+          "tail": null
+        },
+        "rtl": {
+          "status": "PASS",
+          "passed": [
+            "_adaptive_avg_pool2d_vs_exact_arithmetic",
+            "_adaptive_avg_pool2d_backward_vs_exact_arithmetic",
+            "_adaptive_avg_pool3d_vs_exact_arithmetic",
+            "_to_copy_vs_exact_arithmetic",
+            "adaptive_avg_pool1d_vs_exact_arithmetic",
+            "add_Scalar_vs_exact_arithmetic",
+            "add_Tensor_vs_exact_arithmetic",
+            "addmm_vs_exact_arithmetic",
+            "avg_pool1d_vs_exact_arithmetic",
+            "avg_pool2d_vs_exact_arithmetic",
+            "avg_pool2d_backward_vs_exact_arithmetic",
+            "avg_pool3d_vs_exact_arithmetic",
+            "bmm_vs_exact_arithmetic",
+            "cat_vs_exact_arithmetic",
+            "clone_vs_exact_arithmetic",
+            "col2im_vs_exact_arithmetic",
+            "constant_pad_nd_vs_exact_arithmetic",
+            "constant_pad_nd_p1_vs_exact_arithmetic",
+            "convolution_vs_exact_arithmetic",
+            "convolution_backward.out0_vs_exact_arithmetic",
+            "convolution_backward.out1_vs_exact_arithmetic",
+            "convolution_backward.out2_vs_exact_arithmetic",
+            "convolution_patch16_vs_exact_arithmetic",
+            "div_Scalar_vs_exact_arithmetic",
+            "fill_Scalar_vs_exact_arithmetic",
+            "full_vs_exact_arithmetic",
+            "full_like_vs_exact_arithmetic",
+            "mean_dim_vs_exact_arithmetic",
+            "mm_vs_exact_arithmetic",
+            "mul_Scalar_vs_exact_arithmetic",
+            "neg_vs_exact_arithmetic",
+            "permute_vs_exact_arithmetic",
+            "reflection_pad1d_vs_exact_arithmetic",
+            "reflection_pad2d_vs_exact_arithmetic",
+            "reflection_pad3d_vs_exact_arithmetic",
+            "relu_vs_exact_arithmetic",
+            "repeat_vs_exact_arithmetic",
+            "replication_pad2d_vs_exact_arithmetic",
+            "replication_pad3d_vs_exact_arithmetic",
+            "select_scatter_vs_exact_arithmetic",
+            "slice_scatter_vs_exact_arithmetic",
+            "sub_Scalar_vs_exact_arithmetic",
+            "sub_Tensor_vs_exact_arithmetic"
+          ],
+          "failed": [],
+          "info": [],
+          "perf": {
+            "rtl-support": 494517
+          },
+          "seconds": 386.7,
+          "exit": 0,
+          "tail": null
+        }
+      }
+    },
+    "e2e-real-spike.json": {
+      "receipt": {
+        "path": "out/exact-int32/e2e-real-spike.json",
+        "sha256": "b6c33c69f1d8a764b41a09d9a1f2c56c2c839256070efe6967e30a52585d88db"
+      },
+      "results": [
+        {
+          "case": "linear_bias0",
+          "status": "PASS",
+          "info": [],
+          "failed": [],
+          "perf": {
+            "linear_bias0": 140745
+          },
+          "tail": null
+        },
+        {
+          "case": "linear_bias1",
+          "status": "PASS",
+          "info": [],
+          "failed": [],
+          "perf": {
+            "linear_bias1": 189102
+          },
+          "tail": null
+        }
+      ]
+    },
+    "e2e-real-rtl.json": {
+      "receipt": {
+        "path": "out/exact-int32/e2e-real-rtl.json",
+        "sha256": "af7843e11af880976e83b6b1faed37734299ec52d98ba4ad2bb172a0d250038e"
+      },
+      "results": [
+        {
+          "case": "linear_bias0",
+          "status": "PASS",
+          "info": [],
+          "failed": [],
+          "perf": {
+            "linear_bias0": 182761
+          },
+          "tail": null
+        },
+        {
+          "case": "linear_bias1",
+          "status": "PASS",
+          "info": [],
+          "failed": [],
+          "perf": {
+            "linear_bias1": 254726
+          },
+          "tail": null
+        }
+      ]
+    },
+    "e2e-iface.json": {
+      "receipt": {
+        "path": "out/exact-int32/e2e-iface.json",
+        "sha256": "8d5843f08474c86eb6aef0a3b79bb43d368a93c3645ba12e93cf660f9dd6303d"
+      },
+      "results": {
+        "model_vs_reference": {
+          "ws_avg_pool2d_ceil_div": {
+            "status": "PASS",
+            "mismatches": {
+              "Y": 0
+            },
+            "buffer_problems": [],
+            "eager_float_divergence": {
+              "informational": true,
+              "diagnostics": []
+            },
+            "commands": [
+              "WINDOW_SUM"
+            ],
+            "instructions": 271,
+            "seconds": 0.27
+          }
+        },
+        "spike": {
+          "status": "PASS",
+          "passed": 1,
+          "failed": [],
+          "info": [],
+          "seconds": 0.0,
+          "tail": null
+        },
+        "rtl": {
+          "status": "PASS",
+          "passed": 1,
+          "failed": [],
+          "info": [],
+          "seconds": 50.2,
+          "tail": null
+        }
+      }
+    },
+    "current-spike.json": {
+      "receipt": {
+        "path": "out/exact-int32/current-spike.json",
+        "sha256": "56aa0877aaa726e3999957a670339c36829846f4f6d82b589672adfa0b8595ad"
+      },
+      "results": {
+        "status": "PASS",
+        "passed": [
+          "_adaptive_avg_pool2d_vs_exact_arithmetic",
+          "_adaptive_avg_pool2d_backward_vs_exact_arithmetic",
+          "_adaptive_avg_pool3d_vs_exact_arithmetic",
+          "_to_copy_vs_exact_arithmetic",
+          "adaptive_avg_pool1d_vs_exact_arithmetic",
+          "add_Scalar_vs_exact_arithmetic",
+          "add_Tensor_vs_exact_arithmetic",
+          "addmm_vs_exact_arithmetic",
+          "avg_pool1d_vs_exact_arithmetic",
+          "avg_pool2d_vs_exact_arithmetic",
+          "avg_pool2d_backward_vs_exact_arithmetic",
+          "avg_pool3d_vs_exact_arithmetic",
+          "bmm_vs_exact_arithmetic",
+          "cat_vs_exact_arithmetic",
+          "clone_vs_exact_arithmetic",
+          "col2im_vs_exact_arithmetic",
+          "constant_pad_nd_vs_exact_arithmetic",
+          "constant_pad_nd_p1_vs_exact_arithmetic",
+          "convolution_vs_exact_arithmetic",
+          "convolution_backward.out0_vs_exact_arithmetic",
+          "convolution_backward.out1_vs_exact_arithmetic",
+          "convolution_backward.out2_vs_exact_arithmetic",
+          "convolution_patch16_vs_exact_arithmetic",
+          "div_Scalar_vs_exact_arithmetic",
+          "fill_Scalar_vs_exact_arithmetic",
+          "full_vs_exact_arithmetic",
+          "full_like_vs_exact_arithmetic",
+          "mean_dim_vs_exact_arithmetic",
+          "mm_vs_exact_arithmetic",
+          "mul_Scalar_vs_exact_arithmetic",
+          "neg_vs_exact_arithmetic",
+          "permute_vs_exact_arithmetic",
+          "reflection_pad1d_vs_exact_arithmetic",
+          "reflection_pad2d_vs_exact_arithmetic",
+          "reflection_pad3d_vs_exact_arithmetic",
+          "relu_vs_exact_arithmetic",
+          "repeat_vs_exact_arithmetic",
+          "replication_pad2d_vs_exact_arithmetic",
+          "replication_pad3d_vs_exact_arithmetic",
+          "select_scatter_vs_exact_arithmetic",
+          "slice_scatter_vs_exact_arithmetic",
+          "sub_Scalar_vs_exact_arithmetic",
+          "sub_Tensor_vs_exact_arithmetic"
+        ],
+        "failed": [],
+        "seconds": 0.17771315574645996,
+        "info": [],
+        "perf": {
+          "all-current": 7174356
+        },
+        "log": "PERF all-current cycles=7174356\nPASS _adaptive_avg_pool2d_vs_exact_arithmetic\nPASS _adaptive_avg_pool2d_backward_vs_exact_arithmetic\nPASS _adaptive_avg_pool3d_vs_exact_arithmetic\nPASS _to_copy_vs_exact_arithmetic\nPASS adaptive_avg_pool1d_vs_exact_arithmetic\nPASS add_Scalar_vs_exact_arithmetic\nPASS add_Tensor_vs_exact_arithmetic\nPASS addmm_vs_exact_arithmetic\nPASS avg_pool1d_vs_exact_arithmetic\nPASS avg_pool2d_vs_exact_arithmetic\nPASS avg_pool2d_backward_vs_exact_arithmetic\nPASS avg_pool3d_vs_exact_arithmetic\nPASS bmm_vs_exact_arithmetic\nPASS cat_vs_exact_arithmetic\nPASS clone_vs_exact_arithmetic\nPASS col2im_vs_exact_arithmetic\nPASS constant_pad_nd_vs_exact_arithmetic\nPASS constant_pad_nd_p1_vs_exact_arithmetic\nPASS convolution_vs_exact_arithmetic\nPASS convolution_backward.out0_vs_exact_arithmetic\nPASS convolution_backward.out1_vs_exact_arithmetic\nPASS convolution_backward.out2_vs_exact_arithmetic\nPASS convolution_patch16_vs_exact_arithmetic\nPASS div_Scalar_vs_exact_arithmetic\nPASS fill_Scalar_vs_exact_arithmetic\nPASS full_vs_exact_arithmetic\nPASS full_like_vs_exact_arithmetic\nPASS mean_dim_vs_exact_arithmetic\nPASS mm_vs_exact_arithmetic\nPASS mul_Scalar_vs_exact_arithmetic\nPASS neg_vs_exact_arithmetic\nPASS permute_vs_exact_arithmetic\nPASS reflection_pad1d_vs_exact_arithmetic\nPASS reflection_pad2d_vs_exact_arithmetic\nPASS reflection_pad3d_vs_exact_arithmetic\nPASS relu_vs_exact_arithmetic\nPASS repeat_vs_exact_arithmetic\nPASS replication_pad2d_vs_exact_arithmetic\nPASS replication_pad3d_vs_exact_arithmetic\nPASS select_scatter_vs_exact_arithmetic\nPASS slice_scatter_vs_exact_arithmetic\nPASS sub_Scalar_vs_exact_arithmetic\nPASS sub_Tensor_vs_exact_arithmetic\nHARNESS_DONE pass=43 fail=0\nGemmini extension configured with:\n    dim = 16\n"
+      }
+    },
+    "ties-spike.json": {
+      "receipt": {
+        "path": "out/exact-int32/ties-spike.json",
+        "sha256": "c4feae224068f14bae01b2b5f826c6f9fdf073c99615a3b8cc7955498201466d"
+      },
+      "results": {
+        "status": "PASS",
+        "passed": [
+          "affine_all_pairs_vs_exact_arithmetic",
+          "mean_tie_vs_exact_arithmetic"
+        ],
+        "failed": [],
+        "info": [],
+        "seconds": 0.06428933143615723,
+        "exit": 0,
+        "tail": null
+      }
+    },
+    "e2e-canonical-schemes.json": {
+      "receipt": {
+        "path": "out/exact-int32/e2e-canonical-schemes.json",
+        "sha256": "6158bfb098e1a2ec9cd356699e13e69a14fe9e2fa741bce87260b95ea74036cf"
+      },
+      "results": {
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir/out/exact-int32/device/canonical-schemes/canonical-schemes.elf",
+        "cases": {
+          "add_Tensor_int8_asymmetric": {
+            "ops": [
+              "aten.add.Tensor"
+            ],
+            "kernels": 1,
+            "instructions": 15,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "add_Tensor_uint8_narrow": {
+            "ops": [
+              "aten.add.Tensor"
+            ],
+            "kernels": 1,
+            "instructions": 15,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "cat_int8_asymmetric": {
+            "ops": [
+              "aten.cat.default"
+            ],
+            "kernels": 1,
+            "instructions": 29,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "cat_uint8_narrow": {
+            "ops": [
+              "aten.cat.default"
+            ],
+            "kernels": 1,
+            "instructions": 29,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "convolution_backward_int8_asymmetric": {
+            "ops": [
+              "aten.convolution_backward.default",
+              "aten.convolution_backward.default",
+              "aten.convolution_backward.default"
+            ],
+            "kernels": 3,
+            "instructions": 1041,
+            "fences": 12,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 2.0
+          },
+          "convolution_backward_uint8_narrow": {
+            "ops": [
+              "aten.convolution_backward.default",
+              "aten.convolution_backward.default",
+              "aten.convolution_backward.default"
+            ],
+            "kernels": 3,
+            "instructions": 443,
+            "fences": 8,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 1.2
+          },
+          "convolution_int8_asymmetric": {
+            "ops": [
+              "aten.convolution.default"
+            ],
+            "kernels": 1,
+            "instructions": 466,
+            "fences": 5,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 1.0
+          },
+          "convolution_uint8_narrow": {
+            "ops": [
+              "aten.convolution.default"
+            ],
+            "kernels": 1,
+            "instructions": 200,
+            "fences": 3,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.7
+          },
+          "mean_dim_int8_asymmetric": {
+            "ops": [
+              "aten.mean.dim"
+            ],
+            "kernels": 1,
+            "instructions": 25,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "mean_dim_uint8_narrow": {
+            "ops": [
+              "aten.mean.dim"
+            ],
+            "kernels": 1,
+            "instructions": 25,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.3
+          },
+          "mm_int8_asymmetric": {
+            "ops": [
+              "aten.mm.default"
+            ],
+            "kernels": 1,
+            "instructions": 41,
+            "fences": 3,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.5
+          },
+          "mm_uint8_narrow": {
+            "ops": [
+              "aten.mm.default"
+            ],
+            "kernels": 1,
+            "instructions": 16,
+            "fences": 2,
+            "model_vs_eager_max": 0,
+            "model_vs_eager_exact": 1.0,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 0,
+              "exact_fraction": 1.0
+            },
+            "declines": [],
+            "build_s": 0.5
+          },
+          "neg_int8_asymmetric": {
+            "ops": [
+              "aten.sub.Scalar"
+            ],
+            "kernels": 1,
+            "instructions": 54,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9453125,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9453125
+            },
+            "declines": [],
+            "build_s": 0.4
+          },
+          "neg_uint8_narrow": {
+            "ops": [
+              "aten.neg.default"
+            ],
+            "kernels": 1,
+            "instructions": 54,
+            "fences": 2,
+            "model_vs_eager_max": 1,
+            "model_vs_eager_exact": 0.9453125,
+            "eager_float_divergence": {
+              "informational": true,
+              "max_code_difference": 1,
+              "exact_fraction": 0.9453125
+            },
+            "declines": [],
+            "build_s": 0.4
+          }
+        },
+        "spike": {
+          "status": "PASS",
+          "passed": [
+            "add_Tensor_int8_asymmetric_vs_exact_arithmetic",
+            "add_Tensor_uint8_narrow_vs_exact_arithmetic",
+            "cat_int8_asymmetric_vs_exact_arithmetic",
+            "cat_uint8_narrow_vs_exact_arithmetic",
+            "convolution_backward_int8_asymmetric.out0_vs_exact_arithmetic",
+            "convolution_backward_int8_asymmetric.out1_vs_exact_arithmetic",
+            "convolution_backward_int8_asymmetric.out2_vs_exact_arithmetic",
+            "convolution_backward_uint8_narrow.out0_vs_exact_arithmetic",
+            "convolution_backward_uint8_narrow.out1_vs_exact_arithmetic",
+            "convolution_backward_uint8_narrow.out2_vs_exact_arithmetic",
+            "convolution_int8_asymmetric_vs_exact_arithmetic",
+            "convolution_uint8_narrow_vs_exact_arithmetic",
+            "mean_dim_int8_asymmetric_vs_exact_arithmetic",
+            "mean_dim_uint8_narrow_vs_exact_arithmetic",
+            "mm_int8_asymmetric_vs_exact_arithmetic",
+            "mm_uint8_narrow_vs_exact_arithmetic",
+            "neg_int8_asymmetric_vs_exact_arithmetic",
+            "neg_uint8_narrow_vs_exact_arithmetic"
+          ],
+          "failed": [],
+          "info": [],
+          "perf": {
+            "canonical-schemes": 280555
+          },
+          "seconds": 0.0,
+          "exit": 0,
+          "tail": null
+        },
+        "rtl": {
+          "status": "PASS",
+          "passed": [
+            "add_Tensor_int8_asymmetric_vs_exact_arithmetic",
+            "add_Tensor_uint8_narrow_vs_exact_arithmetic",
+            "cat_int8_asymmetric_vs_exact_arithmetic",
+            "cat_uint8_narrow_vs_exact_arithmetic",
+            "convolution_backward_int8_asymmetric.out0_vs_exact_arithmetic",
+            "convolution_backward_int8_asymmetric.out1_vs_exact_arithmetic",
+            "convolution_backward_int8_asymmetric.out2_vs_exact_arithmetic",
+            "convolution_backward_uint8_narrow.out0_vs_exact_arithmetic",
+            "convolution_backward_uint8_narrow.out1_vs_exact_arithmetic",
+            "convolution_backward_uint8_narrow.out2_vs_exact_arithmetic",
+            "convolution_int8_asymmetric_vs_exact_arithmetic",
+            "convolution_uint8_narrow_vs_exact_arithmetic",
+            "mean_dim_int8_asymmetric_vs_exact_arithmetic",
+            "mean_dim_uint8_narrow_vs_exact_arithmetic",
+            "mm_int8_asymmetric_vs_exact_arithmetic",
+            "mm_uint8_narrow_vs_exact_arithmetic",
+            "neg_int8_asymmetric_vs_exact_arithmetic",
+            "neg_uint8_narrow_vs_exact_arithmetic"
+          ],
+          "failed": [],
+          "info": [],
+          "perf": {
+            "canonical-schemes": 500856
+          },
+          "seconds": 336.2,
+          "exit": 0,
+          "tail": null
+        }
+      }
+    }
+  },
+  "final_elf_audits": [
+    {
+      "artifact": {
+        "path": "out/exact-int32/device/all-current/all-current.nofsm_audit.json",
+        "sha256": "966e594e787d6cd8fe9778151128ad251eb9048e596d07b634df9a26276877e6"
+      },
+      "audit": {
+        "schema": "gemmini_nofsm_elf_audit_v1",
+        "elf_sha256": "2320cc88a9070317f2deed8dfe3d860dbf0ca95abd678cd94f12a6baf2b830db",
+        "executable_sections": 3,
+        "custom_funct_counts": {
+          "0": 1474,
+          "1": 318,
+          "2": 2692,
+          "3": 187,
+          "4": 281,
+          "5": 231,
+          "6": 512,
+          "7": 43,
+          "14": 124
+        },
+        "forbidden": [],
+        "unknown": [],
+        "status": "pass"
+      }
+    },
+    {
+      "artifact": {
+        "path": "out/exact-int32/device/canonical-schemes/canonical-schemes.nofsm_audit.json",
+        "sha256": "140a5c56976b92813a8c1070892083a4a7f973e0b4b69cf953b0f0642505fcac"
+      },
+      "audit": {
+        "schema": "gemmini_nofsm_elf_audit_v1",
+        "elf_sha256": "1854ee90b6c77d3fbb77c79ffe340bd367bb90c550ecd6952dff071960dbe67a",
+        "executable_sections": 3,
+        "custom_funct_counts": {
+          "0": 126,
+          "1": 200,
+          "2": 260,
+          "3": 96,
+          "4": 174,
+          "5": 28,
+          "6": 202,
+          "7": 18,
+          "14": 66
+        },
+        "forbidden": [],
+        "unknown": [],
+        "status": "pass"
+      }
+    },
+    {
+      "artifact": {
+        "path": "out/exact-int32/device/real-model-rtl/linear_bias0/linear_bias0.nofsm_audit.json",
+        "sha256": "d83cee63244e2ad92ffe991914dd828779495bbb9deb5277c91a7ec8b8e1e8cd"
+      },
+      "audit": {
+        "schema": "gemmini_nofsm_elf_audit_v1",
+        "elf_sha256": "455182f3325d38e2e438887a9a957afa4addb991690d2ad18c14f6e7c45e92d9",
+        "executable_sections": 3,
+        "custom_funct_counts": {
+          "0": 18,
+          "1": 3,
+          "2": 6,
+          "3": 6,
+          "4": 2,
+          "6": 2,
+          "7": 6,
+          "14": 4
+        },
+        "forbidden": [],
+        "unknown": [],
+        "status": "pass"
+      }
+    },
+    {
+      "artifact": {
+        "path": "out/exact-int32/device/real-model-rtl/linear_bias1/linear_bias1.nofsm_audit.json",
+        "sha256": "4c9ddfbfa2c453f86ca24cf7a5990ed7e99922081e91b8a6e8bde0f8205ddd23"
+      },
+      "audit": {
+        "schema": "gemmini_nofsm_elf_audit_v1",
+        "elf_sha256": "59c939ba057c7984399695c56f0b22da8859129b7f170fcf387791641bab4340",
+        "executable_sections": 3,
+        "custom_funct_counts": {
+          "0": 18,
+          "1": 3,
+          "2": 6,
+          "3": 6,
+          "4": 2,
+          "6": 2,
+          "7": 6,
+          "14": 4
+        },
+        "forbidden": [],
+        "unknown": [],
+        "status": "pass"
+      }
+    },
+    {
+      "artifact": {
+        "path": "out/exact-int32/device/real-model-spike/linear_bias0/linear_bias0.nofsm_audit.json",
+        "sha256": "d8202566a2ebfd5af3f8e0335f566639e3b3d54ad223fe9a3aa4cb5ee060dec9"
+      },
+      "audit": {
+        "schema": "gemmini_nofsm_elf_audit_v1",
+        "elf_sha256": "4410b0779a8d654ffe0dfd6e9a71345c622f0a166007609ec80dde60ed6d3230",
+        "executable_sections": 3,
+        "custom_funct_counts": {
+          "0": 18,
+          "1": 3,
+          "2": 6,
+          "3": 6,
+          "4": 2,
+          "6": 2,
+          "7": 6,
+          "14": 4
+        },
+        "forbidden": [],
+        "unknown": [],
+        "status": "pass"
+      }
+    },
+    {
+      "artifact": {
+        "path": "out/exact-int32/device/real-model-spike/linear_bias1/linear_bias1.nofsm_audit.json",
+        "sha256": "0255a65b600eeeb8101994fab47fce0befbd15270f7a1ffd6700bc583dfadc8e"
+      },
+      "audit": {
+        "schema": "gemmini_nofsm_elf_audit_v1",
+        "elf_sha256": "796cfd07371b841ddb589df748d14e8008930febe04eb936a739af37fee2c325",
+        "executable_sections": 3,
+        "custom_funct_counts": {
+          "0": 18,
+          "1": 3,
+          "2": 6,
+          "3": 6,
+          "4": 2,
+          "6": 2,
+          "7": 6,
+          "14": 4
+        },
+        "forbidden": [],
+        "unknown": [],
+        "status": "pass"
+      }
+    },
+    {
+      "artifact": {
+        "path": "out/exact-int32/device/rtl-support/rtl-support.nofsm_audit.json",
+        "sha256": "56ab55e3060d0aa80dd7c1197b9ca9a6e97122e34827fd3fafcd8877c7228614"
+      },
+      "audit": {
+        "schema": "gemmini_nofsm_elf_audit_v1",
+        "elf_sha256": "34c21aff36705d2659ebd9c7f03074870cae7e3b96abf60d632a961b6cea5223",
+        "executable_sections": 3,
+        "custom_funct_counts": {
+          "0": 423,
+          "1": 63,
+          "2": 630,
+          "3": 100,
+          "4": 61,
+          "5": 8,
+          "6": 69,
+          "7": 43,
+          "14": 73
+        },
+        "forbidden": [],
+        "unknown": [],
+        "status": "pass"
+      }
+    },
+    {
+      "artifact": {
+        "path": "out/exact-int32/device/ties/ties.nofsm_audit.json",
+        "sha256": "4b0dd7fd4413d7ad57f7d3b936836a16b2a5a026ca43acb2be71ce128ebac27c"
+      },
+      "audit": {
+        "schema": "gemmini_nofsm_elf_audit_v1",
+        "elf_sha256": "3d38af77e4cd110a5d49edce30b48377d908f65e4ccb9b2883d06b6609726f8d",
+        "executable_sections": 3,
+        "custom_funct_counts": {
+          "0": 10,
+          "1": 1,
+          "2": 10,
+          "3": 9,
+          "4": 4,
+          "6": 4,
+          "7": 2,
+          "14": 6
+        },
+        "forbidden": [],
+        "unknown": [],
+        "status": "pass"
+      }
+    }
+  ],
+  "test_logs": {
+    "qualified-focused.log": {
+      "artifact": {
+        "path": "out/exact-int32/qualified-focused.log",
+        "sha256": "fc8faebeef35403c836b9e762312aa00a0bd77d7afdac98d2864c8acaa685d09"
+      },
+      "summary": "170 passed, 1 skipped, 310 warnings, 103 subtests passed in 176.18s (0:02:56)",
+      "failures": []
+    },
+    "proof-schema-final.log": {
+      "artifact": {
+        "path": "out/exact-int32/proof-schema-final.log",
+        "sha256": "f26c7cabab869047e35292657118ac214a5c637a07d8d2b2f23f2a62b77cb7d5"
+      },
+      "summary": "3 passed in 0.78s",
+      "failures": []
+    },
+    "pinned-real-final.log": {
+      "artifact": {
+        "path": "out/exact-int32/pinned-real-final.log",
+        "sha256": "1ef0fbfdc35a336e0f23c93a21d36e695b1937cdcccb37867180cac62f6ad516"
+      },
+      "summary": "10 passed, 130 warnings in 14.72s",
+      "failures": []
+    },
+    "merlin-abi-final.log": {
+      "artifact": {
+        "path": "out/exact-int32/merlin-abi-final.log",
+        "sha256": "45774bf2f7b87ca6d149ce4425e0da3733094ee4a3a7d1b1219f8a573dabc0d6"
+      },
+      "summary": "4 passed in 0.60s",
+      "failures": []
+    },
+    "repo-release-tests.log": {
+      "artifact": {
+        "path": "out/exact-int32/repo-release-tests.log",
+        "sha256": "edbab0cb60115fc8457570c7f1044dab6c2b2a4548d9e87a3e204a337a32012b"
+      },
+      "summary": "37 failed, 1567 passed, 8 skipped, 328 warnings, 131 subtests passed in 1069.16s (0:17:49)",
+      "failures": [
+        "FAILED tests/test_descriptor_writer.py::test_actual_upstream_ownership_live_input_and_fresh_result[-O0]",
+        "FAILED tests/test_descriptor_writer.py::test_actual_upstream_ownership_live_input_and_fresh_result[-O2]",
+        "FAILED tests/test_expanded_writer.py::test_real_expanded_adapter_fresh_output_and_live_input",
+        "FAILED tests/test_golden_calibrated_catalog.py::test_shared_solver_winner_is_linked_and_closed_by_normal_routing",
+        "FAILED tests/test_golden_compiler_export.py::test_inventory_uses_actual_new_commands_and_existing_contract_checks",
+        "FAILED tests/test_golden_model_plan.py::test_complete_integer_source_plan_drives_unchanged_normal_catalog_path",
+        "FAILED tests/test_gsim_support_provider.py::test_discovery_is_explicit_and_does_not_import_legacy_backend",
+        "FAILED tests/test_gsim_support_provider.py::test_recipe_refuses_missing_caller_configuration",
+        "FAILED tests/test_gsim_support_provider.py::test_command_requires_explicit_integer_cycle_bound[None]",
+        "FAILED tests/test_gsim_support_provider.py::test_command_requires_explicit_integer_cycle_bound[True]",
+        "FAILED tests/test_gsim_support_provider.py::test_command_requires_explicit_integer_cycle_bound[0]",
+        "FAILED tests/test_gsim_support_provider.py::test_command_requires_explicit_integer_cycle_bound[-1]",
+        "FAILED tests/test_gsim_support_provider.py::test_command_requires_explicit_integer_cycle_bound[1<<63]",
+        "FAILED tests/test_gsim_support_provider.py::test_command_requires_explicit_integer_cycle_bound[1.5]",
+        "FAILED tests/test_gsim_support_provider.py::test_prepared_command_revalidates_inputs_and_exact_argv[elf.write_bytes(b'changed')]",
+        "FAILED tests/test_gsim_support_provider.py::test_prepared_command_revalidates_inputs_and_exact_argv[receipt.write_text('changed')]",
+        "FAILED tests/test_gsim_support_provider.py::test_prepared_command_revalidates_inputs_and_exact_argv[engine['path']='other']",
+        "FAILED tests/test_gsim_support_provider.py::test_prepared_command_revalidates_inputs_and_exact_argv[cmd=replace(cmd,argv=cmd.argv+('other',))]",
+        "FAILED tests/test_gsim_support_provider.py::test_prepared_command_revalidates_inputs_and_exact_argv[cmd=replace(cmd,env_overrides=(('UNBOUND','1'),))]",
+        "FAILED tests/test_gsim_support_provider.py::test_unbound_engine_and_wrong_expected_elf_are_refused",
+        "FAILED tests/test_joint_residual_catalog.py::test_actual_upstream_private_lifetime_and_live_inputs[False--O0]",
+        "FAILED tests/test_joint_residual_catalog.py::test_actual_upstream_private_lifetime_and_live_inputs[False--O2]",
+        "FAILED tests/test_joint_residual_catalog.py::test_actual_upstream_private_lifetime_and_live_inputs[True--O0]",
+        "FAILED tests/test_joint_residual_catalog.py::test_actual_upstream_private_lifetime_and_live_inputs[True--O2]",
+        "FAILED tests/test_paired_readout_store.py::test_default_program_byte_identity[shape0-False]",
+        "FAILED tests/test_paired_readout_store.py::test_default_program_byte_identity[shape0-True]",
+        "FAILED tests/test_paired_readout_store.py::test_default_program_byte_identity[shape1-False]",
+        "FAILED tests/test_paired_readout_store.py::test_default_program_byte_identity[shape1-True]",
+        "FAILED tests/test_paired_readout_store.py::test_default_program_byte_identity[shape2-False]",
+        "FAILED tests/test_paired_readout_store.py::test_default_program_byte_identity[shape2-True]",
+        "FAILED tests/test_paired_source_stride.py::test_default_source_stride_IR_byte_preservation[False-False]",
+        "FAILED tests/test_paired_source_stride.py::test_default_source_stride_IR_byte_preservation[True-False]",
+        "FAILED tests/test_paired_source_stride.py::test_default_source_stride_IR_byte_preservation[True-True]",
+        "FAILED tests/test_resident_paired_stores.py::test_default_IR_unchanged[options0]",
+        "FAILED tests/test_resident_paired_stores.py::test_default_IR_unchanged[options1]",
+        "FAILED tests/test_resident_paired_stores.py::test_default_IR_unchanged[options2]",
+        "FAILED tests/test_resident_paired_stores.py::test_default_IR_unchanged[options3]"
+      ]
+    },
+    "support-tests.log": {
+      "artifact": {
+        "path": "out/exact-int32/support-tests.log",
+        "sha256": "f2e8730c65efc831d5fa1d29917392057b5c160a7523777a2b6671fea4168020"
+      },
+      "summary": "2 failed, 108 passed, 2 skipped, 2 warnings in 6.47s",
+      "failures": [
+        "FAILED merlin-support/tests/test_conformance_policy.py::test_real_cli_help_and_wrong_provider_refusal[True]",
+        "FAILED merlin-support/tests/test_conformance_policy.py::test_real_cli_help_and_wrong_provider_refusal[False]"
+      ]
+    },
+    "inventory-rerun.log": {
+      "artifact": {
+        "path": "out/exact-int32/inventory-rerun.log",
+        "sha256": "dd90bf023643ac042d9171b5c0ab9172aef2f59455f67833136d5a6dc3ed9732"
+      },
+      "summary": "1 passed, 6 warnings in 5.37s",
+      "failures": []
+    },
+    "gsim-contract-final.log": {
+      "artifact": {
+        "path": "out/exact-int32/gsim-contract-final.log",
+        "sha256": "6a4194833e052c5edea8ac581d3d0da9977c275871de035ccee06fb1a031bd23"
+      },
+      "summary": "16 passed in 6.21s",
+      "failures": []
+    },
+    "contract-inventory-final.log": {
+      "artifact": {
+        "path": "out/exact-int32/contract-inventory-final.log",
+        "sha256": "51a59d24b3a9175bec7d7eac5b6aa446b918661c6d01cb6ce2a91ac616c5a849"
+      },
+      "summary": "4 passed, 6 warnings in 4.34s",
+      "failures": []
+    }
+  },
+  "full_suite_followup": {
+    "raw": "1567 passed, 37 failed, 8 skipped, 131 subtests passed",
+    "resolved_provider_failures": 14,
+    "provider_rerun": "16 passed",
+    "resolved_in_other_environment": "jsonschema inventory plus contract tests: see contract-inventory-final.log",
+    "remaining_categories": {
+      "missing_clang_23": 7,
+      "missing_historical_git_objects": 13,
+      "existing_golden_identity_preservation": 2
+    }
+  },
+  "genuine_refusals": [
+    "Unproved int32 seed/partial-sum overflow",
+    "Unsupported or unproved layouts, empty/dynamic geometries or hardware resource limits",
+    "Unsupported per-channel Q/DQ matching; supported source integer-producer readouts remain on host",
+    "Unknown, obsolete, host_only or nonexact quantization policy",
+    "Nonunity device scaling without an exact-product proof"
+  ],
+  "incomplete_runs": [
+    "Interrupted original large-shape 41-case RTL batch; original cases passed Spike and instruction/source checks",
+    "Interrupted 65536-add-pair RTL batch; native/instruction property tests and Spike completed",
+    "Interrupted original-shape whole-graph shim run after addmm, avg_pool2d and convolution passed; no whole-batch pass claimed"
+  ],
+  "abi_note": "Repository-local ABI_NOTES.md supplied; parent ABI_NOTES.md cannot be written under sandbox permissions.",
+  "historical_reports": "docs/core_aten_exactness_20261017.md and docs/exactness/core_aten_20261017.json remain unchanged."
+}

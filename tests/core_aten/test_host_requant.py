@@ -394,3 +394,37 @@ def test_relu_does_not_hide_inexact_device_product():
         prove_readout(F(1), -(1 << 25), 0, relu=True)
     with pytest.raises(Decline, match="product is not exact"):
         prove_readout(F(3, 8), -(1 << 24), 0, relu=True)
+
+
+@pytest.mark.parametrize(
+    "low,high,zp", [(-128, 127, 0), (-127, 127, -7), (0, 255, 123), (1, 255, 128)]
+)
+def test_merlin_exact_host_api_matches_target_reference(low, high, zp):
+    api = pytest.importorskip("merlin.runtime.exact_readout")
+    rng = np.random.default_rng(7291)
+    values = np.concatenate(
+        (
+            np.arange(-256, 257, dtype=np.int32),
+            rng.integers(-(1 << 31), 1 << 31, 1024, dtype=np.int32),
+            np.array([-(1 << 31), (1 << 31) - 1], dtype=np.int32),
+        )
+    )
+    for factor in (F(1, 2), F(-3, 8), F(17, 31), F(1, 1 << 149), F(1 << 127), F(0)):
+        expected = evaluate(
+            values,
+            factor.numerator,
+            factor.denominator,
+            zero_point=zp,
+            quant_min=low,
+            quant_max=high,
+        )
+        actual = api.requantize_int32(
+            values,
+            scale_numerator=str(factor.numerator),
+            scale_denominator=str(factor.denominator),
+            zero_point=zp,
+            quant_min=low,
+            quant_max=high,
+            rounding="half_to_even",
+        )
+        assert np.array_equal(actual, expected.astype(np.int64))
