@@ -101,3 +101,34 @@ to its instruction model; RTL `mcycle` deltas are Rocket hardware cycles. Neithe
 is a full-model or FireSim measurement. The final linked ELF must pass the
 independent design-rule checker and emitted objects are checked for floating
 point instructions. At most one RTL simulation is needed for the paired ELF.
+
+## Task E qualification (2026-10-18)
+
+Median cycles per call, five trials of ten calls each. All paired results and
+full-kernel outputs match the independent exact source reference on Spike and
+RTL. The reductions apply to host epilogues, excluding device kernel time.
+
+| Phase 0 kernel | Spike old → new | Reduction | RTL old → new | Reduction |
+|---|---:|---:|---:|---:|
+| mean.dim | 150.3 → 52.3 | 65.2% | 196.2 → 95.6 | 51.3% |
+| avg_pool2d | 755.3 → 235.3 | 68.8% | 1322.4 → 457.4 | 65.4% |
+| add.Tensor | 565.3 → 153.3 | 72.9% | 979.1 → 314.1 | 67.9% |
+
+The recorded accumulator domains contain 766, 1,025 and 769 integers,
+respectively. Every one was exhaustively checked at compile time, in addition
+to the formal certificate over the combined numerator interval. Final ELF audit:
+48 Gemmini instructions, three full-int32 stores, zero narrowed stores,
+identity scales, no violations, successful execution. All nine emitted objects
+contain no floating-point instructions.
+
+Validation: 310 core-aten tests and 103 subtests passed (11 skipped); 127 real
+model2MLIR capture tests passed (five skipped) against the pinned `cb1a3da` source;
+13 dedicated proof/native tests passed. The prepared target environment is
+required for the routing test. The live model2MLIR revision fails the existing
+schema pin, so the pinned source was archived under this worktree's output root.
+
+Static instruction counts for the paired add epilogues increase from 115 to 183
+because of LLVM's unrolling, despite the lower dynamic cycle counts. No
+whole-model or FireSim performance claim is made. Full constants, certificates,
+raw trials, object and ELF hashes, test receipts and negative evidence are in
+[the measurement record](perf_records/host_requant_taskE_20261018.json).

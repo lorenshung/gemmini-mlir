@@ -1,0 +1,513 @@
+{
+  "artifact_hashes": {
+    "design-rule.json": "83f0a8d5a8ae0b6a8d641f66c286197dac2897396454919aa9c3fb53b3f08bb3",
+    "host_requant.elf": "da7fbd1fbb4a10350ceb89b850de868d312b34d4214e06c34d7f83831de6fc36",
+    "magic-final.log": "a867af539301f7092add6b5048c107f353acc96900bc552bb2ebb625e0399c98",
+    "pytest-final.log": "0dc89409e3df2acdf1d9d162f9166c9c648745d00c4af2e814f0a71bf2849f0e",
+    "real-captures-pinned.log": "fe0a90267fe84e69fe92573e3fdf038d9fec761e756848c0982b6616f524745d",
+    "rtl-live.log": "7847a1aa6080583ee699d8a1ae1a1fb70e73b82f948008c3801ea2b2b7245ba4",
+    "spike.log": "73d4e185ecef5c7358917d54e23c3ab09e39c895480f3504c5c6fec2a187224f"
+  },
+  "baseline_revision": "f3d92d5",
+  "baseline_sha256": "39f53fa0bcfe406b4dd4eb2c8b350a4cdcce41a639949c04a7dac056e70a55c4",
+  "cases": [
+    {
+      "case": "aten__mean__dim",
+      "elements": 2,
+      "meta": {
+        "accumulator_max": 381,
+        "accumulator_min": -384,
+        "device_arithmetic": "exact_integer",
+        "device_readout": "full_i32",
+        "fp32_product_proofs": [],
+        "host_requantization_proofs": [
+          {
+            "accumulator_bounds": [
+              {
+                "accumulator_max": 381,
+                "accumulator_min": -384,
+                "bound_source": "kernel_meta",
+                "tile": "y__i32"
+              }
+            ],
+            "boundary_values": 1555,
+            "coefficients": [
+              "7012438",
+              "0"
+            ],
+            "denominator": "14306687",
+            "elements": 2,
+            "error_limit": "36028797018963968",
+            "error_product": "5122691650465536",
+            "int64_intermediates_proven": true,
+            "max_magnitude": "2692776192",
+            "method": "exact_reciprocal_multiply_shift",
+            "multiplier": "2518318673",
+            "numerator_max": "2671738878",
+            "numerator_min": "-2692776192",
+            "output": "y",
+            "quotient_proof": "A*(M*d-2^s)<2^s; floor(n*M/2^s)=floor(n/d)",
+            "reachable_values_tested": 766,
+            "reachable_verification": "exhaustive_accumulator_tuples",
+            "reciprocal_error": "1902383",
+            "rounding_proof": "exact remainder; r>d-r or (r=d-r and quotient odd); signed symmetry",
+            "shift": 55,
+            "tested_values": 1555,
+            "ties": "all n=+/-((2*k+1)*d/2), when integral, proved symbolically for every k",
+            "verification": "formal_bound_and_boundary_tests"
+          }
+        ],
+        "quantize_rounding": "host_exact_rational_RNE",
+        "readout_scale": 1.0,
+        "reduced": 3
+      },
+      "source": "/scratch/loren/core-aten-snap/run7-out/lane-pk/run/part7/shards/aten__mean__dim/model.mlir",
+      "source_sha256": "fefcf574ffcc52f7b84cd103e80c7a2284970ef8fa95d4080bdf5b0c873fda10"
+    },
+    {
+      "case": "aten__avg_pool2d__default",
+      "elements": 8,
+      "meta": {
+        "accumulator_bounds": [
+          {
+            "accumulator_max": 512,
+            "accumulator_min": -512,
+            "tile": "acc_combined"
+          }
+        ],
+        "arithmetic": "integer_accumulating_mvin",
+        "components": 1,
+        "device_arithmetic": "exact_integer",
+        "device_constant": false,
+        "device_readout": "full_i32",
+        "device_relu": false,
+        "execute_activation_proof": null,
+        "form": "exact_linear_i32",
+        "fp32_product_proofs": [],
+        "host_requantization_proofs": [
+          {
+            "accumulator_bounds": [
+              {
+                "accumulator_max": 512,
+                "accumulator_min": -512,
+                "bound_source": "kernel_meta",
+                "tile": "acc_combined"
+              }
+            ],
+            "boundary_values": 1297,
+            "coefficients": [
+              "3506219",
+              "0"
+            ],
+            "denominator": "12215568",
+            "elements": 8,
+            "error_limit": "9007199254740992",
+            "error_product": "6871821227253760",
+            "int64_intermediates_proven": true,
+            "max_magnitude": "1795184128",
+            "method": "exact_reciprocal_multiply_shift",
+            "multiplier": "737354109",
+            "numerator_max": "1795184128",
+            "numerator_min": "-1795184128",
+            "output": "y",
+            "quotient_proof": "A*(M*d-2^s)<2^s; floor(n*M/2^s)=floor(n/d)",
+            "reachable_values_tested": 1025,
+            "reachable_verification": "exhaustive_accumulator_tuples",
+            "reciprocal_error": "3827920",
+            "rounding_proof": "exact remainder; r>d-r or (r=d-r and quotient odd); signed symmetry",
+            "shift": 53,
+            "tested_values": 1297,
+            "ties": "all n=+/-((2*k+1)*d/2), when integral, proved symbolically for every k",
+            "verification": "formal_bound_and_boundary_tests"
+          }
+        ],
+        "integer_weights": [
+          "1"
+        ],
+        "quantize_rounding": "host_exact_rational_RNE",
+        "readout": "full_i32",
+        "rounding": "host_exact_rational_RNE",
+        "terms": 32
+      },
+      "source": "/scratch/loren/core-aten-snap/run7-out/lane-pk/run/part7/shards/aten__avg_pool2d__default/model.mlir",
+      "source_sha256": "1d94aefa96ee382607eee4381d732c78d655b091d1625122b6f893d3d8ce42c5"
+    },
+    {
+      "case": "aten__add__Tensor",
+      "elements": 6,
+      "meta": {
+        "accumulator_bounds": [
+          {
+            "accumulator_max": 384,
+            "accumulator_min": -384,
+            "tile": "acc_combined"
+          }
+        ],
+        "arithmetic": "weighted_integer_compute",
+        "components": 1,
+        "device_arithmetic": "exact_integer",
+        "device_constant": false,
+        "device_readout": "full_i32",
+        "device_relu": false,
+        "execute_activation_proof": null,
+        "form": "exact_linear_i32",
+        "fp32_product_proofs": [],
+        "host_requantization_proofs": [
+          {
+            "accumulator_bounds": [
+              {
+                "accumulator_max": 384,
+                "accumulator_min": -384,
+                "bound_source": "kernel_meta",
+                "tile": "acc_combined"
+              }
+            ],
+            "boundary_values": 1297,
+            "coefficients": [
+              "10518657",
+              "0"
+            ],
+            "denominator": "24825344",
+            "elements": 6,
+            "error_limit": "144115188075855872",
+            "error_product": "48725375892258816",
+            "int64_intermediates_proven": true,
+            "max_magnitude": "4039164288",
+            "method": "exact_reciprocal_multiply_shift",
+            "multiplier": "5805163791",
+            "numerator_max": "4039164288",
+            "numerator_min": "-4039164288",
+            "output": "y",
+            "quotient_proof": "A*(M*d-2^s)<2^s; floor(n*M/2^s)=floor(n/d)",
+            "reachable_values_tested": 769,
+            "reachable_verification": "exhaustive_accumulator_tuples",
+            "reciprocal_error": "12063232",
+            "rounding_proof": "exact remainder; r>d-r or (r=d-r and quotient odd); signed symmetry",
+            "shift": 57,
+            "tested_values": 1297,
+            "ties": "all n=+/-((2*k+1)*d/2), when integral, proved symbolically for every k",
+            "verification": "formal_bound_and_boundary_tests"
+          }
+        ],
+        "integer_weights": [
+          "1",
+          "2"
+        ],
+        "quantize_rounding": "host_exact_rational_RNE",
+        "readout": "full_i32",
+        "rounding": "host_exact_rational_RNE",
+        "terms": 12
+      },
+      "source": "/scratch/loren/core-aten-snap/run7-out/lane-pk/run/part4/shards/aten__add__Tensor/model.mlir",
+      "source_sha256": "2d6c1b6d4a73e4d255ae0e1c4d58d6bd63477c6186a95f26c96cd8a3e0023a84"
+    }
+  ],
+  "design_rule": {
+    "config": {
+      "ex_acc_scales": [
+        1.0
+      ],
+      "ex_shifts": [
+        0
+      ],
+      "ld_scales": [
+        1.0
+      ],
+      "st_acc_scales": [
+        1.0
+      ],
+      "st_acts": [
+        0
+      ]
+    },
+    "counts": {
+      "COMPUTE_PRELOADED": 3,
+      "CONFIG": 13,
+      "FLUSH": 3,
+      "MVIN": 18,
+      "MVIN2": 4,
+      "MVIN3": 1,
+      "MVOUT": 3,
+      "PRELOAD": 3
+    },
+    "design_rule": "OK_full_i32",
+    "elf": "out/taskE/final-measurement/host_requant.elf",
+    "full_i32_readout": true,
+    "gemmini_instructions": 48,
+    "mvout": {
+      "acc_full": 3,
+      "acc_narrow": 0,
+      "spad": 0
+    },
+    "narrow_examples": [],
+    "narrow_readouts": 0,
+    "spike_rc": 0,
+    "stdout_tail": "",
+    "violations": []
+  },
+  "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE/final-measurement/host_requant.elf",
+  "elf_sha256": "da7fbd1fbb4a10350ceb89b850de868d312b34d4214e06c34d7f83831de6fc36",
+  "emitted_object_audits": {
+    "e0_baseline": {
+      "instructions": 166,
+      "no_floating_point_instructions": true,
+      "object_sha256": "4dc57147672a7cc4ce6cc4e7d196a99928945f3651dd9d24643a4dc85332bb51"
+    },
+    "e0_full": {
+      "instructions": 97,
+      "no_floating_point_instructions": true,
+      "object_sha256": "3240e8129f9ce6684013e789f956cabb6e23136511486d6e77e00ed5861fb270"
+    },
+    "e0_magic": {
+      "instructions": 63,
+      "no_floating_point_instructions": true,
+      "object_sha256": "b4750764efe96166c3c1009d6b5b674bba86f2dd123168bbac7aac82d6e5ed50"
+    },
+    "e1_baseline": {
+      "instructions": 115,
+      "no_floating_point_instructions": true,
+      "object_sha256": "890f87a26ce4de0128cae63173e26af54379166aa9105e96041f509ca8f17579"
+    },
+    "e1_full": {
+      "instructions": 87,
+      "no_floating_point_instructions": true,
+      "object_sha256": "f0135ff818d50f3a5dc51449fce99d61acab158462f4ebbb50339545d2aedf53"
+    },
+    "e1_magic": {
+      "instructions": 47,
+      "no_floating_point_instructions": true,
+      "object_sha256": "7070846b128810696b45a9f76d43216bdd1f598eb494b152c48a58356ec556d7"
+    },
+    "e2_baseline": {
+      "instructions": 115,
+      "no_floating_point_instructions": true,
+      "object_sha256": "a1ceaf4d0c7f6184f9a431fc975a920fd38735e187362ded2a057e74b404d75d"
+    },
+    "e2_full": {
+      "instructions": 223,
+      "no_floating_point_instructions": true,
+      "object_sha256": "f7a9621e9992a6a99111a3c571035b2ac019f6aec2adc7ea6f0004c7fca3dde8"
+    },
+    "e2_magic": {
+      "instructions": 183,
+      "no_floating_point_instructions": true,
+      "object_sha256": "30c888553581bda951c532ce0183022f2ad4e9c3cfe54f5dce13bc48bf079c08"
+    }
+  },
+  "implementation_commits": [
+    "610b863",
+    "e53cd50"
+  ],
+  "limitations": [
+    "Host epilogue timings only; neither whole-model nor FireSim cycles.",
+    "Spike cycle deltas use its instruction model; RTL mcycle deltas are hardware cycles.",
+    "Frozen Phase 0 shapes/qparams and generated deterministic reachable int8 inputs, not original suite input bytes.",
+    "Add epilogue static instruction count increases from 115 to 183 despite lower dynamic cycles; all object counts preserved.",
+    "Generic arithmetic prototype must be promoted into Merlin on integration; this task was restricted to the OOT worktree."
+  ],
+  "measurement": "host epilogues only; generated reachable codes; warmed repeated calls/trial; full kernels checked once",
+  "measurement_driver_sha256": "0d60b69b6c584748ac2889331c1bc0c67891a384299cfb84f49eeabc2d6228dc",
+  "merlin_revision_tested": "5ca4f83de2a6b3dcf05fdd73eaaf2d8bf2662235",
+  "model2mlir_revision_tested": "cb1a3da5800026389444b994fd3779b0ffd28121",
+  "negative_evidence": [
+    "Requested env-gwtE.sh was absent; prepared env-gE.sh points at this worktree and was used with output root overrides.",
+    "Live model2MLIR revision e05e614 differs from the schema pin: 10 setup errors and one capture failure; pinned archival source passed all 127 tests.",
+    "Without the prepared target environment the routing test fails at baseline too; with it the complete suite passes.",
+    "Initial restricted-ISA audit trapped on the cycle CSR; machine-mode mcycle fixed the benchmark harness; final audit completes with rc 0.",
+    "Long provisional RTL trials were interrupted and replaced by ten-call trials, then run with a streaming log and finite cycle cap; no more than one simulation was intentionally active."
+  ],
+  "repetitions": 10,
+  "rtl": {
+    "cycles_per_trial": {
+      "e0_baseline": [
+        1973,
+        1962,
+        1962,
+        1962,
+        1962
+      ],
+      "e0_magic": [
+        1018,
+        956,
+        970,
+        950,
+        950
+      ],
+      "e1_baseline": [
+        13251,
+        13197,
+        13224,
+        13224,
+        13218
+      ],
+      "e1_magic": [
+        4581,
+        4581,
+        4574,
+        4574,
+        4574
+      ],
+      "e2_baseline": [
+        9801,
+        9793,
+        9790,
+        9765,
+        9791
+      ],
+      "e2_magic": [
+        3221,
+        3151,
+        3140,
+        3141,
+        3140
+      ]
+    },
+    "exit_code": 0,
+    "failed": [],
+    "invocation": "rtl_case.py command form; streaming console; same final measurement ELF",
+    "max_cycles": 3000000,
+    "passed": [
+      "e0_full_exact",
+      "e0_baseline_exact",
+      "e0_magic_exact",
+      "e1_full_exact",
+      "e1_baseline_exact",
+      "e1_magic_exact",
+      "e2_full_exact",
+      "e2_baseline_exact",
+      "e2_magic_exact"
+    ],
+    "savings": [
+      {
+        "baseline_cycles_per_call": 196.2,
+        "case": "aten__mean__dim",
+        "cycles_saved_per_call": 100.6,
+        "magic_cycles_per_call": 95.6,
+        "reduction_percent": 51.27420998980632
+      },
+      {
+        "baseline_cycles_per_call": 1322.4,
+        "case": "aten__avg_pool2d__default",
+        "cycles_saved_per_call": 865.0000000000001,
+        "magic_cycles_per_call": 457.4,
+        "reduction_percent": 65.41137326073806
+      },
+      {
+        "baseline_cycles_per_call": 979.1,
+        "case": "aten__add__Tensor",
+        "cycles_saved_per_call": 665.0,
+        "magic_cycles_per_call": 314.1,
+        "reduction_percent": 67.91951792462466
+      }
+    ],
+    "simulator": "/scratch2/loren/chipyard/sims/verilator/simulator-chipyard.harness-GemminiRocketConfig",
+    "status": "PASS"
+  },
+  "spike": {
+    "cycles_per_trial": {
+      "e0_baseline": [
+        1503,
+        1503,
+        1503,
+        1503,
+        1503
+      ],
+      "e0_magic": [
+        523,
+        523,
+        523,
+        523,
+        523
+      ],
+      "e1_baseline": [
+        7553,
+        7553,
+        7553,
+        7553,
+        7553
+      ],
+      "e1_magic": [
+        2353,
+        2353,
+        2353,
+        2353,
+        2353
+      ],
+      "e2_baseline": [
+        5653,
+        5653,
+        5653,
+        5653,
+        5653
+      ],
+      "e2_magic": [
+        1533,
+        1533,
+        1533,
+        1533,
+        1533
+      ]
+    },
+    "failed": [],
+    "passed": [
+      "e0_full_exact",
+      "e0_baseline_exact",
+      "e0_magic_exact",
+      "e1_full_exact",
+      "e1_baseline_exact",
+      "e1_magic_exact",
+      "e2_full_exact",
+      "e2_baseline_exact",
+      "e2_magic_exact"
+    ],
+    "savings": [
+      {
+        "baseline_cycles_per_call": 150.3,
+        "case": "aten__mean__dim",
+        "cycles_saved_per_call": 98.00000000000001,
+        "magic_cycles_per_call": 52.3,
+        "reduction_percent": 65.2029274783766
+      },
+      {
+        "baseline_cycles_per_call": 755.3,
+        "case": "aten__avg_pool2d__default",
+        "cycles_saved_per_call": 520.0,
+        "magic_cycles_per_call": 235.3,
+        "reduction_percent": 68.84681583476764
+      },
+      {
+        "baseline_cycles_per_call": 565.3,
+        "case": "aten__add__Tensor",
+        "cycles_saved_per_call": 411.99999999999994,
+        "magic_cycles_per_call": 153.3,
+        "reduction_percent": 72.8816557580046
+      }
+    ],
+    "seconds": 0.011197566986083984,
+    "status": "PASS"
+  },
+  "tests": [
+    {
+      "command": "PYTHONPATH=/scratch/loren/core-aten-ref/merlin/src /scratch/loren/venvs/gca/bin/python -m pytest tests/core_aten --ignore=tests/core_aten/test_real_model2mlir.py -q",
+      "environment": "prepared env-gE.sh, output roots within out/taskE, GEMMINI_LLVM_BIN configured",
+      "log": "out/taskE/pytest-final.log",
+      "passed": 310,
+      "skipped": 11,
+      "subtests_passed": 103
+    },
+    {
+      "command": "/scratch/loren/core-aten-snap/venvs/m2m-dev/bin/python -m pytest tests/core_aten/test_real_model2mlir.py -q",
+      "environment": "PYTHONPATH points at archived schema-pinned model2MLIR under out/taskE/pinned-model2mlir; MODEL2MLIR_MLIR_TRANSLATE and MODEL2MLIR_CLANG configured",
+      "log": "out/taskE/real-captures-pinned.log",
+      "passed": 127,
+      "skipped": 5
+    },
+    {
+      "command": "/scratch/loren/venvs/gca/bin/python -m pytest tests/core_aten/test_host_magic.py -q",
+      "environment": "GEMMINI_LLVM_BIN configured; includes native multiterm and >64 shift execution",
+      "log": "out/taskE/magic-final.log",
+      "passed": 13
+    }
+  ],
+  "trials": 5
+}
