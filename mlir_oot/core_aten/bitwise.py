@@ -63,6 +63,8 @@ class Selectors(linmap.Region):
 
 
 def match(op):
+    if any(k.startswith('prov.quant.') for k in op.attributes):
+        return None
     if op.name not in CARRIERS or len(op.results) != 1 or not isinstance(op.results[0].type, TensorType):
         return None
     root = op.results[0]

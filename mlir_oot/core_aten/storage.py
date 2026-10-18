@@ -33,10 +33,13 @@ def literal_bytes(value, dtype):
         require(value == int(value), 'nonintegral integer movement literal')
         return (int(value) % (1 << (width * 8))).to_bytes(width, 'little')
     require(dtype in ('f16', 'bf16', 'f32', 'f64'), 'unsupported movement literal: ' + dtype)
-    require(math.isfinite(value), 'nonfinite movement literal has no preserved payload proof')
+    require(not math.isnan(value), 'NaN movement literal has no preserved payload proof')
     exponent_bits, fraction_bits = {'f16': (5, 10), 'bf16': (8, 7),
                                    'f32': (8, 23), 'f64': (11, 52)}[dtype]
     sign = int(math.copysign(1, value) < 0)
+    if math.isinf(value):
+        bits = (sign << (exponent_bits + fraction_bits)) | (((1 << exponent_bits)-1) << fraction_bits)
+        return bits.to_bytes(width, 'little')
     q = abs(Fraction(value))
     if not q:
         bits = sign << (exponent_bits + fraction_bits)

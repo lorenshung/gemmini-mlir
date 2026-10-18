@@ -36,9 +36,16 @@ def test_element_selectors_preserve_opaque_payloads(dtype):
     ('i64', (1 << 60) + 3, '0300000000000010'), ('i1', -1, '01'),
     ('bf16', 1.00390625, '803f'),  # exact halfway rounds to even
     ('bf16', 1.01171875, '823f'),
+    ('bf16', float('inf'), '807f'), ('f16', -float('inf'), '00fc'),
 ])
 def test_literal_storage_is_exact(dtype, value, expected):
     assert literal_bytes(value, dtype).hex() == expected
+
+
+def test_nan_literal_declines_without_a_payload_proof():
+    from mlir_oot.core_aten.match import Decline
+    with pytest.raises(Decline, match='NaN movement literal has no preserved payload proof'):
+        literal_bytes(float('nan'), 'f32')
 
 
 def test_float_add_zero_is_not_bitwise_movement():
