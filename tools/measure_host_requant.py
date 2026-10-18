@@ -33,7 +33,10 @@ def main():
     ap.add_argument('--baseline', type=Path, required=True)
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--rtl', action='store_true')
+    ap.add_argument('--repetitions', type=int, default=10)
+    ap.add_argument('--trials', type=int, default=5)
     args = ap.parse_args()
+    assert args.repetitions > 0 and args.trials > 0
     args.out.mkdir(parents=True, exist_ok=True)
     spec = importlib.util.spec_from_file_location('baseline_host_readout', args.baseline)
     baseline = importlib.util.module_from_spec(spec)
@@ -96,9 +99,9 @@ def main():
         call = f'{sym}({", ".join("ca_"+n for n in bn)});'
         timing.append('  '+call)
         if not sym.endswith('_full'):
-            timing += ['  for (int trial=0; trial<5; ++trial) {',
+            timing += [f'  for (int trial=0; trial<{args.trials}; ++trial) {{',
                        '    uint64_t t0=host_cycles();',
-                       f'    for (int rep=0; rep<100; ++rep) {{ {call} }}',
+                       f'    for (int rep=0; rep<{args.repetitions}; ++rep) {{ {call} }}',
                        '    ca_fence(); uint64_t t1=host_cycles();',
                        f'    printf("PERF {sym} cycles=%lu\\n", (unsigned long)(t1-t0));', '  }']
     text = text[:begin]+'\n'.join(timing)+'\n'+text[end:]
@@ -109,10 +112,10 @@ def main():
         return cpath, args.out/'blobs.S'
     with patch.object(runner, 'write_sources', write):
         elf = runner.build_elf(test, args.out)
-    report = dict(cases=records, repetitions=100, trials=5, elf=str(elf),
+    report = dict(cases=records, repetitions=args.repetitions, trials=args.trials, elf=str(elf),
                   elf_sha256=hashlib.sha256(elf.read_bytes()).hexdigest(),
                   baseline_sha256=hashlib.sha256(args.baseline.read_bytes()).hexdigest(),
-                  measurement='host epilogues only; generated reachable codes; warmed 100 calls/trial; full kernels checked once')
+                  measurement='host epilogues only; generated reachable codes; warmed repeated calls/trial; full kernels checked once')
     for engine, fn in [('spike', runner.run_spike)] + ([('rtl', runner.run_rtl)] if args.rtl else []):
         result = fn(elf)
         (args.out/f'{engine}.log').write_text(result.log)
@@ -121,12 +124,12 @@ def main():
             timings.setdefault(sym, []).append(int(cycles))
         savings = []
         for ordinal, record in enumerate(records):
-            old, new = (median(timings[f'e{ordinal}_{v}'])/100 for v in ('baseline', 'magic'))
+            old, new = (median(timings[f'e{ordinal}_{v}'])/args.repetitions for v in ('baseline', 'magic'))
             savings.append(dict(case=record['case'], baseline_cycles_per_call=old,
                                 magic_cycles_per_call=new, cycles_saved_per_call=old-new,
                                 reduction_percent=100*(old-new)/old))
         report[engine] = dict(status=result.status, passed=result.passed, failed=result.failed,
-                              seconds=result.seconds, cycles_per_100_calls=timings, savings=savings)
+                              seconds=result.seconds, cycles_per_trial=timings, savings=savings)
         (args.out/'measurements.json').write_text(json.dumps(report, indent=2)+'\n')
         print(engine, report[engine], flush=True)
         assert result.ok, result.log[-3000:]

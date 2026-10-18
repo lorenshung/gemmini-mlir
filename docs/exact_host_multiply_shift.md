@@ -92,7 +92,7 @@ mean.dim, avg_pool2d and add.Tensor. It uses their concrete shapes, qparams and
 recorded accumulator bounds. Deterministic generated int8 inputs are checked
 against the independent source oracle. The complete kernels execute once;
 paired old/new host-only epilogues then process the same resulting int32 tiles.
-Each timing is five warmed trials of 100 calls, with output equality checked.
+Each timing is five warmed trials of ten calls by default (configurable), with output equality checked.
 The old emitter is loaded from a separate file extracted from the base revision.
 There is no production flag that selects algorithms by workload.
 
