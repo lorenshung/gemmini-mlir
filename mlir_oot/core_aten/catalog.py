@@ -150,16 +150,19 @@ def compile_catalog(source_path: Path, workdir: Path, *, llvm_bin: Path | None =
     if manifest["kernels"]:
         receipt = compile_to_object(device, workdir, llvm_bin=llvm_bin, stem="core_aten")
         manifest["compilation"] = receipt
+        manifest['status'] = 'compiled'
+    else:
+        manifest.update(status='declined', reason='no exact device kernel produced')
     (workdir / "core_aten_catalog.json").write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
 
 def merlin_builder(llvm_bin: Path):
-    """Build function with Merlin's ``catalog_builder`` signature: (prepared, workdir) -> (manifest, object)."""
+    """Return (manifest, object); an empty catalog returns (refusal manifest, None)."""
 
     def build_fn(prepared: Path, workdir: Path):
-        compile_catalog(Path(prepared), Path(workdir), llvm_bin=Path(llvm_bin))
-        return Path(workdir) / "core_aten_catalog.json", Path(workdir) / "core_aten.o"
+        manifest = compile_catalog(Path(prepared), Path(workdir), llvm_bin=Path(llvm_bin))
+        return Path(workdir) / "core_aten_catalog.json", (Path(workdir) / "core_aten.o" if manifest['kernels'] else None)
 
     return build_fn
 

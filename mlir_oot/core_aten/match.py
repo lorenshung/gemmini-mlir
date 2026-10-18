@@ -574,7 +574,7 @@ def match_elementwise(op: Operation) -> Match | None:
 # Epilogue chains after a contraction or reduction: reshapes and affine generics, then Q
 # ---------------------------------------------------------------------------------------------
 
-RESHAPES = ("tensor.collapse_shape", "tensor.expand_shape")
+RESHAPES = ("tensor.collapse_shape", "tensor.expand_shape", "tensor.reshape")
 
 
 @dataclass
@@ -620,6 +620,8 @@ def follow_chain(v: SSAValue) -> Chain:
         if u is None:
             raise Decline("contraction result has several users")
         if u.name in RESHAPES:
+            from .views import reindex_shape
+            reindex_shape(u)
             ch.ops.append(u)
             ch.final = u.results[0]
             continue
@@ -813,6 +815,8 @@ def _through_reshapes(v: SSAValue) -> SSAValue:
         p = producer(v)
         if p is None or p.name not in RESHAPES:
             return v
+        from .views import reindex_shape
+        reindex_shape(p)
         v = p.operands[0]
 
 

@@ -139,3 +139,35 @@ constant and activation placement. Nonoverlapping pool-adjoint index maps can
 also be movement-only; overlapping maps accumulate on the device. Convolution
 backwards on the golden route performs its GEMMs on the device while its
 surrounding patch/fold and bias reductions remain explicit host source work.
+
+## Closed reductions and shape epilogues
+
+A closed Q/DQ linear island can include a zero-seeded sum, a literal rational
+division and a dense `tensor.reshape`, `tensor.collapse_shape` or
+`tensor.expand_shape` before its output quantization. These view operations
+preserve flattened element order, element type and static element count. A
+reshape additionally requires a literal shape tensor equal to its static
+result shape; an unproved dynamic shape operand declines. Expand dimensions
+must be static. The same rule applies to nonscalar outputs and longer chains.
+
+The kernel returns full int32 numerator tiles. The host readout factor retains
+the divisor exactly: for six values with input scale `sx` and output scale
+`sy`, `A = sum(codes)` and `v = A * sx / (6 * sy)`. Neither division nor view
+inserts an intermediate rounding. Named and generic zero-seeded reductions
+use the same contract. Source-bound `admit_numeric_schedule` proofs use
+`abi="gemmini_core_aten_catalog_v1"`, `exact_arithmetic=true`,
+`schedule.readout="full_i32"`,
+`schedule.requantization="exact_rational_host_epilogue"` and the catalog's
+exact `requantization` records. The proof checks the actual integer stream,
+accumulator bounds and selected MAC policy. Partial matches do not establish
+coverage of a separate live arithmetic producer. Input Q and final DQ remain
+host boundary operations; the bound reduction, division, views and output Q
+are replaced by the integer kernel plus this exact host readout ABI.
+
+An empty catalog is an explicit refusal manifest with `status="declined"`,
+`reason="no exact device kernel produced"`, no kernels/bindings and no
+`compilation` receipt. `core_aten_catalog` and `catalog.merlin_builder` return
+`(manifest_path, None)` in that case. `core_aten_offload` returns
+`(None, None, None, manifest_path)` and emits no model or shim. Callers must
+handle the absent artifacts as a device refusal; a preexisting object in the
+work directory does not make it a successful compilation.

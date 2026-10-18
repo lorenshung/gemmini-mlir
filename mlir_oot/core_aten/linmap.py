@@ -279,9 +279,13 @@ class Region:
                     coefficients[position] = np.asarray(coefficient).item()
                     terms.append((sid, indices.reshape(shp), coefficients.reshape(shp)))
             return Sym(terms, np.asarray(constants, dtype=object).reshape(shp))
-        if nm in ("tensor.collapse_shape", "tensor.expand_shape", "tensor.cast"):
+        if nm in ("tensor.reshape", "tensor.collapse_shape", "tensor.expand_shape", "tensor.cast"):
+            from .views import reindex_shape
+            try:
+                shp = reindex_shape(op)
+            except ValueError as exc:
+                raise NotLinear(str(exc)) from exc
             x = self.tensor(op.operands[0])
-            shp = _shape(op.results[0])
             if isinstance(x, Scatter):
                 return Scatter(shp, x.base.reshape(shp) if isinstance(x.base, Sym) else np.asarray(x.base).reshape(shp),
                                x.updates)

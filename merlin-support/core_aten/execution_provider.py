@@ -99,16 +99,17 @@ def _core_aten_module(package, name):
 def core_aten_catalog(prepared, workdir, *, package, llvm_bin=None):
     """Bind and compile the exactly implementable Core ATen regions of ``prepared``.
 
-    Returns (manifest path, object path).  The manifest (schema gemmini_core_aten_catalog_v1)
+    Returns (manifest path, object path), or (manifest path, None) when declined.
+    The manifest (schema gemmini_core_aten_catalog_v1)
     lists each kernel's argument table and each binding's root ordinal, replaced ordinals and
     operand sources; regions it cannot implement exactly are listed under ``declines``.  This is
     opt-in beside ``routing``: the integer GEMM catalog and its bindings are unchanged.
     """
     catalog = _core_aten_module(package, "catalog")
     workdir = Path(workdir)
-    catalog.compile_catalog(Path(prepared), workdir,
+    manifest = catalog.compile_catalog(Path(prepared), workdir,
                             llvm_bin=Path(llvm_bin) if llvm_bin else toolchain.llvm_install() / "bin")
-    return workdir / "core_aten_catalog.json", workdir / "core_aten.o"
+    return workdir / "core_aten_catalog.json", (workdir / "core_aten.o" if manifest['kernels'] else None)
 
 
 def core_aten_offload(prepared, workdir, *, package, llvm_bin=None):
@@ -118,10 +119,14 @@ def core_aten_offload(prepared, workdir, *, package, llvm_bin=None):
     function-boundary bufferization and ``llvm.emit_c_interface`` lowering, the rewritten model calls
     ``_mlir_ciface_ca_<symbol>``, which the shim defines over the kernel object.  The host image
     must link both (and provide malloc for the call results' destinations).
+    With no kernel, returns (None, None, None, refusal manifest) without emitting
+    rewritten/shim files. Callers must inspect this refusal before linking.
     """
     import json
 
     manifest_path, obj = core_aten_catalog(prepared, workdir, package=package, llvm_bin=llvm_bin)
+    if obj is None:
+        return None, None, None, manifest_path
     offload = _core_aten_module(package, "offload")
     manifest = json.loads(Path(manifest_path).read_text())
     workdir = Path(workdir)
@@ -163,7 +168,7 @@ def full_call_oracle(target):
 
 
 def admit_numeric_schedule(source, *, package, numeric_policy):
-    """Prove the actual default catalog's WS primitive and i32 aggregation bounds."""
+    """Prove the selected integer stream and its complete source-bound region."""
     from merlin.targetgen.operation_numerics import integer_split_k_limit
 
     if numeric_policy is None:
@@ -180,10 +185,15 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
     regions = _core_aten_module(package, "integer_regions")
     catalog_module = _core_aten_module(package, "catalog")
     limbs = _core_aten_module(package, "limbs")
-    if limbs.has_limb_plan(catalog_module.parse_module(source)):
+    parsed = catalog_module.parse_module(source)
+    if limbs.has_limb_plan(parsed):
         return _admit_limb_regions(source, package=package, numeric_policy=numeric_policy)
-    if regions.has_integer_readout(catalog_module.parse_module(source)):
+    if regions.has_integer_readout(parsed):
         return _admit_integer_regions(source, package=package, numeric_policy=numeric_policy)
+    if any(getattr(getattr(o, 'op_name', None), 'data', o.name).startswith('quant_ext.') for o in parsed.walk()):
+        proof = _admit_quantized_linear_regions(source, package=package, numeric_policy=numeric_policy)
+        if proof is not None:
+            return proof
     identity = hashlib.sha256(str(Path(package).resolve()).encode()).hexdigest()
     backend = load_module(package, "mlir_oot.golden_device_catalog", package_name=f"core_aten_backend_{identity}")
     _, catalog = backend.build_catalog(source)
@@ -263,8 +273,64 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
             )
         )
     if not proofs or not catalog["coverage_complete"]:
-        raise ValueError("provider did not cover every proposed integer contraction")
+        return dict(status='declined', reason='provider did not cover every proposed integer contraction',
+                    source_sha256=catalog['source_sha256'], kernels=[], bindings=[])
     return dict(status="proven", source_sha256=catalog["source_sha256"], kernels=proofs, bindings=catalog["bindings"])
+
+
+def _admit_quantized_linear_regions(source, *, package, numeric_policy):
+    """Authenticate closed rational linear islands, not their Q/DQ boundaries alone."""
+    from merlin.targetgen.operation_numerics import integer_split_k_limit
+    catalog_module = _core_aten_module(package, 'catalog')
+    _, catalog, matches = catalog_module.build(source)
+    if not any(m.kernel.meta.get('form') == 'exact_linear_i32' or 'reduced' in m.kernel.meta for m in matches):
+        return None
+    parsed = catalog_module.parse_module(source)
+    operations = list(parsed.walk())
+    live = _core_aten_module(package, 'liveness').live_source_ops(parsed)
+    covered = {ordinal for b in catalog['bindings'] for ordinal in b['replaced_ordinals']}
+    def decline(reason):
+        return dict(status='declined', reason=reason, source_sha256=catalog['source_sha256'],
+                    kernels=[], bindings=[], declines=catalog['declines'])
+    # A partial linear match must not hide another live arithmetic producer.
+    if any(o in live and o.name.startswith('linalg.') and o.name not in ('linalg.yield', 'linalg.index')
+           and i not in covered for i, o in enumerate(operations)):
+        return decline('provider did not cover every live quantized arithmetic producer')
+    proofs = {}
+    kernels = {k['symbol']: k for k in catalog['kernels']}
+    for binding, match in zip(catalog['bindings'], matches):
+        meta, stream = match.kernel.meta, match.kernel.stream
+        if not (meta.get('form') == 'exact_linear_i32' or 'reduced' in meta):
+            return decline('closed linear proof cannot authenticate a different numeric schedule')
+        try:
+            bound = integer_split_k_limit(numeric_policy, tile_dim=16, full_k=1)
+        except ValueError as exc:
+            return decline(str(exc))
+        if bound is None or bound['signed_operand_bits'] != 8:
+            return decline('no reviewed signed integer MAC bound for closed linear schedule')
+        intervals = meta.get('accumulator_bounds') or [dict(accumulator_min=meta.get('accumulator_min'),
+                                                        accumulator_max=meta.get('accumulator_max'))]
+        computes = [i for i in stream.ins if i.kind == 'compute']
+        stores = [i for i in stream.ins if i.kind == 'mvout']
+        if (not stream.readouts or not stores
+                or any(not i.a('local') & (1 << 29) for i in stores)
+                or any(i.a('scale') != 1 for i in stream.ins if i.kind == 'config_ld')
+                or any(i.a('acc_scale') != 1 for i in stream.ins if i.kind == 'config_st')
+                or any(i.a('dataflow') != 1 for i in stream.ins if i.kind == 'config_ex')
+                or any(i.a('a_cols') > 16 or i.a('bd') != 0xffffffff
+                       or i.a('a_cols') * bound['maximum_product'] > (1 << (bound['mac_result_bits']-1))-1
+                       for i in computes)
+                or any(type(row.get('accumulator_min')) is not int or type(row.get('accumulator_max')) is not int
+                       or not -(1 << 31) <= row['accumulator_min'] <= row['accumulator_max'] < (1 << 31)
+                       for row in intervals)):
+            return decline('closed linear schedule exceeds selected exact MAC/readout contract')
+        proofs[binding['symbol']] = dict(symbol=binding['symbol'], status='proven', exact_arithmetic=True,
+            device_readout='full_i32', schedule={**meta, 'readout':'full_i32',
+                'requantization':'exact_rational_host_epilogue'}, bound=bound,
+            requantization=kernels[binding['symbol']]['requantization'],
+            emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest())
+    return dict(status='proven', source_sha256=catalog['source_sha256'], kernels=list(proofs.values()),
+                bindings=catalog['bindings'], declines=catalog['declines'], abi='gemmini_core_aten_catalog_v1')
 
 
 def _admit_limb_regions(source, *, package, numeric_policy):
@@ -351,6 +417,7 @@ def _admit_integer_regions(source, *, package, numeric_policy):
             accumulator_min=match.kernel.meta["accumulator_min"], accumulator_max=match.kernel.meta["accumulator_max"],
             emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest()))
     if not proofs:
-        raise ValueError("provider did not cover any exact seeded readout region: " + str(catalog["declines"]))
+        return dict(status='declined', reason='provider did not cover any exact seeded readout region',
+                    source_sha256=catalog['source_sha256'], kernels=[], bindings=[], declines=catalog['declines'])
     return dict(status="proven", source_sha256=catalog["source_sha256"], kernels=proofs,
                 bindings=catalog["bindings"], declines=catalog["declines"], abi="gemmini_core_aten_catalog_v1")
