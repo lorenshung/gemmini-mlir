@@ -127,7 +127,7 @@ def shim_source(manifest: dict) -> str:
             if a["role"] == "scratch":
                 call.append(f"{sym}__{a['name']}")
             else:
-                call.append(f"(void *)({_CT[a['dtype']]} *){a['name']}->aligned + {a['name']}->offset")
+                call.append(f"(void *)(({_CT[a['dtype']]} *){a['name']}->aligned + {a['name']}->offset)")
         body.append(f"  {sym}({', '.join(call)});")
         body.append(f"  *result = *{out['name']};")
         body.append("}")

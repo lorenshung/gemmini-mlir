@@ -81,9 +81,9 @@ def cases(representative: bool = False) -> dict[str, dict]:
     cs["ws_avg_pool2d"] = _one("WINDOW_SUM", {"A": N}, (B, H // 2, W // 2, C), dict(
         mode="window", kernel=[3, 3], stride=[2, 2], padding=[1, 1], count_include_pad=False,
         readout_scale=0.93, output_dtype="i8"))
-    cs["ws_avg_pool2d_ceil_div"] = _one("WINDOW_SUM", {"A": N}, (B, (H - 2 + 1) // 2 + 1, (W - 2 + 1) // 2 + 1, C), dict(
+    cs["ws_avg_pool2d_ceil_div"] = _one("WINDOW_SUM", {"A": (B, H + 1, W + 1, C)}, (B, H // 2 + 1, W // 2 + 1, C), dict(
         mode="window", kernel=[2, 2], stride=[2, 2], padding=[0, 0], count_include_pad=True, ceil_mode=True,
-        divisor_override=3, readout_scale=0.5, output_dtype="i8")) if (H % 2) else None
+        divisor_override=3, readout_scale=0.5, output_dtype="i8"))
     cs["ws_avg_pool1d_nchw"] = _one("WINDOW_SUM", {"A": (B, C, 4 * W)}, (B, C, 2 * W), dict(
         mode="window", kernel=[2], stride=[2], padding=[0], count_include_pad=True, layout="nchw",
         readout_scale=1.1, output_dtype="i8"))

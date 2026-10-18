@@ -41,6 +41,8 @@ class Src:
 
 
 def gather_jobs(lm: LinearMap, srcs: dict[int, Src], s_out: float, out: str) -> list[mv.Copy]:
+    if any(d <= 0 for d in lm.out_shape) or any(any(d <= 0 for d in src.shape) for src in srcs.values()):
+        raise Decline("empty or dynamic gather shape")
     shp = lm.out_shape
     n = int(np.prod(shp)) if shp else 1
     cnt = np.bincount(lm.out, minlength=n)

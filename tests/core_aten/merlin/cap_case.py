@@ -6,7 +6,6 @@ dequantized result followed by its tensor inputs.
 """
 import json, sys
 import numpy as np, torch
-sys.path.insert(0, "/scratch/loren/core-aten-ref/model2mlir")
 import torch.ao.quantization.fx._decomposed  # noqa
 import m2m
 QD = torch.ops.quantized_decomposed

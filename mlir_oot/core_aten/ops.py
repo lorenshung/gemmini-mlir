@@ -38,6 +38,9 @@ def _numel(shape) -> int:
 
 
 def _begin(args) -> Stream:
+    from .match import Decline
+    if any(any(d <= 0 for d in a.shape) for a in args):
+        raise Decline("empty or dynamic tensor shape")
     s = Stream(list(args))
     s.fence()
     s.flush()
@@ -253,7 +256,12 @@ def add_scalar(op: str, shape, c: float, *, s_x: float, s_out: float, w: float =
 def mean_dim(shape, dims, keepdim: bool, *, s_x: float, s_out: float, w: float | None = None,
              op: str = "aten.mean.dim") -> Kernel:
     """sum (w = 1) or mean (w = 1 / L, the default) over dims, one readout scale w s_x / s_out."""
+    from .match import Decline
+    if any(d <= 0 for d in shape):
+        raise Decline("empty or dynamic reduction shape")
     r = len(shape)
+    if not r or not dims or any(d < -r or d >= r for d in dims) or len(set(d % r for d in dims)) != len(dims):
+        raise Decline("reduction needs nonempty, unique, in-range dimensions")
     dims = sorted(d % r for d in dims)
     # size-1 dims never break contiguity of the reduced block
     eff = [d for d in dims if shape[d] != 1] or dims[:1]

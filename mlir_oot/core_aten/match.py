@@ -1318,6 +1318,9 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     for ordinal, op in enumerate(module.walk()):
         if id(op) in taken:
             continue
+        if any(any(d <= 0 for d in shape(v)) for v in (*op.operands, *op.results) if shape(v) is not None):
+            declines.append(dict(ordinal=ordinal, op=op.name, reason="empty or dynamic tensor shape", aten=""))
+            continue
         for fn in MATCHERS:
             try:
                 m = fn(op)
