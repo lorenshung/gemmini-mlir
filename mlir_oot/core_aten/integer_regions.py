@@ -1,4 +1,4 @@
-"""Source-bound seeded integer MAC plus exact Gemmini narrowing readout.
+"""Source-bound seeded integer MAC with full-width readout and retained host quantization.
 
 Only a checked closed body grants semantics. Provenance describes bindings but
 never substitutes for that check. Unbounded runtime seeds stay on the host:
@@ -83,7 +83,8 @@ def match_integer_region(op):
     if selected is None:
         return None
     reader, scale, relu = selected
-    require(dims.batch == 1 and len(shape(op.operands[0])) == 2, 'seeded readout batching is not implemented')
+    rank = len(shape(op.operands[0]))
+    batch = dims.batch if rank == 3 else 0
     seed = op.operands[2]
     consumed = [op]
     bias = not _zero_init(seed)
@@ -96,7 +97,7 @@ def match_integer_region(op):
         seed_op = producer(seed)
         if seed_op is not None and seed_op.name == 'linalg.broadcast':
             dimensions = list(seed_op.properties['dimensions'].iter_values())
-            require(dimensions == [0] and shape(seed_op.operands[0]) == (dims.n,), 'non-channel seed broadcast')
+            require(dimensions == list(range(rank - 1)) and shape(seed_op.operands[0]) == (dims.n,), 'non-channel seed broadcast')
             consumed.append(seed_op)
             seed = seed_op.operands[0]
             bias_rows = False
@@ -120,10 +121,10 @@ def match_integer_region(op):
             values = np.asarray(values, np.int32)
         else:
             runtime_seed = seed
-    kernel = ops.matmul('aten.addmm.default' if bias else 'aten.mm.default', dims.m, dims.k, dims.n,
-                        s_out=None, bias=bias, bias_const=values,
+    kernel = ops.matmul('aten.bmm.default' if batch else 'aten.addmm.default' if bias else 'aten.mm.default', dims.m, dims.k, dims.n,
+                        batch=batch, s_out=None, bias=bias, bias_const=values,
                         bias_rows=bias_rows, relu=relu, bias_range=guarded_range)
-    kernel.meta.update(integer_readout=True, dimensions=dict(batch=1,m=dims.m,n=dims.n,k=dims.k),
+    kernel.meta.update(integer_readout=True, dimensions=dict(batch=dims.batch,m=dims.m,n=dims.n,k=dims.k),
                        seed=('guarded_runtime' if runtime_seed is not None else 'constant') if bias else 'zero')
     kernel.meta.update(readout="full_i32", requantization="retained_source_exact_integer",
                        scale_numerator=[str(v.numerator) for v in scale],scale_denominator=[str(v.denominator) for v in scale])

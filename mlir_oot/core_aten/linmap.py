@@ -55,11 +55,11 @@ class Sym:
         return Sym(list(self.terms), self.const + k * np.asarray(other, object))
 
     def take(self, index):
-        return Sym([(s, i[index], c[index]) for s, i, c in self.terms], np.asarray(self.const)[index]
+        return Sym([(s, np.asarray(i)[index], np.broadcast_to(c, np.shape(i))[index]) for s, i, c in self.terms], np.asarray(self.const)[index]
                    if np.ndim(self.const) else self.const)
 
     def reshape(self, shp):
-        return Sym([(s, i.reshape(shp), c.reshape(shp)) for s, i, c in self.terms],
+        return Sym([(s, np.asarray(i).reshape(shp), np.broadcast_to(c, np.shape(i)).reshape(shp)) for s, i, c in self.terms],
                    np.asarray(self.const).reshape(shp) if np.ndim(self.const) else np.full(shp, self.const))
 
     def compact(self):
@@ -210,6 +210,29 @@ class Region:
             return np.full(_shape(op.results[0]), s)
         if nm == "tensor.empty":
             return np.zeros(_shape(op.results[0]), dtype=object)
+        if nm == "tensor.extract":
+            return self._scalar(op, [self.tensor(v) for v in op.operands], {}, [], np.asarray(True))
+        if nm == "tensor.from_elements":
+            shp = _shape(op.results[0])
+            values = [self.tensor(v) for v in op.operands]
+            if any((v.shape if isinstance(v, Sym) else np.shape(v)) != () for v in values):
+                raise NotLinear("from_elements requires scalar elements")
+            if not any(isinstance(v, Sym) for v in values):
+                return np.asarray(values, dtype=object).reshape(shp)
+            # Embed each scalar linear form in its own output element. This
+            # covers rank-zero reduction readouts and general scalar assembly.
+            terms, constants = [], []
+            for position, value in enumerate(values):
+                if not isinstance(value, Sym):
+                    value = Sym([], value)
+                constants.append(np.asarray(value.const).item())
+                for sid, index, coefficient in value.terms:
+                    indices = np.zeros(len(values), dtype=np.int64)
+                    coefficients = np.zeros(len(values), dtype=object)
+                    indices[position] = np.asarray(index).item()
+                    coefficients[position] = np.asarray(coefficient).item()
+                    terms.append((sid, indices.reshape(shp), coefficients.reshape(shp)))
+            return Sym(terms, np.asarray(constants, dtype=object).reshape(shp))
         if nm in ("tensor.collapse_shape", "tensor.expand_shape", "tensor.cast"):
             x = self.tensor(op.operands[0])
             shp = _shape(op.results[0])

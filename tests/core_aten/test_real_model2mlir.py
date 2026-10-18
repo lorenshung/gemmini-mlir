@@ -3,6 +3,7 @@
 import importlib.util
 import json
 import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -13,6 +14,133 @@ from mlir_oot.core_aten.catalog import build
 from mlir_oot.core_aten.offload import rewrite
 from mlir_oot.core_aten.stream import simulate, FULL_BIT, ACC_BIT
 from exact_oracle import evaluate
+
+
+@pytest.mark.parametrize('batch,m,k,n', [(1, 2, 17, 3), (3, 17, 33, 19)])
+def test_real_bmm_proof_covers_producer_and_retains_source_readout(batch, m, k, n):
+    torch = pytest.importorskip('torch')
+    m2m = pytest.importorskip('m2m')
+    from m2m.capture.torchao_pipeline import QuantizationConfig
+    from merlin.frontends.linalg_mlir import parse_mlir_text
+    from merlin.targetgen.core_aten_spec_int8 import provider_coverage
+    from mlir_oot.contraction_patterns import match_integer_gemm
+    from mlir_oot.core_aten.lint import lint
+
+    class Bmm(torch.nn.Module):
+        def forward(self, a, b):
+            return torch.ops.aten.bmm.default(a, b)
+
+    converted = m2m.convert(Bmm().eval(), (torch.randn(batch, m, k), torch.randn(batch, k, n)),
+        backend='fx_importer', quantization=QuantizationConfig(scheme='int8_static_act_int8_weight',
+            extra_args={'profile': 'int8_accelerator'}))
+    assert converted.ok, converted.diagnostics
+    module = parse_mlir_text(converted.mlir_text)
+    text = str(module)
+    path = Path(__file__).parents[2] / 'merlin-support/core_aten/execution_provider.py'
+    spec = importlib.util.spec_from_file_location('real_bmm_provider_test', path)
+    provider = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(provider)
+    policy = dict(numerical_semantics=dict(accumulator_dtype='i32', internal_arithmetic=dict(
+        signed_operand_bits=8, mac_result_bits=20, mac_result_overflow='wrap_to_20_bits',
+        full_operation_overflow_policy='bounded_exact_requires_each_partial_sum')))
+    proof = provider.admit_numeric_schedule(text, package=path.parents[2], numeric_policy=policy)
+    contraction, = [op for op in module.walk() if match_integer_gemm(op, require_zero=False)]
+    assert provider_coverage(module, proof, contraction) is None
+    _, manifest, matches = build(text)
+    match, = [m for m in matches if m.kernel.meta.get('integer_readout')]
+    assert match.kernel.meta['dimensions'] == dict(batch=batch, m=m, k=k, n=n)
+    rewritten = rewrite(text, manifest)
+    assert 'prov.quant.arithmetic = "exact"' in rewritten
+    rng = np.random.default_rng(282)
+    feed = dict(a=rng.integers(-128, 128, (batch, m, k), dtype=np.int8),
+                b=rng.integers(-128, 128, (batch, k, n), dtype=np.int8))
+    lint(match.kernel.stream)
+    assert np.array_equal(simulate(match.kernel.stream, feed)['out'], evaluate(match, feed)['out'])
+
+
+READINESS = ['add_Scalar', 'sub_Scalar', '_to_copy_f64', 'full_like_f64', 'fill_Scalar',
+    'repeat', 'avg_pool3d', '_adaptive_avg_pool3d', 'avg_pool2d_backward',
+    '_adaptive_avg_pool2d_backward', 'col2im', 'reflection_pad1d', 'reflection_pad2d',
+    'reflection_pad3d', 'replication_pad2d', 'replication_pad3d', 'convolution_backward',
+    'mean_all_dims', 'mean_all_keepdim', 'mean_all']
+
+
+@pytest.fixture(scope='module')
+def readiness_cases():
+    pytest.importorskip('m2m')
+    torch = pytest.importorskip('torch')
+    sys.path.insert(0, str(Path(__file__).parent / 'e2e'))
+    from capture_rtl import rtl_set
+    from capture import case, rnd, A, QD
+    class FloatWidth(torch.nn.Module):
+        # Match the lane's code copy/fill boundary: Q/DQ uses f32, while
+        # the requested float-width conversion and returned dtype remain f64.
+        def __init__(self, fill):
+            super().__init__()
+            self.fill = fill
+
+        def forward(self, codes):
+            x = QD.dequantize_per_tensor(codes, 0.03125, 0, -128, 127, torch.int8)
+            wide = (A.full_like.default(x, 0.75, dtype=torch.float64) if self.fill else
+                    A._to_copy.default(x, dtype=torch.float64))
+            codes = QD.quantize_per_tensor(wide.float(), 0.03125, 0, -128, 127, torch.int8)
+            return QD.dequantize_per_tensor(codes, 0.03125, 0, -128, 127, torch.int8).double()
+    cases = rtl_set()
+    cases += [
+        ('_to_copy_f64', FloatWidth(False), [torch.arange(-7, 8, dtype=torch.int8).reshape(3, 5)]),
+        ('full_like_f64', FloatWidth(True), [torch.arange(-7, 8, dtype=torch.int8).reshape(3, 5)]),
+        case('mean_all_dims', lambda x: A.mean.dim(x, [0, 1]), [rnd(3, 5)]),
+        case('mean_all_keepdim', lambda x: A.mean.dim(x, [0, 1], True), [rnd(3, 5)]),
+        case('mean_all', lambda x: A.mean.default(x), [rnd(3, 5)]),
+    ]
+    return {name: (model, inputs) for name, model, inputs in cases if name in READINESS}
+
+
+@pytest.mark.parametrize('name', READINESS)
+def test_real_readiness_capture_is_exact_with_unit_device_scales(name, readiness_cases):
+    import m2m
+    from mlir_oot.frontend.parse import parse_module
+    from exact_oracle import SourceOracle
+    model, inputs = readiness_cases[name]
+    converted = m2m.convert(model.eval(), tuple(inputs), backend='fx_importer')
+    assert converted.ok, converted.diagnostics
+    text = converted.mlir_text
+    module = parse_module(text)
+    ordinals = {op: i for i, op in enumerate(module.walk())}
+    fn = next(op for op in module.walk() if op.name == 'func.func')
+    arguments = list(fn.body.blocks[0].args)
+    values = {('arg', i): x.numpy() for i, x in enumerate(inputs)}
+    def key(value):
+        return ('arg', arguments.index(value)) if value in arguments else ('op', ordinals[value.owner], list(value.owner.results).index(value))
+    def source_key(source):
+        return ('arg', source['func_arg']) if 'func_arg' in source else ('op', source['op_ordinal'], source['result'])
+    oracle = SourceOracle({arg: np.asarray(x.numpy(), dtype=object) for arg, x in zip(arguments, inputs)})
+    offloaded_oracle = SourceOracle({arg: np.asarray(x.numpy(), dtype=object) for arg, x in zip(arguments, inputs)})
+    def source_value(source):
+        return arguments[source['func_arg']] if 'func_arg' in source else list(module.walk())[source['op_ordinal']].results[source['result']]
+    _, manifest, matches = build(text)
+    assert matches, manifest['declines']
+    for binding, match in zip(manifest['bindings'], matches):
+        feed = {name: values[source_key(src)] if source_key(src) in values else
+                np.asarray(oracle.tensor(source_value(src)), dtype=np.int64).astype(np.int8)
+                for name, src in binding['operands'].items()}
+        actual = simulate(match.kernel.stream, feed)[match.result[0]]
+        assert np.array_equal(actual, evaluate(match, feed)[match.result[0]])
+        result_source, = binding['result'].values()
+        values[source_key(result_source)] = actual
+        offloaded_oracle.memo[source_value(result_source)] = actual.astype(object)
+        assert all(i.a('scale') == 1 for i in match.kernel.stream.ins if i.kind == 'config_ld')
+        assert all(i.a('acc_scale') == 1 for i in match.kernel.stream.ins if i.kind == 'config_st')
+        assert all(i.a('local') & FULL_BIT for i in match.kernel.stream.ins if i.kind == 'mvout' and i.a('local') & ACC_BIT)
+    ret = next(op for op in fn.walk() if op.name == 'func.return')
+    for value in ret.operands:
+        if name in ('_to_copy_f64', 'full_like_f64'):
+            assert str(value.type.get_element_type()) == 'f64'
+            assert np.array_equal(offloaded_oracle.tensor(value), oracle.tensor(value))
+        else:
+            assert key(value) in values, manifest['declines']
+            expected = np.asarray(oracle.tensor(value), dtype=np.int64).astype(values[key(value)].dtype)
+            assert np.array_equal(values[key(value)], expected)
 
 
 @pytest.fixture(scope="module", params=[False, True], ids=["no_bias", "bias"])

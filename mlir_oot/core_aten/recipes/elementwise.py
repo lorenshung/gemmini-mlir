@@ -65,12 +65,13 @@ def lincomb(s: Stream, terms: list[tuple[str, int, list[int]]], out: str, M: int
     if not parts or len(parts) > 12 or any(not -127 <= c <= 127 or c == 0 for _, c in parts):
         raise ValueError("lincomb needs 1..12 nonzero int8 weight parts")
     ld_out = N if out_stride is None else out_stride
-    if "eye16" not in s._index:
-        s.const("eye16", np.eye(DIM, dtype=np.int8))
     s.config_ex()
     for p, (_, c) in enumerate(parts):
-        s.config_ld(1, DIM, float(c))
-        s.mvin(s.at("eye16"), SP(16 * p), DIM, DIM, 1)
+        name = f"weight_eye_{c}"
+        if name not in s._index:
+            s.const(name, np.eye(DIM, dtype=np.int8) * c)
+        s.config_ld(1, DIM, 1.0)
+        s.mvin(s.at(name), SP(16 * p), DIM, DIM, 1)
     if bias is not None:
         name = f"brow{bias}".replace("-", "m")
         if name not in s._index:

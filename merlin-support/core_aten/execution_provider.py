@@ -164,6 +164,17 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
     """Prove the actual default catalog's WS primitive and i32 aggregation bounds."""
     from merlin.targetgen.operation_numerics import integer_split_k_limit
 
+    if numeric_policy is None:
+        # Standalone callers may use the same explicitly selected declaration
+        # as the real lane. Never infer internal MAC arithmetic from a name.
+        import os
+        from merlin.targetgen.software_spec import load_software_spec
+        selected = os.environ.get('MERLIN_CORE_ATEN_SOFTWARE_SPEC')
+        if not selected:
+            return dict(status='declined', reason='no selected numerical policy; pass numeric_policy or set MERLIN_CORE_ATEN_SOFTWARE_SPEC',
+                        source_sha256=hashlib.sha256(source.encode()).hexdigest(), kernels=[], bindings=[])
+        numeric_policy = load_software_spec(Path(selected), target=TARGET)
+
     regions = _core_aten_module(package, "integer_regions")
     catalog_module = _core_aten_module(package, "catalog")
     if regions.has_integer_readout(catalog_module.parse_module(source)):

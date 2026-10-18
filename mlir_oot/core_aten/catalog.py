@@ -30,7 +30,7 @@ from xdsl.ir import BlockArgument
 
 from ..frontend.parse import parse_module
 from .emit import build_module, compile_to_object, encode
-from .lint import lint
+from .lint import HazardError, lint
 from .match import match_all
 
 SCHEMA = "gemmini_core_aten_catalog_v1"
@@ -66,8 +66,15 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
     kernels: dict[str, dict] = {}
     device = ModuleOp([])
     bindings = []
+    accepted = []
     for m in matches:
-        report = lint(m.kernel.stream)
+        try:
+            report = lint(m.kernel.stream)
+        except HazardError as exc:
+            declines.append(dict(ordinal=ordinals[m.root], op=m.root.name,
+                                 reason='unsafe device schedule: ' + str(exc), aten=m.op))
+            continue
+        accepted.append(m)
         digest = _stream_digest(m.kernel)
         symbol = "gemmini_ca_" + digest[:16]
         if symbol not in kernels:
@@ -101,7 +108,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                              quantization="int8/uint8 storage, exact integer device math, full-i32 readout; one exact rational host RNE, then zero point and declared clamp"),
                     kernels=list(kernels.values()), bindings=bindings, declines=declines,
                     matched=len(bindings), unique_kernels=len(kernels))
-    return device, manifest, matches
+    return device, manifest, accepted
 
 
 def _readout_contracts(stream):

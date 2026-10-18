@@ -337,7 +337,7 @@ def simulate(stream: Stream, inputs: dict[str, np.ndarray]) -> dict[str, np.ndar
             data = np.asarray(inputs[arg.name])
         else:
             data = np.full(arg.shape, 0x5A if dt is np.int8 else 0x5A5A5A5A, dt)
-        buffers[i] = np.ascontiguousarray(data.astype(dt).reshape(arg.shape)).copy()
+        buffers[i] = np.ascontiguousarray(data.astype(dt)).reshape(arg.shape).copy()
     for source,dest in stream.packs:
         buffers[stream._index[dest]].view(np.uint8).flat[:] = buffers[stream._index[source]].view(np.uint8).reshape(-1) ^ 128
     from dataclasses import replace

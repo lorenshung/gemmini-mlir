@@ -6,14 +6,14 @@ These are the ``_lib_movement.py`` recipes (``mv_copy2d[_multi]``, ``mv_vec``, `
 * a copy job moves an int8 [rows x cols] block, source row stride ``sld`` bytes, to one or
   more destinations with row stride ``dld``; every <=16x16 tile is one MVIN and one MVOUT
   per destination, through four rotating scratchpad tiles (rows < 1024 so Spike can store
-  them).  A copy may requantize with one MVIN-scale rounding (independent qparams, Q8).
+  them). Production copies retain integer codes; requantization uses the exact host boundary.
 * a fill job stores a 16x16 constant tile: the zero-fill primitive for code 0, otherwise a
-  stride-0 MVIN of a ones row with the code as the MVIN scale (``mv_fill2d``).
+  stride-0 MVIN of literal integer codes with unit scale.
 * jobs are grouped in stages; a fence separates stages whose DMA ranges overlap (a fill
   then the interior copy, a copy of ``self`` then the scattered ``src``, or a stage that
   reads output bytes a previous stage wrote): the reservation station does not order DRAM.
-* the column (inner) DMA stride is always one element (C1).  A permutation that moves the
-  innermost dimension goes through the transposer (WS, ``a_transpose``, B = I).
+* the column (inner) DMA stride is always one element (C1). A permutation that moves the
+  innermost dimension gathers one-element columns with strided DMA.
 """
 
 from __future__ import annotations
@@ -23,11 +23,10 @@ from itertools import product
 
 import numpy as np
 
-from ..stream import ACC, DIM, NO_ACT, SP, Stream
+from ..stream import ACC, DIM, SP, Stream
 
 SLOTS = (0, 16, 32, 48)          # rotating copy tiles
 FILL_SLOT = 64
-T_IDENT, T_SLOT0 = 128, 144      # transposer identity and operand tiles
 
 
 @dataclass
@@ -97,13 +96,14 @@ def emit_plan(s: Stream, plan: Plan) -> None:
                             ld = cfg
                         s.mvin(None, SP(FILL_SLOT), DIM, DIM, 0)
                     else:
-                        if "ones16" not in s._index:
-                            s.const("ones16", np.ones(DIM, np.int8))
-                        cfg = (0, float(job.code))
+                        name = f"fill_code_{job.code}"
+                        if name not in s._index:
+                            s.const(name, np.full(DIM, job.code, np.int8))
+                        cfg = (0, 1.0)
                         if ld != cfg:
-                            s.config_ld(0, 0, float(job.code))
+                            s.config_ld(0, 0, 1.0)
                             ld = cfg
-                        s.mvin(s.at("ones16"), SP(FILL_SLOT), DIM, DIM, 0)
+                        s.mvin(s.at(name), SP(FILL_SLOT), DIM, DIM, 0)
                     fill_code = job.code
             else:
                 cfg = (job.sld, job.scale)
@@ -261,42 +261,31 @@ def permute_plan(x: str, shape, out: str, perm, scale=1.0):
 
 
 def emit_transpose(s: Stream, x: str, shape, out: str, perm, scale=1.0):
-    """Permutation moving the innermost input dim: 2-D transposes through the transposer.
+    """Move a permutation's innermost output axis with strided byte DMA.
 
-    dst tile = src tile^T with src rows = input dim p (= the output's innermost dim) and
-    src cols = the innermost input dim (contiguous).  Readout through the accumulator at
-    ``scale`` (one RNE when requantizing).
+    Each DMA gathers a column of up to DIM source elements into scratchpad
+    rows, then writes those bytes contiguously. This avoids accumulator
+    narrowing even for layout conversions inside a contraction schedule.
     """
+    from ..exactness import require
+    require(scale == 1, "permutation scaling requires exact host requantization")
     r = len(shape)
     oshape = [shape[q] for q in perm]
     ist, ost = strides(shape), strides(oshape)
     p = perm[-1]
-    pos_last = perm.index(r - 1)          # output position of the innermost input dim
-    others = [d for d in range(r) if d not in (p, r - 1)]
-    if "eye16" not in s._index:
-        s.const("eye16", np.eye(DIM, dtype=np.int8))
-    s.config_ex(a_transpose=1)
-    s.config_ld(1, DIM)
+    others = [d for d in range(r) if d != p]
     s.config_ld(0, ist[p], 1.0)
-    s.config_st(ost[pos_last], NO_ACT, scale)
-    s.mvin(s.at("eye16"), SP(T_IDENT), DIM, DIM, 1)
+    s.config_st(1)
     t = 0
-    rows_n, cols_n = shape[p], shape[r - 1]
     for idx in _iter([(0, shape[d]) for d in others]):
         so = sum(i * ist[d] for d, i in zip(others, idx))
         do = sum(i * ost[perm.index(d)] for d, i in zip(others, idx))
-        for r0 in range(0, rows_n, DIM):
-            rh = min(DIM, rows_n - r0)
-            for c0 in range(0, cols_n, DIM):
-                cw = min(DIM, cols_n - c0)
-                slot = T_SLOT0 + (t & 3) * DIM
-                acc = (t & 3) * DIM
-                t += 1
-                s.mvin(s.at(x, so + r0 * ist[p] + c0), SP(slot), cw, rh, 0)
-                s.preload(SP(T_IDENT), ACC(acc), DIM, DIM, rh, cw)
-                s.compute(SP(slot), DIM, DIM)
-                s.mvout(s.at(out, do + c0 * ost[pos_last] + r0), ACC(acc), rh, cw)
-    s.config_ex()
+        for start in range(0, shape[p], DIM):
+            rows = min(DIM, shape[p] - start)
+            slot = SLOTS[t & 3]
+            t += 1
+            s.mvin(s.at(x, so + start * ist[p]), SP(slot), 1, rows, 0)
+            s.mvout(s.at(out, do + start), SP(slot), 1, rows)
     return oshape
 
 

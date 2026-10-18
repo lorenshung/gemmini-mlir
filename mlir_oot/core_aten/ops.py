@@ -2,8 +2,8 @@
 
 Quantized outputs use an exact rational CPU epilogue, fenced after the device
 stores. Distinct source scales remain distinct; coefficients are never rounded
-into approximate integer weights. Device instructions use unity data-path scales
-unless their product exactness is explicitly established and recorded.
+into approximate integer weights. These schedules require unity data-path scales
+and full-width accumulator stores.
 """
 
 from __future__ import annotations
@@ -12,14 +12,14 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .exactness import rational as Q, require, prove_readout, accumulator_bound
+from .exactness import rational as Q, require, accumulator_bound
 from .numerics import code, parts127
 from .recipes import elementwise as ew
 from .recipes import movement as mv
 from .recipes import reduce as rd
 from .recipes.conv import ConvGeom, conv2d
 from .recipes.gemm import blocked_matmul
-from .stream import Arg, Stream
+from .stream import ACC_BIT, FULL_BIT, Arg, Stream
 
 
 @dataclass
@@ -52,16 +52,13 @@ def _end(op, s, **meta) -> Kernel:
     s.fence()
     meta.update(device_arithmetic='exact_integer',quantize_rounding='host_exact_rational_RNE' if s.readouts else 'none',
                 device_readout='full_i32' if s.readouts else 'exact_integer_storage')
-    proofs=[]
     for instruction in s.ins:
+        if instruction.kind == 'mvout' and instruction.a('local') & ACC_BIT:
+            require(instruction.a('local') & FULL_BIT, 'accumulator readout requires full int32 width')
         if instruction.kind not in ('config_ld','config_st'): continue
         factor=instruction.a('scale') if instruction.kind=='config_ld' else instruction.a('acc_scale')
-        if factor != 1:
-            require(instruction.kind=='config_ld','nonunit accumulator readout requires an explicit product-exactness proof')
-            prove_readout(Q(factor),-128,127)
-            proofs.append(dict(unit='mvin',factor=str(Q(factor)),input_min=-128,input_max=127,
-                               proof='exact_fp32_conversion_and_product'))
-    meta['fp32_product_proofs']=proofs
+        require(factor == 1, 'nonunit device scale requires an exact integer schedule and host requantization')
+    meta['fp32_product_proofs']=[]
     return Kernel(op, s, meta)
 
 
@@ -115,7 +112,7 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
     out_i32 = True
     args = [Arg("a", "i8", lead + (M, K), "input"), Arg("b", "i8", lead + (K, N), "input")]
     if bias and bias_const is None:
-        args.append(Arg("bias", "i32", (M, N) if bias_rows else (N,), "input"))
+        args.append(Arg("bias", "i32", lead + (M, N) if bias_rows else (N,), "input"))
     args.append(Arg("out", "i32" if out_i32 else "i8", lead + (M, N), "output"))
     s = _begin(args)
     if s_out is not None:
@@ -125,11 +122,14 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
         bname = "bias"
         if bias_const is not None:
             bname = "bias_c"
-            s.const(bname, np.asarray(bias_const, np.int32).reshape((M, N) if bias_rows else (N,)))
+            s.const(bname, np.asarray(bias_const, np.int32).reshape(lead + (M, N) if bias_rows else (N,)))
     scale = 1.0
     for bi in range(B):
+        if bi:
+            # Each batch reuses the same local seed and operand tiles.
+            s.fence()
         blocked_matmul(s, ("a", bi * M * K), K, ("b", bi * K * N), N, ("out", bi * M * N * (4 if out_i32 else 1)), N,
-                       M, K, N, bias=(bname, 0) if bias else None, scale=scale, relu=False, out_i32=out_i32,
+                       M, K, N, bias=(bname, bi * M * N * 4 if bias_rows else 0) if bias else None, scale=scale, relu=False, out_i32=out_i32,
                        configure=bi == 0, bias_rows=bias_rows, bias_repeat=bias_repeat)
     return _end(op, s, readout_scale=scale, accumulator_min=lo, accumulator_max=hi)
 
@@ -344,7 +344,7 @@ def permute(shape, perm, *, s_x=1, s_out=1):
 
 
 def _permute_into(s: Stream, x: str, shape, out: str, perm) -> None:
-    """Emit a permutation of x into out (strided DMA if the innermost dim stays, else the transposer)."""
+    """Emit a byte permutation using strided row or column DMA."""
     perm = list(perm)
     if perm[-1] == len(shape) - 1:
         plan, _ = mv.permute_plan(x, list(shape), out, perm)
@@ -444,6 +444,9 @@ def contraction_zero_points(kernel, qa, qb, M, K, N, batch=0):
         # The mean recipes address dense bases; use a temporary stream then
         # relocate its operand byte offsets for this independent batch.
         for axis,source,dest in [('row',names[0],'row_sum'),('column',names[1],'column_sum')]:
+            # Independent reductions reuse scratchpad rows, including the
+            # ones vector whose tail may not be touched by the last compute.
+            s.fence()
             temporary=Stream(s.args.copy(),consts=s.consts.copy())
             if axis=='row': rd.mean_last(temporary,source,dest,M,K,1,out_i32=True)
             else: rd.mean_middle(temporary,source,dest,1,K,N,1,out_i32=True)
