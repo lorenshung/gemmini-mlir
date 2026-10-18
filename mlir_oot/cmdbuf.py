@@ -19,6 +19,8 @@ _OPCODES = frozenset({
     "RMSNORM", "ATTENTION_QK", "BATCHED_MATMUL", "LAYERNORM", "SOFTMAX", "GELU", "SOFTCAP",
     "GEGLU", "ATTENTION_FULL", "ROPE", "CONV", "MATMUL_BATCHED", "BIAS_ADD", "CONV2D",
     "MOVEMENT", "ATTENTION_PV",
+    # v0.1 extensions (Merlin 74bd4290, cc50cc01)
+    "AFFINE_MAP", "CONCAT", "INSERT_SLICE", "FILL", "FENCE", "WINDOW_SUM",
 })
 
 _EPILOGUE = frozenset({"bias_add", "bias", "requant", "acc_scale", "relu", "maxpool"})

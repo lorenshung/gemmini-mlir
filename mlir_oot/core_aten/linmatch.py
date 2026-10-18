@@ -188,7 +188,10 @@ def _refine(lm: LinearMap, in_shape, out_shape):
     return tuple(shape)
 
 
-def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float) -> ops.Kernel:
+def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float, *, weights: np.ndarray | None = None,
+               rho: np.ndarray | None = None) -> ops.Kernel:
+    """``weights`` (per term) and ``rho`` (per output element) state the integer form explicitly;
+    otherwise they are derived from the coefficients with ``s_out``."""
     if np.any(lm.const != 0):
         raise Decline("sum with an offset")
     out_shape = tuple(lm.out_shape)
@@ -218,7 +221,12 @@ def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float) -> ops.Kernel:
         rows_out = int(np.prod(o_sp_shape)) if osp else 1
         sub = LinearMap(tuple(o_sp_shape), o_row[ref], np.zeros(int(ref.sum()), np.int64), i_row[ref],
                         lm.coef[ref], np.zeros(rows_out), {})
-        W, rho = _integer_weights(sub, s_out, rows_out, sub.out)
+        if weights is None:
+            W, rho_rows = _integer_weights(sub, s_out, rows_out, sub.out)
+        else:
+            W = np.asarray(weights)[ref]
+            rho_rows = np.zeros(rows_out)
+            rho_rows[o_row[ref]] = np.asarray(rho).reshape(-1)[lm.out[ref]]
         in_perm = isp + iid
         out_perm = osp + oid
         args = [Arg(src.name, "i8", arg_shape, "input"), Arg("y", "i8", out_shape, "output"),
@@ -231,14 +239,17 @@ def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float) -> ops.Kernel:
             s.fence()
             x_in = "ws_x"
         direct_out = out_perm == list(range(len(out_shape)))
-        accumulate_sum(s, x_in, "y" if direct_out else "ws_y", C, rows_out, sub.out, sub.idx, W, rho)
+        accumulate_sum(s, x_in, "y" if direct_out else "ws_y", C, rows_out, sub.out, sub.idx, W, rho_rows)
         if not direct_out:
             s.fence()
             inv = [out_perm.index(d) for d in range(len(out_shape))]
             ops._permute_into(s, "ws_y", [out_shape[d] for d in out_perm], "y", inv)
         return ops._end(op, s, form="accumulate_sum", channels=C, rows=rows_out, terms=int(sub.out.size))
     n_out = int(np.prod(out_shape))
-    W, rho = _integer_weights(lm, s_out, n_out, lm.out)
+    if weights is None:
+        W, rho = _integer_weights(lm, s_out, n_out, lm.out)
+    else:
+        W, rho = np.asarray(weights), np.asarray(rho).reshape(-1)
     args = [Arg(src.name, "i8", arg_shape, "input"), Arg("y", "i8", out_shape, "output")]
     s = ops._begin(args)
     accumulate_sum(s, src.name, "y", 1, n_out, lm.out, lm.idx, W, rho)

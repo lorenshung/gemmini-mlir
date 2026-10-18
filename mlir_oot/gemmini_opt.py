@@ -19,6 +19,7 @@ if str(_HERE.parent) not in sys.path:
 from xdsl.printer import Printer                                       # noqa: E402
 
 from mlir_oot import cmdbuf                                            # noqa: E402
+from mlir_oot.core_aten import iface as core_aten_iface               # noqa: E402
 from mlir_oot.codegen import gemmini_module, llvm_emit                 # noqa: E402
 from mlir_oot.frontend import linalg_reader, parse as _parse, reader   # noqa: E402
 from mlir_oot.lowering.plan import Builder, LoweringDeclined           # noqa: E402
@@ -30,6 +31,13 @@ def _print(op) -> str:
     out = io.StringIO()
     Printer(stream=out).print_op(op)
     return out.getvalue() + "\n"
+
+
+class _ExtensionPlan:
+    """The plan of an extension-opcode program: its command buffer; the artifact is already built."""
+
+    def __init__(self, command_buffer):
+        self.command_buffer = command_buffer
 
 
 class Pipeline:
@@ -102,6 +110,17 @@ class Pipeline:
                         "reason": self.mixed_declined,
                         "op": wl.regions[0].op or "linalg_on_tensors",
                         "shape": list(wl.results[0][0]) if wl.results else []}
+            return self.plan
+        if core_aten_iface.uses_extension(self.module):
+            # AFFINE_MAP / MOVEMENT forms / CONCAT / INSERT_SLICE / FILL / FENCE / WINDOW_SUM:
+            # one Core ATen program, one gemmini_kernel, an explicit whole-program kernel_abi.
+            try:
+                cb, artifact, _ = core_aten_iface.build(self.module, self.text)
+            except core_aten_iface.IfaceDecline as exc:
+                raise LoweringDeclined(exc.reason, op=exc.op, shape=exc.shape) from exc
+            self.plan = _ExtensionPlan(cb)
+            self.artifact = artifact
+            self.instrs, self.staging = [], {}
             return self.plan
         self.plan = Builder(reader.read(self.module)).build()
         self.instrs, self.staging = schedule(self.plan)
@@ -277,6 +296,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.emit_target_artifact:
             module = (pipe.artifact if pipe.artifact is not None
                       else llvm_emit.emit(pipe.plan, pipe.instrs, pipe.staging))
+        elif args.convert_iface_to_gemmini and isinstance(pipe.plan, _ExtensionPlan):
+            module = pipe.artifact
         elif args.convert_iface_to_gemmini:
             module = gemmini_module.build(pipe.plan, pipe.instrs, pipe.staging)
         else:

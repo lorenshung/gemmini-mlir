@@ -53,7 +53,8 @@ def unary_readout(s: Stream, x: str, out: str, n: int, scale: float, relu: bool)
 
 
 def lincomb(s: Stream, terms: list[tuple[str, int, list[int]]], out: str, M: int, N: int, scale: float, *,
-            bias: int | None = None, relu: bool = False, out_stride: int | None = None) -> None:
+            bias: int | None = None, relu: bool = False, out_stride: int | None = None,
+            out_i32: bool = False) -> None:
     """``terms``: (arg, row stride in bytes (0 = broadcast row), int8 weight parts).
 
     Computes out[M, N] = sat8(RNE(scale act(sum_t (sum parts_t) x_t + bias))).
@@ -81,7 +82,9 @@ def lincomb(s: Stream, terms: list[tuple[str, int, list[int]]], out: str, M: int
         s.config_ld(ti, stride, 1.0)
     if bias is not None:
         s.config_ld(2, 0, 1.0)
-    s.config_st(ld_out, RELU if relu else NO_ACT, scale)
+    if out_i32 and (relu or scale != 1.0):
+        raise ValueError("an int32 result has no readout scale or activation")
+    s.config_st(ld_out * (4 if out_i32 else 1), RELU if relu else NO_ACT, scale)
     tiles = [(i0, j0) for i0 in range(0, M, DIM) for j0 in range(0, N, DIM)]
     base = 1024
     for grp, g0 in enumerate(range(0, len(tiles), 32)):
@@ -118,5 +121,10 @@ def lincomb(s: Stream, terms: list[tuple[str, int, list[int]]], out: str, M: int
         for a, b in runs:
             i0, j0 = group[a]
             mr = min(DIM, M - i0)
+            if out_i32:
+                for g in range(a, b):
+                    gi, gj = group[g]
+                    s.mvout(s.at(out, (gi * ld_out + gj) * 4), ACC(acc0 + g * DIM, full=True), min(DIM, N - gj), mr)
+                continue
             cols = sum(min(DIM, N - group[g][1]) for g in range(a, b))
             s.mvout(s.at(out, i0 * ld_out + j0), ACC(acc0 + a * DIM), cols, mr)
