@@ -55,7 +55,7 @@ def _end(op, s, **meta) -> Kernel:
 
 def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0, s_b: float = 1.0,
            s_out: float | None = None, alpha: float = 1.0, bias: bool = False, relu: bool = False,
-           bias_const: np.ndarray | None = None) -> Kernel:
+           bias_const: np.ndarray | None = None, bias_rows: bool = False, bias_repeat: int = 1) -> Kernel:
     """mm / bmm (batch > 0) / addmm (bias: int32 [N] in accumulator units, i.e. at scale alpha s_a s_b).
 
     ``bias_const`` makes the (compile-time quantized) bias a private constant instead of an argument.
@@ -66,7 +66,7 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
     out_i32 = s_out is None
     args = [Arg("a", "i8", lead + (M, K), "input"), Arg("b", "i8", lead + (K, N), "input")]
     if bias and bias_const is None:
-        args.append(Arg("bias", "i32", (N,), "input"))
+        args.append(Arg("bias", "i32", (M, N) if bias_rows else (N,), "input"))
     args.append(Arg("out", "i32" if out_i32 else "i8", lead + (M, N), "output"))
     s = _begin(args)
     bname = None
@@ -74,22 +74,23 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
         bname = "bias"
         if bias_const is not None:
             bname = "bias_c"
-            s.const(bname, np.asarray(bias_const, np.int32).reshape(N))
+            s.const(bname, np.asarray(bias_const, np.int32).reshape((M, N) if bias_rows else (N,)))
     scale = 1.0 if out_i32 else alpha * s_a * s_b / s_out
     for bi in range(B):
         blocked_matmul(s, ("a", bi * M * K), K, ("b", bi * K * N), N, ("out", bi * M * N * (4 if out_i32 else 1)), N,
                        M, K, N, bias=(bname, 0) if bias else None, scale=scale, relu=relu, out_i32=out_i32,
-                       configure=bi == 0)
+                       configure=bi == 0, bias_rows=bias_rows, bias_repeat=bias_repeat)
     return _end(op, s, readout_scale=scale)
 
 
-def _conv_body(s: Stream, g: ConvGeom, x, w, y, bname, scale, relu, out_i32):
+def _conv_body(s: Stream, g: ConvGeom, x, w, y, bname, scale, relu, out_i32, bias_repeat=1):
     if (g.kh, g.kw, g.sh, g.sw, g.ph, g.pw, g.groups) == (1, 1, 1, 1, 0, 0, 1):
         M = g.n * g.h * g.w
         blocked_matmul(s, (x, 0), g.cin, (w, 0), g.cout, (y, 0), g.cout, M, g.cin, g.cout,
-                       bias=(bname, 0) if bname else None, scale=scale, relu=relu, out_i32=out_i32)
+                       bias=(bname, 0) if bname else None, scale=scale, relu=relu, out_i32=out_i32,
+                       bias_repeat=bias_repeat)
     else:
-        conv2d(s, g, x, w, y, bias=bname, scale=scale, relu=relu, out_i32=out_i32)
+        conv2d(s, g, x, w, y, bias=bname, scale=scale, relu=relu, out_i32=out_i32, bias_repeat=bias_repeat)
 
 
 def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float | None = None,
@@ -109,7 +110,8 @@ def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float
 
 
 def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha: float = 1.0,
-                     bias: bool = False, relu: bool = False, bias_const: np.ndarray | None = None) -> Kernel:
+                     bias: bool = False, relu: bool = False, bias_const: np.ndarray | None = None,
+                     bias_repeat: int = 1) -> Kernel:
     """The source layout (NCHW x OIHW -> NCHW) with on-device transposes around the channels-last
     convolution: x and w are transposed into caller-provided scratch, fenced (DRAM RAW), convolved,
     fenced, and the NHWC result transposed into y.  Merlin's layout propagation can bind the
@@ -135,7 +137,7 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     mv.emit_transpose(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 1, 0])
     s.fence()
     scale = alpha * s_x * s_w / s_out
-    _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, scale, relu, False)
+    _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, scale, relu, False, bias_repeat)
     s.fence()
     mv.emit_transpose(s, "ws_y", [g.n, g.oh, g.ow, g.cout], "y", [0, 3, 1, 2])
     return _end("aten.convolution.default", s, readout_scale=scale, layout="NCHW,OIHW->NCHW via NHWC")

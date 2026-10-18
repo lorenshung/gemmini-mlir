@@ -33,12 +33,17 @@ def blocks(M: int, N: int, K: int) -> tuple[int, int, int]:
 def blocked_matmul(s: Stream, A: tuple[str, int], lda: int, B: tuple[str, int], ldb: int,
                    C: tuple[str, int], ldc: int, M: int, K: int, N: int, *,
                    bias: tuple[str, int] | None = None, scale: float = 1.0, relu: bool = False,
-                   out_i32: bool = False, configure: bool = True, b_transpose: bool = False) -> None:
+                   out_i32: bool = False, configure: bool = True, b_transpose: bool = False,
+                   bias_rows: bool = False, bias_repeat: int = 1) -> None:
     """``A``/``B``/``C``/``bias`` are (argument name, byte offset); strides are in elements.
 
     ``b_transpose`` reads B as the stored [N, K] matrix (row stride ``ldb``), through the
     transposer: the tile at (k, j) is MVIN'd from B^T rows j and transposed on PRELOAD.
+    ``bias_rows`` reads a full [M, N] int32 bias instead of one broadcast row; ``bias_repeat`` > 1
+    seeds the bias that many times (zero-fill, then accumulating MVIN3s: an exact integer weight).
     """
+    if not 1 <= bias_repeat <= 16:
+        raise ValueError("bias weight must be an integer in 1..16")
     if out_i32 and (scale != 1.0 or relu):
         raise ValueError("raw int32 readout applies neither scale nor ReLU")
     if scale <= 0 and relu:
@@ -49,7 +54,7 @@ def blocked_matmul(s: Stream, A: tuple[str, int], lda: int, B: tuple[str, int], 
         s.config_ex(b_transpose=b_transpose)
         s.config_ld(0, lda)
         s.config_ld(1, ldb)
-        s.config_ld(2, 0)
+        s.config_ld(2, ldc * 4 if bias_rows else 0)
         s.config_st(ldc * (4 if out_i32 else 1), RELU if relu else NO_ACT, scale)
     an, ao = A
     bn, bo = B
@@ -66,8 +71,14 @@ def blocked_matmul(s: Stream, A: tuple[str, int], lda: int, B: tuple[str, int], 
                     mr = min(DIM, M - (ib + i) * DIM)
                     for j in range(tj):
                         nc = min(DIM, N - (jb + j) * DIM)
-                        s.mvin(s.at(bias[0], bias[1] + (jb + j) * DIM * 4), ACC(acc0 + (i * tj + j) * DIM),
-                               nc, mr, 2)
+                        boff = bias[1] + (((ib + i) * DIM * N if bias_rows else 0) + (jb + j) * DIM) * 4
+                        tile = acc0 + (i * tj + j) * DIM
+                        if bias_repeat == 1:
+                            s.mvin(s.at(bias[0], boff), ACC(tile), nc, mr, 2)
+                        else:
+                            s.mvin(None, ACC(tile), nc, mr, 2)
+                            for _ in range(bias_repeat):
+                                s.mvin(s.at(bias[0], boff), ACC(tile, accumulate=True), nc, mr, 2)
             for kb in range(0, Kt, TK):
                 tk = min(TK, Kt - kb)
                 aB = (kblk & 1) * 8192

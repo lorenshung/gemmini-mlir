@@ -479,6 +479,31 @@ class Chain:
     perm: list | None = None             # a final layout transpose before the quantize
 
 
+def _scaled_dequant(x: SSAValue):
+    """(QIn, multiplier, ops) for a dequantized tensor, possibly through single-input scale generics."""
+    k, ops_ = 1.0, []
+    for _ in range(4):
+        q = dequant(x)
+        if q is not None:
+            return q, k, ops_
+        p = producer(x)
+        if p is None or p.name != "linalg.generic" or any(i != "parallel" for i in iterators(p)):
+            return None, k, ops_
+        n_in = len(p.operands) - 1
+        consts = {i: c for i, v in enumerate(p.operands[:n_in]) if (c := splat_value(v)) is not None}
+        body = analyse_body(p.regions[0].blocks[0], n_in, consts)
+        maps = generic_maps(p)
+        if body is None or body.relu or body.lin.c or len(body.lin.terms) != 1:
+            return None, k, ops_
+        (i, w), = body.lin.terms.items()
+        if not identity_map(maps[i]) or not identity_map(maps[-1]) or len(list(p.results[0].uses)) != 1:
+            return None, k, ops_
+        k *= w
+        ops_.append(p)
+        x = p.operands[i]
+    return None, k, ops_
+
+
 def follow_chain(v: SSAValue) -> Chain:
     ch = Chain([], v)
     while True:
@@ -530,11 +555,12 @@ def follow_chain(v: SSAValue) -> Chain:
                 continue
             if ch.bias is not None:
                 raise Decline("more than one bias operand")
-            q = dequant(x)
+            q, k_b, extra = _scaled_dequant(x)
             src = q if q is not None else dense_values(x)
             if src is None:
                 raise Decline("bias is neither dequantized nor a dense constant")
-            ch.bias = (src, body.lin.terms[i], maps[i])
+            ch.bias = (src, body.lin.terms[i] * k_b, maps[i])
+            ch.ops.extend(extra)
         if ch.bias is not None and k != 1.0 and others:
             # a later scale also scales the bias term
             src, wb, m = ch.bias
@@ -544,22 +570,27 @@ def follow_chain(v: SSAValue) -> Chain:
         ch.final = u.results[0]
 
 
-def _bias_operand(ch: Chain, s_acc: float, n: int, broadcast_dim_ok):
-    """Return ('arg', value) for a runtime int32 bias already in accumulator units, or
-    ('const', int32 array) for a compile-time bias, or None."""
+def _bias_operand(ch: Chain, s_acc: float, n: int, broadcast_dim_ok, full_ok=None):
+    """('arg', QIn, repeat, full) for a runtime int32 bias whose weight is a small positive integer
+    in accumulator units, ('const', int32 array, 1, full) for a compile-time bias, or None."""
     if ch.bias is None:
         return None
     src, wb, amap = ch.bias
-    if not broadcast_dim_ok(amap):
+    full = full_ok is not None and full_ok(amap)
+    if not full and not broadcast_dim_ok(amap):
         raise Decline("bias broadcast does not follow the output channel")
     if isinstance(src, QIn):
-        if src.dtype == "i32" and math.isclose(wb * src.scale, ch.w * s_acc, rel_tol=1e-6):
-            return ("arg", src)
-        raise Decline("runtime bias is not int32 at the accumulator scale")
+        if src.dtype != "i32":
+            raise Decline("runtime bias is not int32")
+        r = wb * src.scale / (ch.w * s_acc)
+        rep = int(round(r))
+        if not 1 <= rep <= 16 or not math.isclose(r, rep, rel_tol=1e-6):
+            raise Decline("runtime bias weight is not a small integer in accumulator units")
+        return ("arg", src, rep, full)
     vals = np.asarray(src, np.float64).reshape(-1)
-    if vals.size != n:
+    if vals.size != n and not full:
         raise Decline("bias extent")
-    return ("const", np.round(wb * vals / (ch.w * s_acc)).astype(np.int32))
+    return ("const", np.round(wb * vals / (ch.w * s_acc)).astype(np.int32), 1, full)
 
 
 def match_contraction(op: Operation) -> Match | None:
@@ -608,13 +639,15 @@ def match_contraction(op: Operation) -> Match | None:
     q = quant_sink(ch.final)
     s_acc = qa.scale * qb.scale
     out_shape = shape(q.value)
-    bias = _bias_operand(ch, s_acc, N, lambda m: trailing_block(m) == m.num_dims - 1)
+    bias = _bias_operand(ch, s_acc, N, lambda m: trailing_block(m) == m.num_dims - 1,
+                         full_ok=(lambda m: identity_map(m)) if not batched else None)
     if ch.c:
         raise Decline("constant epilogue offset")
     aten = "aten.bmm.default" if batched else ("aten.addmm.default" if bias else "aten.mm.default")
     k = ops.matmul(aten, M, K, N, batch=Bn, s_a=qa.scale, s_b=qb.scale, s_out=q.scale, alpha=ch.w,
                    bias=bias is not None, relu=ch.relu,
-                   bias_const=bias[1] if bias and bias[0] == "const" else None)
+                   bias_const=bias[1] if bias and bias[0] == "const" else None,
+                   bias_rows=bool(bias and bias[3]), bias_repeat=bias[2] if bias else 1)
     operands = [("a", qa.value), ("b", qb.value)]
     if bias and bias[0] == "arg":
         operands.append(("bias", bias[1].value))
@@ -707,7 +740,8 @@ def match_convolution_rows(op: Operation) -> Match | None:
     if ch.c:
         raise Decline("constant epilogue offset")
     k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=bias is not None,
-                             relu=ch.relu, bias_const=bias[1] if bias and bias[0] == "const" else None)
+                             relu=ch.relu, bias_const=bias[1] if bias and bias[0] == "const" else None,
+                             bias_repeat=bias[2] if bias else 1)
     operands = [("x", qx.value), ("w", qw.value)]
     if bias and bias[0] == "arg":
         operands.append(("bias", bias[1].value))
@@ -776,7 +810,8 @@ def match_convolution(op: Operation) -> Match | None:
     if ch.c:
         raise Decline("constant epilogue offset")
     k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=bias is not None,
-                             relu=ch.relu, bias_const=bias[1] if bias and bias[0] == "const" else None)
+                             relu=ch.relu, bias_const=bias[1] if bias and bias[0] == "const" else None,
+                             bias_repeat=bias[2] if bias else 1)
     operands = [("x", qx.value), ("w", qw.value)]
     if bias and bias[0] == "arg":
         operands.append(("bias", bias[1].value))
