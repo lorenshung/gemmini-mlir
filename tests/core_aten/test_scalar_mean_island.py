@@ -167,6 +167,25 @@ def test_partial_island_proof_does_not_hide_live_unsupported_arithmetic():
     assert proof['reason'] == 'provider did not cover every live quantized arithmetic producer'
 
 
+def test_layout_prelude_does_not_intercept_a_complete_legacy_gemm_proof(tmp_path):
+    from mlir_oot.golden_device_catalog import build_catalog
+    from types import SimpleNamespace
+    text = source('host_quantized_gemm')
+    _, region_catalog, _ = build(text)
+    assert region_catalog['kernels']  # Partial byte-layout matches triggered the regression.
+    _, legacy = build_catalog(text)
+    assert legacy['coverage_complete'] and legacy['covered_contractions'] == 1
+    api = provider()
+    proof = api.admit_numeric_schedule(text,package=PACKAGE,numeric_policy=POLICY)
+    assert proof['status'] == 'proven', proof
+    assert proof['bindings'] == legacy['bindings']
+    assert proof['kernels'][0]['schedule']['output_dtype'] == 'i32'
+    (tmp_path/'model.mlir').write_text(text)
+    route = api.routing(tmp_path,target='gemmini',package=PACKAGE,facts=None,
+                        eligible=[(None,SimpleNamespace(dtypes=('i8','i8','i32')))])
+    assert route.catalog_builder is not None and route.region_offload is None
+
+
 def test_empty_catalog_never_claims_an_object_or_rewritten_artifact(tmp_path):
     path = tmp_path/'source.mlir'
     path.write_text('builtin.module { func.func @forward(%x: tensor<2xi32>) -> tensor<2xi32> { func.return %x : tensor<2xi32> } }')

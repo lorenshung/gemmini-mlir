@@ -190,10 +190,16 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
         return _admit_limb_regions(source, package=package, numeric_policy=numeric_policy)
     if regions.has_integer_readout(parsed):
         return _admit_integer_regions(source, package=package, numeric_policy=numeric_policy)
+    linear_refusal = None
     if any(getattr(getattr(o, 'op_name', None), 'data', o.name).startswith('quant_ext.') for o in parsed.walk()):
         proof = _admit_quantized_linear_regions(source, package=package, numeric_policy=numeric_policy)
         if proof is not None:
-            return proof
+            if proof.get('reason') != 'provider did not cover every live quantized arithmetic producer':
+                return proof
+            # A layout prelude is not a complete linear island. The legacy
+            # contraction ABI deliberately retains source layout/host work;
+            # authenticate its actual GEMMs independently before refusing.
+            linear_refusal = proof
     identity = hashlib.sha256(str(Path(package).resolve()).encode()).hexdigest()
     backend = load_module(package, "mlir_oot.golden_device_catalog", package_name=f"core_aten_backend_{identity}")
     _, catalog = backend.build_catalog(source)
@@ -273,6 +279,8 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
             )
         )
     if not proofs or not catalog["coverage_complete"]:
+        if linear_refusal is not None:
+            return linear_refusal
         return dict(status='declined', reason='provider did not cover every proposed integer contraction',
                     source_sha256=catalog['source_sha256'], kernels=[], bindings=[])
     return dict(status="proven", source_sha256=catalog["source_sha256"], kernels=proofs, bindings=catalog["bindings"])

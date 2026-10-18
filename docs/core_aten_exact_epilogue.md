@@ -164,6 +164,16 @@ coverage of a separate live arithmetic producer. Input Q and final DQ remain
 host boundary operations; the bound reduction, division, views and output Q
 are replaced by the integer kernel plus this exact host readout ABI.
 
+A partial closed-linear layout prelude does not supersede the legacy raw-GEMM
+ABI. If total linear coverage fails, admission may independently authenticate
+the legacy contraction catalog instead. That proof contains only its actual
+source-bound GEMMs and retains layout producers, Q/DQ boundaries and other host
+source work. It must still cover every proposed legacy contraction; an unrelated
+linear match cannot grant that coverage. If the legacy proof also has no complete
+coverage, the original linear refusal is returned. This permits the existing
+convolution-backward route without claiming that its host patch/fold work is
+device computation.
+
 An empty catalog is an explicit refusal manifest with `status="declined"`,
 `reason="no exact device kernel produced"`, no kernels/bindings and no
 `compilation` receipt. `core_aten_catalog` and `catalog.merlin_builder` return
