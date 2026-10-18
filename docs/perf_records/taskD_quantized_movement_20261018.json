@@ -1,0 +1,719 @@
+{
+  "schema": "gemmini.quantized_movement_qualification.v1",
+  "baseline_revision": "f3d92d5e1be080046906d5c809cdff3589293b01",
+  "implementation_revision": "7e96ca4227011c99d6d83f26e5ad22efb689bead",
+  "environment_revisions_at_qualification": {
+    "merlin": "5ca4f83de2a6b3dcf05fdd73eaaf2d8bf2662235",
+    "model2mlir": "e05e614790ad80f24790255d2303b0365c3881a5"
+  },
+  "quantity": "Spike mcycle delta around source-bound kernel calls, including generated baseline host epilogues; excludes input Q and final DQ; not RTL or full-model cycles",
+  "instruction_quantity": "Dynamic retired Gemmini RoCC instructions decoded by independent design_rule.py",
+  "design_rule_command": "python3 -I /scratch/loren/core-aten-snap/run4-out/scripts/design_rule.py <elf> 268435456 <out.json>",
+  "phase0": [
+    {
+      "name": "clone",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part6/shards/aten__clone__default/capture-bundle/model.mlir",
+      "source_sha256": "bc06f33ae27925f827c2cd3a8ad4210949b8298f35f819827ca88c9817a26841",
+      "inputs_sha256": "6a2be31c09119ff91135104c1a922f643c8e8fab1bda9d4de6ce33816875d5f0",
+      "baseline": {
+        "spike_cycles": 413,
+        "gemmini_instructions": 7,
+        "mvout": {
+          "acc_full": 1,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "dc52ad7affe5822d386fa792cf951b6d141bbec48538f7c5a38b34ec8a6ff07f",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 27,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "elf_sha256": "1794b896af8038c4cae4ee402655e0f7b2364e65c8e5a81f862c7d14fb18adc6",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "cat",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part2/shards/aten__cat__default/capture-bundle/model.mlir",
+      "source_sha256": "a842d8ac1dd283150a3b1438291fa1d76c8e8a47805df9583d877bff91dc4d1b",
+      "inputs_sha256": "b361b7b7b395bf5744e83dc69eff0aa6a5d488a9b90b8a717a57802f226774f8",
+      "baseline": {
+        "spike_cycles": 787,
+        "gemmini_instructions": 8,
+        "mvout": {
+          "acc_full": 1,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "bd7db55787b198367ede68e18b5cdf130d1d0c3b22aa37ab13a934a5ebb0c779",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 33,
+        "gemmini_instructions": 7,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 2
+        },
+        "elf_sha256": "5dcb07e275ed900ffff15e31d0a23c0e181c561b2f5545702ab7a8c916876186",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "constant_pad_nd",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part0/shards/aten__constant_pad_nd__default/capture-bundle/model.mlir",
+      "source_sha256": "ae4b5059ac6a85b34f6fc109a5ec6ff0e1d9c6b7af8839f0cfee43256eb72f3f",
+      "inputs_sha256": "98604ec852d2cc99c265b8cd0c0caaaeaa3b2049efbf2d36159818085b4fec73",
+      "baseline": {
+        "spike_cycles": 1547,
+        "gemmini_instructions": 10,
+        "mvout": {
+          "acc_full": 2,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "982dc447e6adb0e1d50e9f61cfda5c96779e5f7a751c0f6cbac6e2c55f851e1e",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 62,
+        "gemmini_instructions": 21,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 5
+        },
+        "elf_sha256": "86a90d4aec04e89c50c4cfa043f20010a22070b7ddf0903747b248a772210655",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "reflection_pad1d",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part0/shards/aten__reflection_pad1d__default/capture-bundle/model.mlir",
+      "source_sha256": "53e83cb306cc6862e1730f9c17c1eb0e05095fd4c9a3fe3764b973c1dd53ecb3",
+      "inputs_sha256": "3b7c6f7a09bfe09fc74dcc4b622d1da51908d3d01fc4106488857521ccbf6b34",
+      "baseline": {
+        "spike_cycles": 418,
+        "gemmini_instructions": 11,
+        "mvout": {
+          "acc_full": 1,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "82c5e9ab2fa868ce98ffec4f242e7b9ca58ed21dffd87954142638c1e96c624e",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 45,
+        "gemmini_instructions": 13,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 3
+        },
+        "elf_sha256": "d2ceff2d47888b9b07e1fe90a34a1c192af99780e6bd2713ad56479daad25e17",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "reflection_pad2d",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part1/shards/aten__reflection_pad2d__default/capture-bundle/model.mlir",
+      "source_sha256": "c42103d0dc40be46d29a690454a444af935623479c2ec881fea6836e402a0240",
+      "inputs_sha256": "0b8a58e5a45c126857a214393116d48bf5d68a4b70277162046085024154fbd6",
+      "baseline": {
+        "spike_cycles": 1642,
+        "gemmini_instructions": 31,
+        "mvout": {
+          "acc_full": 2,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "c1b4854796aa02b2e503970651df3bb0d1b98f5ce93e77f055633832b1addac5",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 104,
+        "gemmini_instructions": 45,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 13
+        },
+        "elf_sha256": "c1ed76d8b583685cb3ad828444d40576edaa8d1d465c0774e115882eeea91358",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "reflection_pad3d",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part2/shards/aten__reflection_pad3d__default/capture-bundle/model.mlir",
+      "source_sha256": "bd34b5da2522a82c973384f0f0aae887634e0ff52102f106c1fbce8c72ce197f",
+      "inputs_sha256": "6230b60eaf57b2e64e90697880ce4a91de690d1b8440664b9ccc1a857efee6b7",
+      "baseline": {
+        "spike_cycles": 8124,
+        "gemmini_instructions": 133,
+        "mvout": {
+          "acc_full": 8,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "ce06359ee9eb1df356df3492a5b80fc0e8805c9db759932a997872c3a7629cb9",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 475,
+        "gemmini_instructions": 209,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 63
+        },
+        "elf_sha256": "8261b4b04b160bd47858a5c2d50d7d062becd50c309d1bfc291a962477d592b0",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "replication_pad2d",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part7/shards/aten__replication_pad2d__default/capture-bundle/model.mlir",
+      "source_sha256": "7ac92a38b2ce5ce4e0bbb5dea0dd5d4da8d33d3c466aec2d142e9014bb29875d",
+      "inputs_sha256": "0b8a58e5a45c126857a214393116d48bf5d68a4b70277162046085024154fbd6",
+      "baseline": {
+        "spike_cycles": 1647,
+        "gemmini_instructions": 27,
+        "mvout": {
+          "acc_full": 2,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "4d0cb435c42cee8223423ff7a0acc238eb0bf72c4290ae6cc1c6db384639e6ae",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 114,
+        "gemmini_instructions": 49,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 13
+        },
+        "elf_sha256": "9f3431e43bcd024917326531cba84e2d1231d9071f7752bc7f5c8e2e05f8a670",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "replication_pad3d",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part0/shards/aten__replication_pad3d__default/capture-bundle/model.mlir",
+      "source_sha256": "4f45aab0d1d5c21f4ba46678c98e1c8be36a2aabbe4f163d5fd87420124fcb9c",
+      "inputs_sha256": "6230b60eaf57b2e64e90697880ce4a91de690d1b8440664b9ccc1a857efee6b7",
+      "baseline": {
+        "spike_cycles": 8077,
+        "gemmini_instructions": 109,
+        "mvout": {
+          "acc_full": 8,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "cf67fe828253a487aaa84d0ddb8151a2a4167e122cec04d69c7f2995c9ed2846",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 432,
+        "gemmini_instructions": 227,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 63
+        },
+        "elf_sha256": "1fec68138f0809dfc4271d29602e6ba300dcc3fac09f0d77a04dddc54af6d011",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "slice_scatter",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part0/shards/aten__slice_scatter__default/capture-bundle/model.mlir",
+      "source_sha256": "5ac1c30585764c9a1be0211ecf852c873d70a16bf3f1aa6575d87ad7e201757a",
+      "inputs_sha256": "4ded4e93b014030dc3e28ba4471c45daa0a289722c1280b574caff65a9594f5f",
+      "baseline": {
+        "spike_cycles": 685,
+        "gemmini_instructions": 17,
+        "mvout": {
+          "acc_full": 1,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "4d42afb121cb1dd0e2f63794e4f3f8e394d9bde4d2f15a6bad005515a12be39a",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 70,
+        "gemmini_instructions": 25,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 9
+        },
+        "elf_sha256": "09b3515759ecf5a86fed12a417b343f64742655dc4e3222a54da2e3d5652ef63",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "select_scatter",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part2/shards/aten__select_scatter__default/capture-bundle/model.mlir",
+      "source_sha256": "9f93565b873eeb7c424a21418b3ea7026132440b9cdbb2f9c263c4cb1b46eb75",
+      "inputs_sha256": "5daa3381f56315bdbc682337bfc3295bdf74dfe92ecc44db270d2600fffcc332",
+      "baseline": {
+        "spike_cycles": 427,
+        "gemmini_instructions": 13,
+        "mvout": {
+          "acc_full": 1,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "a972214068b30d1b1e6e4524ff4b3131d73e28395438cd1046e82fad57eddc79",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 54,
+        "gemmini_instructions": 17,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 5
+        },
+        "elf_sha256": "769ec2b26045214a6b1cc9ea253ee8e5b3cfa5268fe07c8a3c397bb91299c79f",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "repeat",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part6/shards/aten__repeat__default/capture-bundle/model.mlir",
+      "source_sha256": "d9bc79260bc02d50ee9ae3153c37dfa79295b759c6fa09e0ab6fec8f62a89d27",
+      "inputs_sha256": "6a2be31c09119ff91135104c1a922f643c8e8fab1bda9d4de6ce33816875d5f0",
+      "baseline": {
+        "spike_cycles": 785,
+        "gemmini_instructions": 8,
+        "mvout": {
+          "acc_full": 1,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "11fa0ca85a65fe8f454c1d44d762d1c0b738d62547b4adb046da1692fcc93f42",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 31,
+        "gemmini_instructions": 7,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 2
+        },
+        "elf_sha256": "30492304ebe89dcddb5a2640912096a51a8725b8ab41dde31c29e4e618b0a16a",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "_to_copy",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part6/shards/aten___to_copy__default/capture-bundle/model.mlir",
+      "source_sha256": "09a73332f025a92508454958b8ccb33373ff0ff9e58b8b4e9e959ce0c3f51ef2",
+      "inputs_sha256": "6a2be31c09119ff91135104c1a922f643c8e8fab1bda9d4de6ce33816875d5f0",
+      "baseline": {
+        "spike_cycles": 413,
+        "gemmini_instructions": 7,
+        "mvout": {
+          "acc_full": 1,
+          "acc_narrow": 0,
+          "spad": 0
+        },
+        "elf_sha256": "e0cc653df02294cc6cfb4cf7563013043ca8b8568f6e22f2dcfcb56255af4a84",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 27,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "elf_sha256": "b7874b319092038247eaa381bed3ea09c14f0be6449765cbea50e87c0b5934af",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "full",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part4/shards/aten__full__default/capture-bundle/model.mlir",
+      "source_sha256": "4116e0541a5ac4c3b43d99abbad71af65e0521351afab69ac8d0e514d57c93e3",
+      "inputs_sha256": "8739c76e681f900923b900c9df0ef75cf421d39cabb54650c4b9ad19b6a76d85",
+      "baseline": {
+        "spike_cycles": 30,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "elf_sha256": "8da69f9ef20c0b0eb3e2ed9ebc47046a975320aaa753e9625d4bf8a389a5efef",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 27,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "elf_sha256": "54dee5fd54cf59cf4cc1c858894ee4752080b571ba156019e50fa1d4a83811cf",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "full_like",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part5/shards/aten__full_like__default/capture-bundle/model.mlir",
+      "source_sha256": "6624a658fb9b62c69ee11499b5b393b4a239520f6d2603f1ee041e730a0a061e",
+      "inputs_sha256": "6a2be31c09119ff91135104c1a922f643c8e8fab1bda9d4de6ce33816875d5f0",
+      "baseline": {
+        "spike_cycles": 30,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "elf_sha256": "dcfbb37d1f15e83cdf68975dbf96df21c6265c13df13ef4bf9512ab365bf6cba",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 27,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "elf_sha256": "ff278e24340311aa8e2a9b5431501524cfc7f7ac7cb5dc0f7203cd75525490bb",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    },
+    {
+      "name": "fill",
+      "source": "/scratch/loren/core-aten-snap/run6-out/lane-pk/run/part7/shards/aten__fill__Scalar/capture-bundle/model.mlir",
+      "source_sha256": "a677c56e8acbb4f0bf4db115f1a9528291d507b8d0774608e4f4f7c26c0970f6",
+      "inputs_sha256": "6a2be31c09119ff91135104c1a922f643c8e8fab1bda9d4de6ce33816875d5f0",
+      "baseline": {
+        "spike_cycles": 30,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "elf_sha256": "f42b8bb48b56335b9f79e607a23618e4af8886c8f257652927f8a96cf5d69873",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      },
+      "storage_codes": {
+        "spike_cycles": 27,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "elf_sha256": "eb81beece1047a3cfd35d728541fdd98918ce10888e1b8e432317abccfe4f724",
+        "bit_exact": true,
+        "design_rule": "OK_full_i32"
+      }
+    }
+  ],
+  "fresh": [
+    {
+      "name": "clone",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__clone__default/capture-bundle/model.mlir",
+      "source_sha256": "9a47a28f29c1ae8ddbdd68f64e68d3282e335aebba8071573171bc7ef309fc8c",
+      "inputs_sha256": "f649878c3e7f30108a6959a50c31cb0b5d3315fcc67f839d55a68d0dac894e40",
+      "spike_cycles": 34,
+      "gemmini_instructions": 7,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 2
+      },
+      "elf_sha256": "fad5ca9f2e95d7ca4acdfb98ec43e2194dabae01646f5d750125e8a39f196986",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "cat",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__cat__default/capture-bundle/model.mlir",
+      "source_sha256": "34119281006f2018c57d5bace8cb8832fb460b0422a6b57984d4014419ec4a05",
+      "inputs_sha256": "6f1d647b02533df5088b428a3055fb2e9815784e49f41053c21757486d4b04d4",
+      "spike_cycles": 53,
+      "gemmini_instructions": 17,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 4
+      },
+      "elf_sha256": "13d07c5dcd419177055a45b21034a3614e6742d85be6f3e49e2b3b61560c15c8",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "constant_pad_nd",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__constant_pad_nd__default/capture-bundle/model.mlir",
+      "source_sha256": "056662db580526a7fa6320542ed72a735cc17f5df65efddc200748181858ab60",
+      "inputs_sha256": "d0e4f2d0d375e1bd9be4638ea917830a11f51e3bcf13a41b584cee67849d2e50",
+      "spike_cycles": 131,
+      "gemmini_instructions": 53,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 13
+      },
+      "elf_sha256": "69d7f063b9c9f38f32bbec87841567a6ad38f70b7a1e081e5cd20037649dffa5",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "reflection_pad1d",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__reflection_pad1d__default/capture-bundle/model.mlir",
+      "source_sha256": "f430267153bfae3fdd39bdb58d615a05db9e8ad6814938e4199ec0ec162c0857",
+      "inputs_sha256": "9a375c69f710bebdbdc99822f3c2439201faab4c5f8b67cb547d8a3b5b91d3ac",
+      "spike_cycles": 201,
+      "gemmini_instructions": 70,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 19
+      },
+      "elf_sha256": "a86c595c3f2fcedabde7625fa2f72aa3342793de979aabd41be5631b384a253d",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "reflection_pad2d",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__reflection_pad2d__default/capture-bundle/model.mlir",
+      "source_sha256": "79a10db9f4ad7624e49c3a86951f474254696ff9ecec4b778f0ad57578b7bd9b",
+      "inputs_sha256": "a5a48ecb3ad4a610740a8f4eb8ac7c65bf2326ecbfe14a7b9701510f7b8ee0a5",
+      "spike_cycles": 194,
+      "gemmini_instructions": 93,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 25
+      },
+      "elf_sha256": "726e8ecd07fcc35601a4daf344ae56c62939cfead2f07500e363c2671aff14a5",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "reflection_pad3d",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__reflection_pad3d__default/capture-bundle/model.mlir",
+      "source_sha256": "d15cf17523243e41fb037fab3135a233bbdaf9d1d66acf0e637797c60498bc4d",
+      "inputs_sha256": "550e43c875fcbe08cfb3b57b7082aed4f5943b9119354eaf1b1ce8ca884e3ded",
+      "spike_cycles": 984,
+      "gemmini_instructions": 533,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 145
+      },
+      "elf_sha256": "142a8e549de230602e4a466df8e778d355691576ad132db6ccc9cf526618d7e6",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "replication_pad2d",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__replication_pad2d__default/capture-bundle/model.mlir",
+      "source_sha256": "efaaf4ab2c21d5dc1ae0939281585a066aea11d8994cf2598cae3a146eacdf8e",
+      "inputs_sha256": "dcb5fca82e9fd564f67fcb96521944a0db8b43ac71fc54c548ef6339b60912fa",
+      "spike_cycles": 209,
+      "gemmini_instructions": 97,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 25
+      },
+      "elf_sha256": "3fc179ac4ae9c7da5f189a8606afe7436923cb9773d472ca831a60df53234529",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "replication_pad3d",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__replication_pad3d__default/capture-bundle/model.mlir",
+      "source_sha256": "3a78fa72a2bfb4d71837c8b237c7c4de20b1ea466255543ccdae24abfc35dd16",
+      "inputs_sha256": "0d2dbbf9ef3dfb47def8de580bb71ac4abfbed7c4ccbf11f684e7877313dd2e0",
+      "spike_cycles": 1045,
+      "gemmini_instructions": 557,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 145
+      },
+      "elf_sha256": "7947c5aad44c4f71cb513792e7b50ced49c249a68417e87133e11427d9e997d6",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "slice_scatter",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__slice_scatter__default/capture-bundle/model.mlir",
+      "source_sha256": "0ff0dc32f7a84a7b8154fb370a7862091cfda9730a9789d8112706376e3df656",
+      "inputs_sha256": "10956d2d4015a7aaccbede1c76d4edeebc17a30a17ecad32e237558c9fa2687d",
+      "spike_cycles": 65,
+      "gemmini_instructions": 25,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 6
+      },
+      "elf_sha256": "f7f36eaf7debb1656c2848e157a6fb223803acb369905caa1dda5e58563ad6bd",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "select_scatter",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__select_scatter__default/capture-bundle/model.mlir",
+      "source_sha256": "15d874069f093ac848bc8f11f5ab76531373090cae0316ace83e5d881e487c58",
+      "inputs_sha256": "25b3bfa4a7351c11a78a949d15eca4901694dd135be83577ee064fed4eba5829",
+      "spike_cycles": 61,
+      "gemmini_instructions": 19,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 5
+      },
+      "elf_sha256": "9cf31bf9ea1e8f5913f13944597be99bbdf56c47470615f7440d2122b5bb4bf5",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "repeat",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__repeat__default/capture-bundle/model.mlir",
+      "source_sha256": "b025c2ac79af1b5340469c709b9fe31d5895ceaff9a60dc0cee73d3df8d4ec2d",
+      "inputs_sha256": "2370eb4cb36242aa3d0d8c8387b51d5fce645d367aaf3e97762654c39e1768d6",
+      "spike_cycles": 71,
+      "gemmini_instructions": 27,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 8
+      },
+      "elf_sha256": "81791faff62200892a0ad095e35af47a9a24dc4c4d752bd86eea1fcbbcdbd279",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "_to_copy",
+      "source": "out/taskD/fresh-captures/part0/shards/aten___to_copy__default/capture-bundle/model.mlir",
+      "source_sha256": "033ad6f2e8a7cc5d8d281132922dd067129eb8b07bdabdf5545510c2ecc82581",
+      "inputs_sha256": "75add3ff191e1ac5ea98f21c04b0d51a783cd4704a2ee14db886d86667e77457",
+      "spike_cycles": 34,
+      "gemmini_instructions": 7,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 2
+      },
+      "elf_sha256": "e690b74643e5a0bff43c3968deddf77ab864fdb8300f66247610026822558f0f",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "full",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__full__default/capture-bundle/model.mlir",
+      "source_sha256": "c61c031e21432482a7bf397d17762aa92794db7248cd7c90060b9078d193ceaa",
+      "inputs_sha256": "2973b1ac136fa9f6100ecc90835f10545a3c37a03b9ecc02e505d3c3f63b41c2",
+      "spike_cycles": 27,
+      "gemmini_instructions": 5,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 1
+      },
+      "elf_sha256": "7e38d7180d9d92a7e54b7a501d23e91efd869b5c4f89f44c5eac44854df63f6b",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "full_like",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__full_like__default/capture-bundle/model.mlir",
+      "source_sha256": "f66fdbd3b614e1d424a3cce5ea2f49b44b38810c9c4270d9a4f0815134fdb899",
+      "inputs_sha256": "da926802f46d2788990cfd999700a87c9d9435c8477b038365e6848608744cb7",
+      "spike_cycles": 27,
+      "gemmini_instructions": 5,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 1
+      },
+      "elf_sha256": "6c81ee525a064c6d433dc1483f65bdb876ef0f981bc82ea478d40ff1d1a102e8",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    },
+    {
+      "name": "fill",
+      "source": "out/taskD/fresh-captures/part0/shards/aten__fill__Scalar/capture-bundle/model.mlir",
+      "source_sha256": "5da5e3322e03df21f1073726d63bc51549f9484b054ba01cfeef5964ee7d016a",
+      "inputs_sha256": "c383d9f19b205ce8e1fd569ae9f6ce6c2898f1720daa2cf1242fc7912b1b403d",
+      "spike_cycles": 27,
+      "gemmini_instructions": 5,
+      "mvout": {
+        "acc_full": 0,
+        "acc_narrow": 0,
+        "spad": 1
+      },
+      "elf_sha256": "55f461bf8c61d96835c140bf38403494a5c2e5b7fe8d61dd9e844d3056f73a1b",
+      "bit_exact": true,
+      "design_rule": "OK_full_i32"
+    }
+  ],
+  "raw_artifacts": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD",
+  "caveats": [
+    "Irregular selectors increase Gemmini instruction count while eliminating accumulator traffic and host requantization.",
+    "The design-rule checker labels byte-only streams OK_full_i32 when there are no narrowed accumulator readouts; inspected acc_full=0 as well.",
+    "No Verilator or FireSim execution requested or performed."
+  ],
+  "tests": {
+    "storage_movement_schema_host_requant": "84 passed, 1 skipped",
+    "previous_full_suite": "315 passed, 12 skipped",
+    "final_full_suite": "316 passed, 12 skipped; 103 subtests passed",
+    "spike_exact_cases": 45,
+    "independent_design_rule_exits_zero": 45
+  }
+}
