@@ -34,7 +34,7 @@ def evaluate(match, inputs):
         values = a @ b
         scale = F(numeric['alpha']) * F(numeric['s_a']) * F(numeric['s_b']) / F(numeric['s_out'])
         assert 'bias' not in inputs
-        return {result_name: quantize(values * scale)}
+        return {result_name: quantize(values * scale).reshape(output.shape)}
     if 'dims' in numeric:
         values = np.sum(inputs['x'].astype(object), axis=tuple(numeric['dims']))
         scale = F(numeric['w']) * F(numeric['s_x']) / F(numeric['s_out'])

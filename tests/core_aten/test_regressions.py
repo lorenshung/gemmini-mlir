@@ -60,3 +60,27 @@ def test_ceil_divisor_case_is_always_generated_with_partial_windows():
         assert cb['tensors']['A']['shape'][1] % 2 == 1
         attrs = cb['commands'][0]['attributes']
         assert attrs['ceil_mode'] and attrs['divisor_override'] == 3
+
+
+def test_contraction_readout_view_keeps_source_descriptor_rank():
+    from mlir_oot.core_aten.catalog import build
+    from mlir_oot.core_aten.stream import simulate
+    from exact_oracle import evaluate
+    fixture=Path(__file__).parents[1]/'fixtures/core_aten/mm'
+    text=(fixture/'model.mlir').read_text()
+    text=text.replace('    %15 = arith.constant',
+        '    %flat = tensor.collapse_shape %14 [[0, 1]] : tensor<37x45xf32> into tensor<1665xf32>\n    %15 = arith.constant',1)
+    lines=text.splitlines()
+    for index,line in enumerate(lines):
+        if '%19 = "quant_ext.quantize_per_tensor"' in line:
+            lines[index]=line.replace('(%14,','(%flat,').replace('tensor<37x45xf32>','tensor<1665xf32>')
+    text='\n'.join(lines).replace('tensor<37x45xi8>','tensor<1665xi8>')
+    _,manifest,matches=build(text)
+    assert len(matches)==1,manifest['declines']
+    match,=matches
+    output=next(arg for arg in match.kernel.args if arg.role=='output')
+    assert output.shape==(1665,)
+    assert 'ca_memref_1 *result' in shim_source(manifest)
+    inputs=dict(np.load(fixture/'inputs.npz'))
+    feed={'a':inputs['arg0'],'b':inputs['arg1']}
+    assert np.array_equal(simulate(match.kernel.stream,feed)['out'],evaluate(match,feed)['out'])

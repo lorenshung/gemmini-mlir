@@ -18,7 +18,7 @@ ReLU, i8 -> i32 sign extension, i8 x i8 -> i32 contractions) match without a san
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 
 import numpy as np
@@ -1147,6 +1147,20 @@ MATCHERS = (match_convolution, match_convolution_rows, match_conv_wgrad, match_c
             match_movement, match_linear)
 
 
+def _bind_dense_layouts(match):
+    """Bind the pointer ABI to source descriptor ranks after proven dense views."""
+    sources = dict(match.operands)
+    sources[match.result[0]] = match.result[1]
+    for index, arg in enumerate(match.kernel.stream.args):
+        if arg.name not in sources:
+            continue
+        value = sources[arg.name]
+        actual = shape(value)
+        if actual is None or etype(value) != arg.dtype or math.prod(actual) != math.prod(arg.shape):
+            raise Decline("source tensor layout/type differs from the dense kernel ABI")
+        match.kernel.stream.args[index] = replace(arg, shape=actual)
+
+
 def match_all(module) -> tuple[list[Match], list[dict]]:
     """Every matched region in program order, plus recorded declines (with reasons)."""
     from .integer_regions import match_integer_region
@@ -1161,6 +1175,8 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         for fn in (match_integer_region, *MATCHERS):
             try:
                 m = fn(op)
+                if m is not None:
+                    _bind_dense_layouts(m)
             except (Decline, ValueError, OverflowError, ZeroDivisionError) as exc:
                 declines.append(dict(ordinal=ordinal, op=op.name, reason=str(exc),
                                      aten=getattr(op.attributes.get("prov.aten"), "data", "")))
