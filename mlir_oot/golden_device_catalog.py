@@ -49,6 +49,8 @@ def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool 
         if dims is None:
             continue
         matched_total += 1
+        if dims.k * 16384 > (1 << 31) - 1:
+            continue  # unbounded exact dot product does not fit accumulator SRAM
         shape = choose_shape(dims,large_n=large_n,prefetch_b=prefetch_b)
         batched = len(op.operands[0].type.get_shape()) == 3
         key = {"batch": dims.batch if batched else 0,

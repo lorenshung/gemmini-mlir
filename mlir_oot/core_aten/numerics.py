@@ -1,5 +1,6 @@
 """Quantized numerics for the Core ATen recipes (per-tensor symmetric int8, zero point 0).
 
+Candidate synthesis never grants device admission; exactness.py must prove it.
 The device rounds once per scale unit: ``sat8(RNE(fp32(v) * fp32(scale)))``.  The
 compile-time constants here (rational integer weights, integer constant multipliers,
 fill codes) are the gate-3 fixes Q1/Q2/Q9/Q10/Q13 of ``analysis/recipe_corrections.md``.
@@ -11,22 +12,22 @@ import math
 
 import numpy as np
 
-from .stream import f32
-
 WMAX = 381          # c*I parts of at most 3 x 127
 
 
 def code(value: float, scale: float, lo: int = -128, hi: int = 127) -> int:
     """Compile-time quantized code of a constant (Q13), with the reference quantizer's own
     arithmetic: RNE(fp32(v) * fp32(1 / s)), saturated (``quantize_per_tensor``)."""
-    if not math.isfinite(value):
-        return hi if value > 0 else lo
-    q = np.rint(np.float32(value) * np.float32(1.0 / scale))
-    return int(min(hi, max(lo, q)))
+    from .exactness import rational, quantized, require
+    require(math.isfinite(value) and math.isfinite(scale) and scale > 0, "invalid constant quantization")
+    return quantized(rational(value) / rational(scale), lo, hi)
+
 
 
 def parts127(w: int) -> list[int]:
     """Split |w| <= WMAX into int8 c*I weights; the sign follows w."""
+    from .exactness import require
+    require(abs(w) <= 12 * 127, "integer weight exceeds the instruction-part budget")
     sign = -1 if w < 0 else 1
     w = abs(w)
     out = []
@@ -64,18 +65,3 @@ def best_int_multiplier(v: float, gmax: int = WMAX) -> int:
         if best is None or key < best[0]:
             best = (key, g)
     return best[1]
-
-
-def readout(acc: np.ndarray, scale: float, relu: bool = False) -> np.ndarray:
-    a = np.asarray(acc, np.int64)
-    if relu:
-        a = np.maximum(a, 0)
-    return np.clip(np.rint(a.astype(np.float32) * np.float32(f32(scale))), -128, 127).astype(np.int8)
-
-
-def quantize(x: np.ndarray, scale: float, lo: int = -128, hi: int = 127) -> np.ndarray:
-    return np.clip(np.rint(np.asarray(x, np.float64) / scale), lo, hi).astype(np.int8)
-
-
-def pt2e_scale(absmax: float) -> float:
-    return max(float(absmax), 1e-8) / 127.5

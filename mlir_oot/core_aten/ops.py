@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .exactness import rational as Q, require, prove_readout, prove_affine, accumulator_bound
 from .numerics import best_int_multiplier, code, parts127, rational_weights
 from .recipes import elementwise as ew
 from .recipes import movement as mv
@@ -34,6 +35,7 @@ class Kernel:
 
 
 def _numel(shape) -> int:
+    require(all(d > 0 for d in shape), "empty or dynamic tensor shape")
     return int(np.prod(shape)) if len(shape) else 1
 
 
@@ -58,12 +60,28 @@ def _end(op, s, **meta) -> Kernel:
 
 def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0, s_b: float = 1.0,
            s_out: float | None = None, alpha: float = 1.0, bias: bool = False, relu: bool = False,
-           bias_const: np.ndarray | None = None, bias_rows: bool = False, bias_repeat: int = 1) -> Kernel:
+           bias_const: np.ndarray | None = None, bias_rows: bool = False, bias_repeat: int = 1,
+           bias_range: tuple[int, int] | None = None) -> Kernel:
     """mm / bmm (batch > 0) / addmm (bias: int32 [N] in accumulator units, i.e. at scale alpha s_a s_b).
 
     ``bias_const`` makes the (compile-time quantized) bias a private constant instead of an argument.
     s_out None selects the raw int32 readout of the exact integer contraction.
     """
+    require(min(M, K, N) > 0 and batch >= 0, "empty or dynamic contraction")
+    bound = K * 16384
+    lo, hi = -bound, bound
+    if bias:
+        if bias_const is not None:
+            values = np.asarray(bias_const, dtype=np.int64)
+            lo += min(0, int(values.min())) * bias_repeat
+            hi += max(0, int(values.max())) * bias_repeat
+        else:
+            require(bias_range is not None, "runtime i32 seed has no nonoverflow range proof")
+            lo += min(0, bias_range[0]) * bias_repeat
+            hi += max(0, bias_range[1]) * bias_repeat
+    require(-(1 << 31) <= lo <= hi < (1 << 31), "unproved i32 accumulator overflow bound")
+    if s_out is not None:
+        prove_readout(Q(alpha) * Q(s_a) * Q(s_b) / Q(s_out), lo, hi, relu)
     B = max(batch, 1)
     lead = (batch,) if batch else ()
     out_i32 = s_out is None
@@ -78,12 +96,12 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
         if bias_const is not None:
             bname = "bias_c"
             s.const(bname, np.asarray(bias_const, np.int32).reshape((M, N) if bias_rows else (N,)))
-    scale = 1.0 if out_i32 else alpha * s_a * s_b / s_out
+    scale = 1.0 if out_i32 else Q(alpha) * Q(s_a) * Q(s_b) / Q(s_out)
     for bi in range(B):
         blocked_matmul(s, ("a", bi * M * K), K, ("b", bi * K * N), N, ("out", bi * M * N * (4 if out_i32 else 1)), N,
                        M, K, N, bias=(bname, 0) if bias else None, scale=scale, relu=relu, out_i32=out_i32,
                        configure=bi == 0, bias_rows=bias_rows, bias_repeat=bias_repeat)
-    return _end(op, s, readout_scale=scale)
+    return _end(op, s, readout_scale=scale, accumulator_min=lo, accumulator_max=hi)
 
 
 def _conv_body(s: Stream, g: ConvGeom, x, w, y, bname, scale, relu, out_i32, bias_repeat=1):
@@ -100,6 +118,11 @@ def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float
                 bias: bool = False, relu: bool = False, alpha: float = 1.0) -> Kernel:
     """Channels-last: NHWC x HWIO -> NHWC; bias int32 [Cout] at scale s_x s_w (PT2E)."""
     g.validate()
+    require(not bias, "runtime convolution seed has no nonoverflow range proof")
+    bound = g.kh * g.kw * (g.cin // g.groups) * 16384
+    accumulator_bound(bound)
+    if s_out is not None:
+        prove_readout(Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out), -bound, bound, relu)
     out_i32 = s_out is None
     args = [Arg("x", "i8", (g.n, g.h, g.w, g.cin), "input"),
             Arg("w", "i8", (g.kh, g.kw, g.cin // g.groups, g.cout), "input")]
@@ -107,7 +130,7 @@ def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float
         args.append(Arg("bias", "i32", (g.cout,), "input"))
     args.append(Arg("y", "i32" if out_i32 else "i8", (g.n, g.oh, g.ow, g.cout), "output"))
     s = _begin(args)
-    scale = 1.0 if out_i32 else alpha * s_x * s_w / s_out
+    scale = 1.0 if out_i32 else Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out)
     _conv_body(s, g, "x", "w", "y", "bias" if bias else None, scale, relu, out_i32)
     return _end("aten.convolution.default", s, readout_scale=scale, layout="NHWC,HWIO->NHWC")
 
@@ -120,6 +143,12 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     fenced, and the NHWC result transposed into y.  Merlin's layout propagation can bind the
     channels-last kernel (``convolution``) instead and drop the transposes."""
     g.validate()
+    require(not bias or bias_const is not None, "runtime convolution seed has no nonoverflow range proof")
+    bound = g.kh * g.kw * g.cin * 16384
+    if bias:
+        bound += int(np.max(np.abs(np.asarray(bias_const, dtype=np.int64)))) * bias_repeat
+    accumulator_bound(bound)
+    prove_readout(Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out), -bound, bound, relu)
     if g.groups != 1:
         raise ValueError("grouped convolution needs the channels-last kernel")
     args = [Arg("x", "i8", (g.n, g.cin, g.h, g.w), "input"), Arg("w", "i8", (g.cout, g.cin, g.kh, g.kw), "input")]
@@ -139,7 +168,7 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     mv.emit_transpose(s, "x", [g.n, g.cin, g.h, g.w], "ws_x", [0, 2, 3, 1])
     mv.emit_transpose(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 1, 0])
     s.fence()
-    scale = alpha * s_x * s_w / s_out
+    scale = Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out)
     _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, scale, relu, False, bias_repeat)
     s.fence()
     mv.emit_transpose(s, "ws_y", [g.n, g.oh, g.ow, g.cout], "y", [0, 3, 1, 2])
@@ -148,38 +177,12 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
 
 def conv_backward_input(g: ConvGeom, *, s_g: float, s_w: float, s_out: float) -> Kernel:
     """grad_input (NCHW) of a forward convolution ``g`` from grad_output (NCHW) and OIHW weights."""
-    from .recipes.backward import conv_transpose
-    args = [Arg("g", "i8", (g.n, g.cout, g.oh, g.ow), "input"), Arg("w", "i8", (g.cout, g.cin, g.kh, g.kw), "input"),
-            Arg("y", "i8", (g.n, g.cin, g.h, g.w), "output"),
-            Arg("ws_g", "i8", (g.n, g.oh, g.ow, g.cout), "scratch"),
-            Arg("ws_w", "i8", (g.kh, g.kw, g.cout, g.cin), "scratch"),
-            Arg("ws_y", "i8", (g.n, g.h, g.w, g.cin), "scratch")]
-    s = _begin(args)
-    mv.emit_transpose(s, "g", [g.n, g.cout, g.oh, g.ow], "ws_g", [0, 2, 3, 1])
-    mv.emit_transpose(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 0, 1])
-    s.fence()
-    scale = s_g * s_w / s_out
-    conv_transpose(s, g, "ws_g", "ws_w", "ws_y", scale)
-    s.fence()
-    mv.emit_transpose(s, "ws_y", [g.n, g.h, g.w, g.cin], "y", [0, 3, 1, 2])
-    return _end("aten.convolution_backward.default", s, output="grad_input", readout_scale=scale)
+    require(False, "transposed convolution requires a full intermediate overflow and readout proof")
 
 
 def conv_backward_weight(g: ConvGeom, *, s_g: float, s_x: float, s_out: float) -> Kernel:
     """grad_weight (OIHW) from grad_output (NCHW) and the forward input (NCHW); Q11 readout."""
-    from .recipes.backward import conv_wgrad
-    args = [Arg("g", "i8", (g.n, g.cout, g.oh, g.ow), "input"), Arg("x", "i8", (g.n, g.cin, g.h, g.w), "input"),
-            Arg("y", "i8", (g.cout, g.cin, g.kh, g.kw), "output"),
-            Arg("ws_x", "i8", (g.n, g.h, g.w, g.cin), "scratch"),
-            Arg("ws_gw", "i8", (g.kh * g.kw, g.cout, g.cin), "scratch")]
-    s = _begin(args)
-    mv.emit_transpose(s, "x", [g.n, g.cin, g.h, g.w], "ws_x", [0, 2, 3, 1])
-    s.fence()
-    scale = s_g * s_x / s_out
-    conv_wgrad(s, g, "g", "ws_x", "ws_gw", scale)
-    s.fence()
-    mv.emit_transpose(s, "ws_gw", [g.kh * g.kw, g.cout, g.cin], "y", [1, 2, 0])
-    return _end("aten.convolution_backward.default", s, output="grad_weight", readout_scale=scale)
+    require(False, "weight gradient requires a full intermediate overflow and readout proof")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -188,17 +191,19 @@ def conv_backward_weight(g: ConvGeom, *, s_g: float, s_x: float, s_out: float) -
 
 def scale_map(op: str, shape, c: float, *, s_x: float, s_out: float) -> Kernel:
     """y = c x (neg: c = -1, mul.Scalar: c, div.Scalar: 1 / c), one MVIN-scale rounding."""
+    prove_readout(Q(c) * Q(s_x) / Q(s_out), -128, 127)
     n = _numel(shape)
     s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(shape), "output")])
-    ew.unary_scale(s, "x", "y", n, c * s_x / s_out)
-    return _end(op, s, mvin_scale=c * s_x / s_out)
+    ew.unary_scale(s, "x", "y", n, Q(c) * Q(s_x) / Q(s_out))
+    return _end(op, s, mvin_scale=Q(c) * Q(s_x) / Q(s_out))
 
 
 def relu(shape, *, s_x: float, s_out: float) -> Kernel:
+    prove_readout(Q(s_x) / Q(s_out), -128, 127, True)
     n = _numel(shape)
     s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(shape), "output")])
-    ew.unary_readout(s, "x", "y", n, s_x / s_out, relu=True)
-    return _end("aten.relu.default", s, readout_scale=s_x / s_out)
+    ew.unary_readout(s, "x", "y", n, Q(s_x) / Q(s_out), relu=True)
+    return _end("aten.relu.default", s, readout_scale=Q(s_x) / Q(s_out))
 
 
 def add_tensor(op: str, shape, b_shape, *, alpha: float = 1.0, s_a: float, s_b: float, s_out: float,
@@ -228,9 +233,12 @@ def add_tensor(op: str, shape, b_shape, *, alpha: float = 1.0, s_a: float, s_b: 
     Wa_s = Wa if wa > 0 else -Wa
     Wb_s = Wb if alpha > 0 else -Wb
     bias = int(round(c * Wa / (abs(wa) * s_a))) if c else None
+    sc = al / Wa
+    prove_affine([Q(wa) * Q(s_a) / Q(s_out), Q(alpha) * Q(s_b) / Q(s_out)], Q(c) / Q(s_out),
+                 [Wa_s, Wb_s], bias or 0, Q(sc), relu)
     terms = [("a", a_stride, parts127(Wa_s)), ("b", b_stride, parts127(Wb_s))]
     s = _begin([Arg("a", "i8", shape, "input"), Arg("b", "i8", b_shape, "input"), Arg("y", "i8", shape, "output")])
-    ew.lincomb(s, terms, "y", rows, cols, al / Wa, bias=bias, relu=relu)
+    ew.lincomb(s, terms, "y", rows, cols, sc, bias=bias, relu=relu)
     return _end(op, s, weights=(Wa_s, Wb_s), bias=bias, readout_scale=al / Wa)
 
 
@@ -243,6 +251,7 @@ def add_scalar(op: str, shape, c: float, *, s_x: float, s_out: float, w: float =
     sc = k / (G * s_out)
     if sc < 0:                         # keep the readout scale positive (ReLU before scale, C7)
         G, B, sc = -G, -B, -sc
+    prove_affine([Q(w) * Q(s_x) / Q(s_out)], Q(c) / Q(s_out), [G], B, Q(sc), relu)
     s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(shape), "output")])
     rows, cols = (n // 64, 64) if n % 64 == 0 else (n // shape[-1], shape[-1])
     ew.lincomb(s, [("x", cols, parts127(G))], "y", rows, cols, sc, bias=B, relu=relu)
@@ -273,7 +282,10 @@ def mean_dim(shape, dims, keepdim: bool, *, s_x: float, s_out: float, w: float |
     oshape = [1 if d in dims else shape[d] for d in range(r)] if keepdim else \
         [shape[d] for d in range(r) if d not in dims]
     s = _begin([Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(oshape), "output")])
-    sc = (1.0 / L if w is None else w) * s_x / s_out
+    exact_scale = (Q(1) / L if w is None else Q(w)) * Q(s_x) / Q(s_out)
+    accumulator_bound(L * 128)
+    prove_readout(exact_scale, -L * 128, L * 127)
+    sc = float(exact_scale)
     if I == 1:
         rd.mean_last(s, "x", "y", O, L, sc)
     else:
@@ -292,22 +304,24 @@ def _plan_kernel(op, args, plan: mv.Plan, **meta) -> Kernel:
 
 
 def clone(shape, *, s_x: float = 1.0, s_out: float = 1.0) -> Kernel:
+    prove_readout(Q(s_x) / Q(s_out), -128, 127)
     n = _numel(shape)
     plan = mv.Plan()
-    mv.flat_copy(plan.stage(), ("x", 0), ("y", 0), n, s_x / s_out)
+    mv.flat_copy(plan.stage(), ("x", 0), ("y", 0), n, Q(s_x) / Q(s_out))
     return _plan_kernel("aten.clone.default", [Arg("x", "i8", tuple(shape), "input"),
                                                 Arg("y", "i8", tuple(shape), "output")], plan)
 
 
 def permute(shape, perm, *, s_x: float = 1.0, s_out: float = 1.0) -> Kernel:
+    prove_readout(Q(s_x) / Q(s_out), -128, 127)
     perm = [p % len(shape) for p in perm]
     oshape = tuple(shape[p] for p in perm)
     args = [Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", oshape, "output")]
     if perm[-1] == len(shape) - 1:
-        plan, _ = mv.permute_plan("x", shape, "y", perm, s_x / s_out)
+        plan, _ = mv.permute_plan("x", shape, "y", perm, Q(s_x) / Q(s_out))
         return _plan_kernel("aten.permute.default", args, plan, form="strided_dma")
     s = _begin(args)
-    mv.emit_transpose(s, "x", list(shape), "y", perm, s_x / s_out)
+    mv.emit_transpose(s, "x", list(shape), "y", perm, Q(s_x) / Q(s_out))
     return _end("aten.permute.default", s, form="transposer")
 
 
@@ -322,6 +336,8 @@ def _permute_into(s: Stream, x: str, shape, out: str, perm) -> None:
 
 
 def cat(shapes, dim: int, *, s_in=None, s_out: float = 1.0) -> Kernel:
+    for si in s_in or [s_out] * len(shapes):
+        prove_readout(Q(si) / Q(s_out), -128, 127)
     names = [f"x{i}" for i in range(len(shapes))]
     scales = None if s_in is None else [si / s_out for si in s_in]
     plan = mv.Plan()
@@ -333,18 +349,21 @@ def cat(shapes, dim: int, *, s_in=None, s_out: float = 1.0) -> Kernel:
 
 def constant_pad_nd(shape, pad, value: float, *, s_x: float = 1.0, s_out: float = 1.0) -> Kernel:
     """``pad`` in ATen order: (last lo, last hi, second-to-last lo, ...)."""
+    prove_readout(Q(s_x) / Q(s_out), -128, 127)
     r = len(shape)
     lohi = [(0, 0)] * r
     for i in range(len(pad) // 2):
         lohi[r - 1 - i] = (pad[2 * i], pad[2 * i + 1])
     plan = mv.Plan()
-    oshape = mv.constant_pad(plan, "x", list(shape), "y", lohi, code(value, s_out), s_x / s_out)
+    oshape = mv.constant_pad(plan, "x", list(shape), "y", lohi, code(value, s_out), Q(s_x) / Q(s_out))
     args = [Arg("x", "i8", tuple(shape), "input"), Arg("y", "i8", tuple(oshape), "output")]
     return _plan_kernel("aten.constant_pad_nd.default", args, plan, fill_code=code(value, s_out))
 
 
 def slice_scatter(shape, src_shape, dim: int, start, end, step: int, *, s_self: float = 1.0, s_src: float = 1.0,
                   s_out: float = 1.0) -> Kernel:
+    prove_readout(Q(s_self) / Q(s_out), -128, 127)
+    prove_readout(Q(s_src) / Q(s_out), -128, 127)
     D = shape[dim % len(shape)]
     start = 0 if start is None else start
     end = D if end is None else end

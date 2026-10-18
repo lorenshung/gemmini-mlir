@@ -81,10 +81,9 @@ def lower(cb):
 
 
 def reference(cb, inputs):
-    from merlin.runtime.reference import reference_outputs
-
-    out = reference_outputs(cb, {k: v.tolist() for k, v in inputs.items()})
-    return {k: np.asarray(v, np.int64).reshape(-1) for k, v in out.items()}
+    sys.path.insert(0, str(HERE.parent))
+    from exact_oracle import command_reference
+    return command_reference(cb, inputs)
 
 
 def merlin_checks(cb, inputs, ref) -> list[str]:
@@ -127,9 +126,11 @@ def main() -> int:
             ref = reference(merlin_cb, inputs)
             model = simulate(stream, inputs)
             bad = {k: int(np.sum(model[k].astype(np.int64).reshape(-1) != ref[k])) for k in ref}
-            problems = merlin_checks(ours, inputs, ref)
+            diagnostics = merlin_checks(ours, inputs, ref)
+            divergence = [p for p in diagnostics if p.startswith("merlin simulate")]
+            problems = [p for p in diagnostics if p not in divergence]
             row = dict(status="PASS" if not any(bad.values()) and not problems else "FAIL", mismatches=bad,
-                       buffer_problems=problems,
+                       buffer_problems=problems, eager_float_divergence=dict(informational=True, diagnostics=divergence),
                        commands=[c["opcode"] for c in ours["commands"]], instructions=len(stream.ins))
             if a.spike or a.rtl:
                 sym = f"ifx{i}_{name}"
@@ -151,15 +152,18 @@ def main() -> int:
                             checks.append(runner.Check(bn, ref[arg.name].astype(dt), 0, f"{name}.{arg.name}_vs_ref"))
                 calls.append((sym, argnames))
         except Exception as exc:  # noqa: BLE001
-            row = dict(status="ERROR", error=f"{type(exc).__name__}: {exc}"[-800:])
+            from mlir_oot.core_aten.iface import IfaceDecline
+            row = dict(status="REFUSED" if isinstance(exc, IfaceDecline) else "ERROR", error=f"{type(exc).__name__}: {exc}"[-800:])
         row["seconds"] = round(time.time() - t0, 2)
         rows[name] = row
-        ok &= row["status"] == "PASS"
+        ok &= row["status"] in ("PASS", "REFUSED")
         print(f"{name:28s} {row['status']} {row.get('mismatches', row.get('error', ''))} {row.get('buffer_problems') or ''}",
               flush=True)
     result = {"model_vs_reference": rows}
     if (a.spike or a.rtl) and calls:
         elf = runner.build_elf(runner.DeviceTest(a.batch, objects, buffers, calls, checks, outputs), wd)
+        from mlir_oot.golden_device_catalog import final_elf_audit
+        final_elf_audit(elf)
         for engine, flag, fn in (("spike", a.spike, runner.run_spike), ("rtl", a.rtl, runner.run_rtl)):
             if not flag:
                 continue

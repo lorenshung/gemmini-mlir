@@ -23,15 +23,19 @@ def test_runner_settings_follow_the_selected_spike_installation(monkeypatch):
 
 def test_provider_binds_catalog_and_derives_precision_from_selected_facts(tmp_path, monkeypatch):
     provider = load_execution_provider("gemmini", PROVIDER)
-    (tmp_path / "model.mlir").write_text("caller source")
+    (tmp_path / "model.mlir").write_text("builtin.module {}")
 
     def builder(*args):
         return None
 
     backend = SimpleNamespace(
-        build_catalog=lambda source: (None, {"covered_contractions": 1}), merlin_builder=lambda llvm_bin: builder
+        build_catalog=lambda source: (None, {"covered_contractions": 1}), merlin_builder=lambda llvm_bin: builder, final_elf_audit=lambda elf: None
     )
-    monkeypatch.setattr(provider, "load_module", lambda *a, **kw: backend)
+    original_load = provider.load_module
+    monkeypatch.setattr(provider, "load_module", lambda package, name, **kw:
+                        backend if name == "mlir_oot.golden_device_catalog" else original_load(package, name, **kw))
+    original_core = provider._core_aten_module
+    monkeypatch.setattr(provider, "_core_aten_module", lambda package, name: original_core(PROVIDER.parents[2], name))
     fixture = Path(__file__).resolve().parent / "fixtures/core_aten_device/facts.json"
     eligible = [(None, SimpleNamespace(dtypes=("i8", "i8", "i32")))]
     with selected_facts("synthetic_core_aten", fixture) as document:
@@ -59,7 +63,7 @@ def test_provider_binds_catalog_and_derives_precision_from_selected_facts(tmp_pa
 
 def test_other_targets_cannot_load_this_provider():
     path = PROVIDER
-    with pytest.raises(ValueError, match="selected target"):
+    with pytest.raises((ValueError, FileNotFoundError), match="selected target|no capability contract"):
         load_execution_provider("synthetic_core_aten", path)
 
 

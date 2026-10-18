@@ -45,6 +45,10 @@ class Check:
     label: str
     count: int | None = None      # leading elements to compare (default: all of expected)
 
+    def __post_init__(self):
+        if self.tol != 0:
+            raise ValueError("device correctness checks require exact equality")
+
 
 @dataclass
 class DeviceTest:

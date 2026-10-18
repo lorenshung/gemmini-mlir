@@ -83,6 +83,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
         provs = [p for p in provs if p and not p.startswith("quantized_decomposed.")]
         bindings.append(dict(
             op=m.op, aten=provs[0] if provs else "", symbol=symbol, root_ordinal=ordinals[m.root],
+            source_operation_ordinal=ordinals[m.consumed[0]],
             replaced_ordinals=sorted({ordinals[o] for o in m.consumed if o is not None}),
             operands=argmap, result={out_name: _source(out_val, ordinals, func_args)},
             result_type=str(out_val.type), operand_types={n: str(v.type) for n, v in m.operands},

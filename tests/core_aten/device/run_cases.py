@@ -1,8 +1,7 @@
 """Compile quantized op cases into one bare-metal ELF and run it on Spike and/or RTL.
 
 Per case the ELF checks the device output against the kernel's bit-level model
-(tolerance 0) and against the eager-PyTorch quantized reference (tolerance = case.tol,
-reporting the bit-exact count).  Usage:
+and the exact-arithmetic reference, using equality of every output code.  Usage:
 
     python run_cases.py [--rtl] [--rep] [--only substr ...] [--batch NAME]
 """
@@ -87,8 +86,6 @@ def main() -> int:
     ap.add_argument("--json")
     args = ap.parse_args()
     cs = C.paper_cases(representative=args.rep)
-    if args.rep:
-        cs = cs[[i for i, c in enumerate(cs) if c.name == "conv_256x14x14_k3s1p1_256"][0]:]
     if args.only:
         cs = [c for c in cs if any(o in c.name for o in args.only)]
     res = run(cs, args.batch, rtl=args.rtl, spike=not args.no_spike)

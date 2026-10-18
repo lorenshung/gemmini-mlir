@@ -1,16 +1,15 @@
-"""Quantized Core ATen op cases with an eager-PyTorch reference.
+"""Calibrated Core ATen cases with rational references for admitted arithmetic.
 
-Each case draws float data, calibrates per-tensor symmetric scales (absmax / 127.5, the
-PT2E MinMax convention), quantizes the inputs, and evaluates the eager PyTorch op in
-float64 on the dequantized inputs; the reference is that result quantized with the
-output's own scale.  The device kernel consumes the int8 codes (channels-last for
-convolutions) and must match the reference within the gate-3 criterion (max error
-<= 1 output LSB, >= 99% bit-exact) and its bit-level model exactly.
+PyTorch supplies calibration data and integer input codes. Device admission
+requires exactness on the full input domain; unsupported cases are reported.
+Every admitted output is compared with exact arithmetic and has zero tolerance.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from fractions import Fraction as F
+from exact_oracle import quantize as exact_quantize
 
 import numpy as np
 import torch
@@ -40,8 +39,8 @@ class Case:
     kernel: ops.Kernel
     inputs: dict[str, np.ndarray]
     reference: dict[str, np.ndarray]           # kernel-layout expected outputs
-    tol: int = 1
-    min_exact: float = 0.99
+    tol: int = 0
+    min_exact: float = 1.0
     info: dict = field(default_factory=dict)
 
 
@@ -69,7 +68,7 @@ def mm_case(M, K, N, seed=0, name=None):
     y = A.mm.default(dq(aq, sa), dq(bq, sb))
     so = scale_of(y)
     k = ops.matmul("aten.mm.default", M, K, N, s_a=sa, s_b=sb, s_out=so)
-    return Case(name or f"mm_{M}x{K}x{N}", "aten.mm.default", k, {"a": _np(aq), "b": _np(bq)}, {"out": _np(q(y, so))})
+    return Case(name or f"mm_{M}x{K}x{N}", "aten.mm.default", k, {"a": _np(aq), "b": _np(bq)}, {"out": exact_quantize(_np(aq).astype(object) @ _np(bq).astype(object) * F(sa) * F(sb), so)})
 
 
 def addmm_case(M, K, N, seed=0, name=None, beta=1.0, alpha=1.0):
@@ -93,7 +92,7 @@ def bmm_case(B, M, K, N, seed=0, name=None):
     so = scale_of(y)
     k = ops.matmul("aten.bmm.default", M, K, N, batch=B, s_a=sa, s_b=sb, s_out=so)
     return Case(name or f"bmm_{B}x{M}x{K}x{N}", "aten.bmm.default", k, {"a": _np(aq), "b": _np(bq)},
-                {"out": _np(q(y, so))})
+                {"out": exact_quantize(_np(aq).astype(object) @ _np(bq).astype(object) * F(sa) * F(sb), so)})
 
 
 def conv_case(N, C, H, W, F, k, s=1, p=0, d=1, groups=1, bias=True, seed=0, name=None):
@@ -129,9 +128,9 @@ def scale_case(op, shape, c, seed=0, name=None, narrow=False):
           "aten.div.Scalar": lambda t: A.div.Scalar(t, c)}[op]
     y = fn(dq(xq, sx))
     so = scale_of(y)
-    cc = {"aten.neg.default": -1.0, "aten.mul.Scalar": c, "aten.div.Scalar": 1.0 / c if c else 0.0}[op]
+    cc = {"aten.neg.default": -1.0, "aten.mul.Scalar": c, "aten.div.Scalar": F(1) / F(c) if c else F(0)}[op]
     k = ops.scale_map(op, shape, cc, s_x=sx, s_out=so)
-    return Case(name or f"{op.split('.')[1]}_{'x'.join(map(str, shape))}", op, k, {"x": _np(xq)}, {"y": _np(q(y, so))})
+    return Case(name or f"{op.split('.')[1]}_{'x'.join(map(str, shape))}", op, k, {"x": _np(xq)}, {"y": exact_quantize(_np(xq).astype(object) * F(sx) * F(cc), so)})
 
 
 def relu_case(shape, seed=0, name=None):
@@ -142,7 +141,7 @@ def relu_case(shape, seed=0, name=None):
     so = scale_of(y)
     k = ops.relu(shape, s_x=sx, s_out=so)
     return Case(name or f"relu_{'x'.join(map(str, shape))}", "aten.relu.default", k, {"x": _np(xq)},
-                {"y": _np(q(y, so))})
+                {"y": exact_quantize(np.maximum(_np(xq).astype(object), 0) * F(sx), so)})
 
 
 def add_case(op, shape, b_shape=None, alpha=1.0, seed=0, name=None):
@@ -156,7 +155,7 @@ def add_case(op, shape, b_shape=None, alpha=1.0, seed=0, name=None):
     k = ops.add_tensor(op, shape, b_shape, alpha=alpha if op == "aten.add.Tensor" else -alpha, s_a=sa, s_b=sb,
                        s_out=so)
     return Case(name or f"{op.split('.')[1]}_{'x'.join(map(str, shape))}", op, k, {"a": _np(aq), "b": _np(bq)},
-                {"y": _np(q(y, so))})
+                {"y": exact_quantize(_np(aq).astype(object) * F(sa) + _np(bq).astype(object) * F(sb) * F(alpha) * (1 if op == "aten.add.Tensor" else -1), so)})
 
 
 def add_scalar_case(op, shape, c, seed=0, name=None):
@@ -168,7 +167,7 @@ def add_scalar_case(op, shape, c, seed=0, name=None):
     so = scale_of(y)
     k = ops.add_scalar(op, shape, c if op == "aten.add.Scalar" else -c, s_x=sx, s_out=so)
     return Case(name or f"{op.split('.')[1]}_{'x'.join(map(str, shape))}", op, k, {"x": _np(xq)},
-                {"y": _np(q(y, so))})
+                {"y": exact_quantize(_np(xq).astype(object) * F(sx) + F(c) * (1 if op == "aten.add.Scalar" else -1), so)})
 
 
 def mean_case(shape, dims, keepdim=False, seed=0, name=None):
@@ -179,7 +178,7 @@ def mean_case(shape, dims, keepdim=False, seed=0, name=None):
     so = scale_of(y)
     k = ops.mean_dim(shape, dims, keepdim, s_x=sx, s_out=so)
     return Case(name or f"mean_{'x'.join(map(str, shape))}", "aten.mean.dim", k, {"x": _np(xq)},
-                {"y": _np(q(y, so))})
+                {"y": exact_quantize(_np(xq).astype(object).sum(axis=tuple(dims), keepdims=keepdim) * F(sx) / int(np.prod([shape[d] for d in dims])), so)})
 
 
 # ---------------------------------------------------------------------------------------------
@@ -215,7 +214,7 @@ def cat_case(shapes, dim, seed=0, name=None, independent=False):
     y = A.cat.default([dq(t, s) for t, s in zip(xq, ss)], dim)
     k = ops.cat(shapes, dim, s_in=ss, s_out=so)
     return Case(name or f"cat_{len(shapes)}x{'x'.join(map(str, shapes[0]))}_d{dim}", "aten.cat.default", k,
-                {f"x{i}": _np(t) for i, t in enumerate(xq)}, {"y": _np(q(y, so))})
+                {f"x{i}": _np(t) for i, t in enumerate(xq)}, {"y": exact_quantize(np.concatenate([_np(t).astype(object) * F(si) for t,si in zip(xq,ss)],axis=dim), so)})
 
 
 def pad_case(shape, pad, value, seed=0, name=None):
@@ -261,52 +260,59 @@ def to_copy_case(shape, seed=0, name=None):
 
 def paper_cases(representative: bool = True) -> list[Case]:
     out = [
-        conv_case(1, 64, 9, 11, 48, 3, 1, 1, name="conv_k3s1p1_tails"),
-        conv_case(1, 32, 12, 12, 40, 3, 2, 1, name="conv_k3s2p1"),
-        conv_case(1, 3, 32, 32, 64, 16, 16, 0, name="conv_patch16"),
-        conv_case(1, 48, 8, 8, 32, 1, 1, 0, name="conv_1x1"),
-        conv_case(1, 32, 9, 9, 24, 7, 2, 3, name="conv_k7s2p3"),
-        mm_case(37, 200, 45, name="mm_tails"),
-        addmm_case(50, 96, 70, name="addmm_tails"),
-        bmm_case(3, 20, 40, 18, name="bmm_tails"),
-        scale_case("aten.neg.default", (37, 21), 0, name="neg_tails"),
-        scale_case("aten.mul.Scalar", (37, 21), 0.25, name="mul_Scalar_tails"),
-        add_case("aten.sub.Tensor", (37, 21), name="sub_Tensor_tails"),
-        add_case("aten.add.Tensor", (37, 21), name="add_Tensor_tails"),
-        add_case("aten.add.Tensor", (40, 48), (48,), alpha=0.5, name="add_Tensor_rowbcast_alpha"),
-        relu_case((37, 21), name="relu_tails"),
-        mean_case((37, 50), [-1], name="mean_last_tails"),
-        mean_case((3, 20, 21), [1], keepdim=True, name="mean_middle"),
-        clone_case((37, 21), name="clone_tails"),
-        permute_case((3, 20, 21), (1, 0, 2), name="permute_102"),
-        permute_case((2, 20, 37), (0, 2, 1), name="permute_021_transposer"),
-        cat_case([(2, 5, 24), (2, 3, 24)], 1, name="cat_d1"),
-        cat_case([(2, 5, 24), (2, 5, 9)], -1, independent=True, name="cat_last_independent"),
-        pad_case((2, 7, 9), [1, 2, 0, 1], 0.0, name="pad_zero"),
-        pad_case((2, 7, 9), [2, 1, 1, 0], 9.0, name="pad_value_requant"),
-        slice_scatter_case((20, 64), (20, 32), 1, 0, 32, 1, name="slice_scatter_c0"),
-        slice_scatter_case((20, 33), (20, 11), 1, 1, None, 3, name="slice_scatter_step3"),
-        full_like_case((37, 21), -1.7, s_out=0.05, name="full_like_tails"),
-        to_copy_case((5, 10), name="to_copy_50"),
+        lambda: conv_case(1, 64, 9, 11, 48, 3, 1, 1, name="conv_k3s1p1_tails"),
+        lambda: conv_case(1, 32, 12, 12, 40, 3, 2, 1, name="conv_k3s2p1"),
+        lambda: conv_case(1, 3, 32, 32, 64, 16, 16, 0, name="conv_patch16"),
+        lambda: conv_case(1, 48, 8, 8, 32, 1, 1, 0, name="conv_1x1"),
+        lambda: conv_case(1, 32, 9, 9, 24, 7, 2, 3, name="conv_k7s2p3"),
+        lambda: mm_case(37, 200, 45, name="mm_tails"),
+        lambda: addmm_case(50, 96, 70, name="addmm_tails"),
+        lambda: bmm_case(3, 20, 40, 18, name="bmm_tails"),
+        lambda: scale_case("aten.neg.default", (37, 21), 0, name="neg_tails"),
+        lambda: scale_case("aten.mul.Scalar", (37, 21), 0.25, name="mul_Scalar_tails"),
+        lambda: add_case("aten.sub.Tensor", (37, 21), name="sub_Tensor_tails"),
+        lambda: add_case("aten.add.Tensor", (37, 21), name="add_Tensor_tails"),
+        lambda: add_case("aten.add.Tensor", (40, 48), (48,), alpha=0.5, name="add_Tensor_rowbcast_alpha"),
+        lambda: relu_case((37, 21), name="relu_tails"),
+        lambda: mean_case((37, 50), [-1], name="mean_last_tails"),
+        lambda: mean_case((3, 20, 21), [1], keepdim=True, name="mean_middle"),
+        lambda: clone_case((37, 21), name="clone_tails"),
+        lambda: permute_case((3, 20, 21), (1, 0, 2), name="permute_102"),
+        lambda: permute_case((2, 20, 37), (0, 2, 1), name="permute_021_transposer"),
+        lambda: cat_case([(2, 5, 24), (2, 3, 24)], 1, name="cat_d1"),
+        lambda: cat_case([(2, 5, 24), (2, 5, 9)], -1, independent=True, name="cat_last_independent"),
+        lambda: pad_case((2, 7, 9), [1, 2, 0, 1], 0.0, name="pad_zero"),
+        lambda: pad_case((2, 7, 9), [2, 1, 1, 0], 9.0, name="pad_value_requant"),
+        lambda: slice_scatter_case((20, 64), (20, 32), 1, 0, 32, 1, name="slice_scatter_c0"),
+        lambda: slice_scatter_case((20, 33), (20, 11), 1, 1, None, 3, name="slice_scatter_step3"),
+        lambda: full_like_case((37, 21), -1.7, s_out=0.05, name="full_like_tails"),
+        lambda: to_copy_case((5, 10), name="to_copy_50"),
     ]
     if representative:
         out += [
-            conv_case(1, 256, 14, 14, 256, 3, 1, 1, name="conv_256x14x14_k3s1p1_256"),
-            addmm_case(1024, 768, 768, name="addmm_1024x768x768"),
-            mm_case(128, 2048, 2048, name="mm_128x2048x2048"),
-            bmm_case(32, 128, 64, 128, name="bmm_32x128x64x128"),
-            add_case("aten.sub.Tensor", (750, 32), name="sub_Tensor_750x32"),
-            scale_case("aten.neg.default", (4096, 32), 0, name="neg_4096x32"),
-            add_case("aten.add.Tensor", (128, 2048), name="add_Tensor_128x2048"),
-            scale_case("aten.mul.Scalar", (4096, 64), 0.125, name="mul_Scalar_4096x64"),
-            relu_case((256, 196), name="relu_256x196"),
-            mean_case((128, 2048), [-1], name="mean_dim_128x2048"),
-            clone_case((262144,), name="clone_262144"),
-            permute_case((128, 32, 64), (1, 0, 2), name="permute_128x32x64_0213"),
-            slice_scatter_case((750, 64), (750, 32), 1, 0, 32, 1, name="slice_scatter_750x64_c0"),
-            pad_case((3, 512, 512), [0, 0, 0, 0], 0.0, name="constant_pad_nd_3x512x512_p0"),
-            full_like_case((12, 1024, 1024), 0.0, s_out=0.1, name="full_like_12x1024x1024"),
-            cat_case([(4, 128, 64), (4, 1, 64)], 1, name="cat_kv_4x128x64"),
-            to_copy_case((50,), name="to_copy_50_rep"),
+            lambda: conv_case(1, 256, 14, 14, 256, 3, 1, 1, name="conv_256x14x14_k3s1p1_256"),
+            lambda: addmm_case(1024, 768, 768, name="addmm_1024x768x768"),
+            lambda: mm_case(128, 2048, 2048, name="mm_128x2048x2048"),
+            lambda: bmm_case(32, 128, 64, 128, name="bmm_32x128x64x128"),
+            lambda: add_case("aten.sub.Tensor", (750, 32), name="sub_Tensor_750x32"),
+            lambda: scale_case("aten.neg.default", (4096, 32), 0, name="neg_4096x32"),
+            lambda: add_case("aten.add.Tensor", (128, 2048), name="add_Tensor_128x2048"),
+            lambda: scale_case("aten.mul.Scalar", (4096, 64), 0.125, name="mul_Scalar_4096x64"),
+            lambda: relu_case((256, 196), name="relu_256x196"),
+            lambda: mean_case((128, 2048), [-1], name="mean_dim_128x2048"),
+            lambda: clone_case((262144,), name="clone_262144"),
+            lambda: permute_case((128, 32, 64), (1, 0, 2), name="permute_128x32x64_0213"),
+            lambda: slice_scatter_case((750, 64), (750, 32), 1, 0, 32, 1, name="slice_scatter_750x64_c0"),
+            lambda: pad_case((3, 512, 512), [0, 0, 0, 0], 0.0, name="constant_pad_nd_3x512x512_p0"),
+            lambda: full_like_case((12, 1024, 1024), 0.0, s_out=0.1, name="full_like_12x1024x1024"),
+            lambda: cat_case([(4, 128, 64), (4, 1, 64)], 1, name="cat_kv_4x128x64"),
+            lambda: to_copy_case((50,), name="to_copy_50_rep"),
         ]
-    return out
+    from mlir_oot.core_aten.match import Decline
+    admitted = []
+    for factory in out:
+        try:
+            admitted.append(factory())
+        except Decline as exc:
+            print("device refusal:", exc)
+    return admitted

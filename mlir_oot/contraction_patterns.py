@@ -75,6 +75,8 @@ def _canonical_body(op: Operation) -> bool:
     if len(block.args) != 3 or [str(x.type) for x in block.args] != ["i8", "i8", "i32"]:
         return False
     ext_a, ext_b, mul, add, result = ops
+    if any(getattr(getattr(x, "overflow_flags", None), "data", ()) for x in (mul, add)):
+        return False
     return (list(ext_a.operands) == [block.args[0]] and
             list(ext_b.operands) == [block.args[1]] and
             str(ext_a.results[0].type) == "i32" and
@@ -86,7 +88,7 @@ def _canonical_body(op: Operation) -> bool:
             list(result.operands) == [add.results[0]])
 
 
-def match_integer_gemm(op: Operation) -> IntegerGemm | None:
+def match_integer_gemm(op: Operation, *, require_zero: bool = True) -> IntegerGemm | None:
     """Return physical batch/M/N/K only when this op has exact GEMM semantics."""
     if op.name not in ("linalg.matmul", "linalg.generic") or len(op.operands) != 3 or len(op.results) != 1:
         return None
@@ -94,7 +96,7 @@ def match_integer_gemm(op: Operation) -> IntegerGemm | None:
     rhs = _shape(op.operands[1], "i8")
     init = _shape(op.operands[2], "i32")
     out = _shape(op.results[0], "i32")
-    if lhs is None or rhs is None or init is None or out != init or not _zero_init(op.operands[2]):
+    if lhs is None or rhs is None or init is None or out != init or (require_zero and not _zero_init(op.operands[2])):
         return None
     if op.name == "linalg.matmul":
         if len(lhs) != 2 or len(rhs) != 2:

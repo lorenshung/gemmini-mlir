@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from fractions import Fraction
 
 import numpy as np
 from xdsl.dialects.builtin import DenseIntOrFPElementsAttr, FloatAttr, IntegerAttr, TensorType
@@ -66,8 +67,11 @@ def _scalar_const(op: Operation | None):
     if op is None or op.name != "arith.constant":
         return None
     attr = _attr_of(op, "value")
-    if isinstance(attr, (FloatAttr, IntegerAttr)):
-        return float(attr.value.data)
+    if isinstance(attr, IntegerAttr):
+        return int(attr.value.data)
+    if isinstance(attr, FloatAttr):
+        value = float(attr.value.data)
+        return value if math.isfinite(value) else None
     return None
 
 
@@ -83,7 +87,7 @@ def splat_value(v: SSAValue):
         if isinstance(attr, DenseIntOrFPElementsAttr):
             vals = list(attr.get_values()) if hasattr(attr, "get_values") else None
             if vals and all(x == vals[0] for x in vals):
-                return float(vals[0])
+                return vals[0]
     return None
 
 
@@ -122,11 +126,14 @@ def dequant(v: SSAValue) -> QIn | None:
     s = splat_value(p.operands[1])
     zp = splat_value(p.operands[2])
     src = p.operands[0]
-    if s is None or zp != 0 or etype(src) not in ("i8", "i32") or not s > 0:
+    if s is None or zp != 0 or etype(src) not in ("i8", "i32") or not math.isfinite(s) or not s > 0:
         return None
-    if etype(src) == "i8" and (_prop_int(p, "quant_min") < -128 or _prop_int(p, "quant_max") > 127):
+    lo, hi = _prop_int(p, "quant_min"), _prop_int(p, "quant_max")
+    if lo is None or hi is None or lo > hi:
         return None
-    return QIn(src, float(np.float32(s)), p, etype(src))
+    if etype(src) == "i8" and (lo < -128 or hi > 127):
+        return None
+    return QIn(src, float(s), p, etype(src))
 
 
 @dataclass(frozen=True)
@@ -146,13 +153,13 @@ def quant_sink(v: SSAValue) -> QOut | None:
     if q.operands[0] is not v:
         return None
     s, zp = splat_value(q.operands[1]), splat_value(q.operands[2])
-    if s is None or zp != 0 or etype(q.results[0]) != "i8" or not s > 0:
+    if s is None or zp != 0 or etype(q.results[0]) != "i8" or not math.isfinite(s) or not s > 0:
         return None
     lo, hi = _prop_int(q, "quant_min"), _prop_int(q, "quant_max")
     if (lo, hi) != (-128, 127):
         # the readout saturates to the full int8 range; a narrow output range needs a clamp
         return None
-    return QOut(q, q.results[0], float(np.float32(s)), lo, hi)
+    return QOut(q, q.results[0], float(s), lo, hi)
 
 
 def single_use(v: SSAValue) -> Operation | None:
@@ -167,15 +174,15 @@ def single_use(v: SSAValue) -> Operation | None:
 @dataclass
 class Lin:
     terms: dict[int, float] = field(default_factory=dict)
-    c: float = 0.0
+    c: float = Fraction(0)
 
     def scaled(self, k):
         return Lin({i: w * k for i, w in self.terms.items()}, self.c * k)
 
-    def plus(self, other, k=1.0):
+    def plus(self, other, k=Fraction(1)):
         t = dict(self.terms)
         for i, w in other.terms.items():
-            t[i] = t.get(i, 0.0) + k * w
+            t[i] = t.get(i, Fraction(0)) + k * w
         return Lin({i: w for i, w in t.items() if w != 0}, self.c + k * other.c)
 
 
@@ -187,21 +194,21 @@ class Body:
 
 
 def _is_zero(x):
-    return isinstance(x, float) and x == 0.0
+    return isinstance(x, (float, Fraction)) and x == 0
 
 
 def analyse_body(block: Block, n_in: int, consts: dict[int, float]) -> Body | None:
     """Symbolic evaluation of an elementwise linalg body (block args 0..n_in-1 are inputs)."""
     env: dict = {}
     for i, a in enumerate(block.args[:n_in]):
-        env[a] = consts[i] if i in consts else Lin({i: 1.0}, 0.0)
+        env[a] = Fraction(consts[i]) if i in consts else Lin({i: Fraction(1)}, Fraction(0))
     relu_of = {}
     widen = False
     for op in block.ops:
         nm = op.name
         if nm == "linalg.yield":
             out = env.get(op.operands[0])
-            if isinstance(out, float):
+            if isinstance(out, (float, Fraction)):
                 return Body(Lin({}, out), False, widen)
             if isinstance(out, Lin):
                 return Body(out, False, widen)
@@ -213,9 +220,9 @@ def analyse_body(block: Block, n_in: int, consts: dict[int, float]) -> Body | No
             c = _scalar_const(op)
             if c is None:
                 return None
-            env[op.results[0]] = c
-        elif nm in ("arith.sitofp", "arith.uitofp", "arith.extf", "arith.truncf"):
-            if not isinstance(vals[0], float):
+            env[op.results[0]] = Fraction(c)
+        elif nm in ("arith.sitofp", "arith.uitofp", "arith.extf"):
+            if not isinstance(vals[0], (float, Fraction)):
                 return None
             env[op.results[0]] = vals[0]
         elif nm == "arith.extsi":
@@ -226,37 +233,37 @@ def analyse_body(block: Block, n_in: int, consts: dict[int, float]) -> Body | No
             env[op.results[0]] = vals[0]
         elif nm in ("arith.addf", "arith.subf"):
             a, b = vals
-            k = 1.0 if nm == "arith.addf" else -1.0
-            if isinstance(a, float) and isinstance(b, float):
+            k = Fraction(1) if nm == "arith.addf" else Fraction(-1)
+            if isinstance(a, (float, Fraction)) and isinstance(b, (float, Fraction)):
                 env[op.results[0]] = a + k * b
             else:
-                la = a if isinstance(a, Lin) else Lin({}, a) if isinstance(a, float) else None
-                lb = b if isinstance(b, Lin) else Lin({}, b) if isinstance(b, float) else None
+                la = a if isinstance(a, Lin) else Lin({}, a) if isinstance(a, (float, Fraction)) else None
+                lb = b if isinstance(b, Lin) else Lin({}, b) if isinstance(b, (float, Fraction)) else None
                 if la is None or lb is None:
                     return None
                 env[op.results[0]] = la.plus(lb, k)
         elif nm == "arith.mulf":
             a, b = vals
-            if isinstance(a, float) and isinstance(b, Lin):
+            if isinstance(a, (float, Fraction)) and isinstance(b, Lin):
                 a, b = b, a
-            if isinstance(a, Lin) and isinstance(b, float):
+            if isinstance(a, Lin) and isinstance(b, (float, Fraction)):
                 env[op.results[0]] = a.scaled(b)
-            elif isinstance(a, float) and isinstance(b, float):
+            elif isinstance(a, (float, Fraction)) and isinstance(b, (float, Fraction)):
                 env[op.results[0]] = a * b
             else:
                 return None
         elif nm == "arith.divf":
             a, b = vals
-            if isinstance(a, Lin) and isinstance(b, float) and b != 0:
-                env[op.results[0]] = a.scaled(1.0 / b)
-            elif isinstance(a, float) and isinstance(b, float) and b != 0:
+            if isinstance(a, Lin) and isinstance(b, (float, Fraction)) and b != 0:
+                env[op.results[0]] = a.scaled(Fraction(1) / b)
+            elif isinstance(a, (float, Fraction)) and isinstance(b, (float, Fraction)) and b != 0:
                 env[op.results[0]] = a / b
             else:
                 return None
         elif nm == "arith.negf":
             if isinstance(vals[0], Lin):
-                env[op.results[0]] = vals[0].scaled(-1.0)
-            elif isinstance(vals[0], float):
+                env[op.results[0]] = vals[0].scaled(Fraction(-1))
+            elif isinstance(vals[0], (float, Fraction)):
                 env[op.results[0]] = -vals[0]
             else:
                 return None
@@ -437,7 +444,7 @@ def match_elementwise(op: Operation) -> Match | None:
         elif c == 0 and body.relu:
             if w <= 0:
                 raise Decline("ReLU after a non-positive scale (C7)")
-            aten, k = "aten.relu.default", ops.relu(oshape, s_x=w * q.scale, s_out=s_o)
+            aten, k = "aten.relu.default", ops.relu(oshape, s_x=Fraction(w) * Fraction(q.scale), s_out=s_o)
         else:
             aten = "aten.add.Scalar" if c > 0 else "aten.sub.Scalar"
             k = ops.add_scalar(aten, oshape, c, s_x=q.scale, s_out=s_o, w=w, relu=body.relu)
@@ -472,8 +479,8 @@ RESHAPES = ("tensor.collapse_shape", "tensor.expand_shape")
 class Chain:
     ops: list[Operation]
     final: SSAValue
-    w: float = 1.0                       # result = act(w * value + bias + c)
-    c: float = 0.0
+    w: float = Fraction(1)               # result = act(w * value + bias + c)
+    c: float = Fraction(0)
     relu: bool = False
     bias: tuple | None = None            # (QIn or constant ndarray, weight, trailing-block index, map coeffs)
     perm: list | None = None             # a final layout transpose before the quantize
@@ -481,7 +488,7 @@ class Chain:
 
 def _scaled_dequant(x: SSAValue):
     """(QIn, multiplier, ops) for a dequantized tensor, possibly through single-input scale generics."""
-    k, ops_ = 1.0, []
+    k, ops_ = Fraction(1), []
     for _ in range(4):
         q = dequant(x)
         if q is not None:
@@ -582,15 +589,19 @@ def _bias_operand(ch: Chain, s_acc: float, n: int, broadcast_dim_ok, full_ok=Non
     if isinstance(src, QIn):
         if src.dtype != "i32":
             raise Decline("runtime bias is not int32")
-        r = wb * src.scale / (ch.w * s_acc)
+        r = Fraction(wb) * Fraction(src.scale) / (Fraction(ch.w) * Fraction(s_acc))
         rep = int(round(r))
-        if not 1 <= rep <= 16 or not math.isclose(r, rep, rel_tol=1e-6):
+        if not 1 <= rep <= 16 or r != rep:
             raise Decline("runtime bias weight is not a small integer in accumulator units")
         return ("arg", src, rep, full)
     vals = np.asarray(src, np.float64).reshape(-1)
     if vals.size != n and not full:
         raise Decline("bias extent")
-    return ("const", np.round(wb * vals / (ch.w * s_acc)).astype(np.int32), 1, full)
+    from .exactness import rational as Q, require
+    units = [Q(wb) * Q(float(v)) / (Q(ch.w) * Q(s_acc)) for v in vals]
+    require(all(v.denominator == 1 and -(1 << 31) <= v < (1 << 31) for v in units),
+            "bias is not exactly representable in accumulator units")
+    return ("const", np.array([int(v) for v in units], np.int32), 1, full)
 
 
 def match_contraction(op: Operation) -> Match | None:
@@ -612,6 +623,17 @@ def match_contraction(op: Operation) -> Match | None:
         if names not in (["arith.mulf", "arith.addf", "linalg.yield"], ["arith.extsi", "arith.extsi", "arith.muli",
                                                                          "arith.addi", "linalg.yield"]):
             return None
+        block = op.regions[0].blocks[0]
+        if names[0] == "arith.mulf":
+            multiply, addition, yielded = list(block.ops)
+            if not (set(multiply.operands) == set(block.args[:2])
+                    and set(addition.operands) == {multiply.results[0], block.args[2]}
+                    and list(yielded.operands) == [addition.results[0]]):
+                return None
+        else:
+            from ..contraction_patterns import _canonical_body
+            if not _canonical_body(op):
+                return None
         batched = True
     else:
         return None
@@ -636,8 +658,8 @@ def match_contraction(op: Operation) -> Match | None:
     ch = follow_chain(op.results[0])
     if ch.perm is not None:
         raise Decline("contraction result is transposed")
-    q = quant_sink(ch.final)
-    s_acc = qa.scale * qb.scale
+    q = _sandwich_out(ch.final)
+    s_acc = Fraction(qa.scale) * Fraction(qb.scale)
     out_shape = shape(q.value)
     bias = _bias_operand(ch, s_acc, N, lambda m: trailing_block(m) == m.num_dims - 1,
                          full_ok=(lambda m: identity_map(m)) if not batched else None)
@@ -732,10 +754,10 @@ def match_convolution_rows(op: Operation) -> Match | None:
     if (g.oh, g.ow) != (OH, OW):
         raise Decline("convolution output extent")
     ch = follow_chain(op.results[0])
-    q = quant_sink(ch.final)
+    q = _sandwich_out(ch.final)
     if ch.perm != [0, 3, 1, 2] or shape(q.value) != (N, F, OH, OW):
         raise Decline("convolution result is not viewed NCHW")
-    s_acc = qx.scale * qw.scale
+    s_acc = Fraction(qx.scale) * Fraction(qw.scale)
     bias = _bias_operand(ch, s_acc, F, lambda m: trailing_block(m) == m.num_dims - 1)
     if ch.c:
         raise Decline("constant epilogue offset")
@@ -802,10 +824,10 @@ def match_convolution(op: Operation) -> Match | None:
     # the epilogue must see [F, N*OH*OW] reshaped to NCHW with N == 1 (a pure view)
     if N != 1:
         raise Decline("batched im2col output needs a transpose")
-    q = quant_sink(ch.final)
+    q = _sandwich_out(ch.final)
     if shape(q.value) != (N, F, OH, OW):
         raise Decline("convolution result is not NCHW")
-    s_acc = qx.scale * qw.scale
+    s_acc = Fraction(qx.scale) * Fraction(qw.scale)
     bias = _bias_operand(ch, s_acc, F, lambda m: map_coeffs(m) == [[0, 1, 0, 0]])
     if ch.c:
         raise Decline("constant epilogue offset")
@@ -829,8 +851,12 @@ def match_mean(op: Operation) -> Match | None:
     """linalg.reduce(addf) over dims, optionally scaled (mean.dim: 1 / L; a sum: any w)."""
     if op.name != "linalg.reduce":
         return None
-    names = [o.name for o in op.regions[0].blocks[0].ops]
+    block = op.regions[0].blocks[0]
+    names = [o.name for o in block.ops]
     if names != ["arith.addf", "linalg.yield"] or splat_value(op.operands[1]) != 0.0:
+        return None
+    addition, yielded = list(block.ops)
+    if set(addition.operands) != set(block.args) or list(yielded.operands) != [addition.results[0]]:
         return None
     qx = dequant(op.operands[0])
     if qx is None or qx.dtype != "i8":
@@ -839,9 +865,9 @@ def match_mean(op: Operation) -> Match | None:
     xshape = shape(qx.value)
     L = int(np.prod([xshape[d] for d in dims]))
     ch = follow_chain(op.results[0])
-    if ch.bias is not None or ch.c or ch.relu:
+    if ch.bias is not None or ch.c or ch.relu or ch.perm is not None:
         raise Decline("reduction epilogue beyond a scale")
-    q = quant_sink(ch.final)
+    q = _sandwich_out(ch.final)
     keepdim = len(shape(q.value)) == len(xshape)
     is_mean = math.isclose(ch.w * L, 1.0, rel_tol=1e-6)
     aten = "aten.mean.dim" if is_mean else (getattr(op.attributes.get("prov.aten"), "data", "") or "aten.sum.dim_IntList")
@@ -907,202 +933,6 @@ def match_conv_wgrad(op: Operation) -> Match | None:
     return Match(aten, q.op, cons, [("g", qg.value), ("x", qx.value)], ("y", q.value), k,
                  layout=dict(source="NCHW,NCHW->OIHW", transposes="on-device"),
                  numeric=dict(output="grad_weight", s_g=qg.scale, s_x=qx.scale, s_out=q.scale))
-
-
-def _numpy_grad_input(gv, wv, g: ConvGeom):
-    out = np.zeros((g.n, g.cin, g.h, g.w))
-    for kh in range(g.kh):
-        for kw in range(g.kw):
-            contrib = np.einsum("nfhw,fc->nchw", gv, wv[:, :, kh, kw])
-            for oh in range(g.oh):
-                ih = oh * g.sh - g.ph + kh * g.dh
-                if not 0 <= ih < g.h:
-                    continue
-                for ow in range(g.ow):
-                    iw = ow * g.sw - g.pw + kw * g.dw
-                    if 0 <= iw < g.w:
-                        out[:, :, ih, iw] += contrib[:, :, oh, ow]
-    return out
-
-
-def _dq_leaves(root: SSAValue, limit: int = 4000) -> list[QIn]:
-    """Dequantized tensors the producers of ``root`` read (stopping at dequantize ops)."""
-    seen, out, stack = set(), [], [root]
-    while stack and len(seen) < limit:
-        v = stack.pop()
-        if id(v) in seen:
-            continue
-        seen.add(id(v))
-        q = dequant(v)
-        if q is not None:
-            if all(x.value is not q.value for x in out):
-                out.append(q)
-            continue
-        p = producer(v)
-        if p is None:
-            continue
-        for o in p.walk():
-            stack.extend(o.operands)
-    return out
-
-
-def _per_tap_contraction(root: SSAValue, qg: QIn, qw: QIn):
-    """The generic T[n, g, c, kh, kw, oh, ow] = sum_f g[n, g, f, oh, ow] w[g, f, c, kh, kw] in root's producers."""
-    seen, stack = set(), [root]
-    while stack:
-        v = stack.pop()
-        if id(v) in seen:
-            continue
-        seen.add(id(v))
-        p = producer(v)
-        if p is None or dequant(v) is not None:
-            continue
-        if (p.name == "linalg.generic" and iterators(p) == ["parallel"] * 7 + ["reduction"]
-                and [o.name for o in p.regions[0].blocks[0].ops] == ["arith.mulf", "arith.addf", "linalg.yield"]):
-            return p
-        stack.extend(p.operands)
-    return None
-
-
-def _conv_input_two_stage(op, q0, root, qg, qw):
-    from . import linmap
-    t = _per_tap_contraction(root, qg, qw)
-    if t is None:
-        raise Decline("grad_input region too large and not a per-tap contraction")
-    N, C, H, W = shape(root)
-    _, F, OH, OW = shape(qg.value)
-    _, _, KH, KW = shape(qw.value)
-    srcs = [_through_reshapes(x) for x in t.operands[:2]]
-    if not {id(s_) for s_ in srcs} <= {id(qw.dq.results[0]), id(qg.dq.results[0])} or splat_value(t.operands[2]) != 0.0:
-        raise Decline("per-tap contraction operands")
-    cos = [map_coeffs(m) for m in generic_maps(t)]
-    wmap = cos[0] if srcs[0] is qw.dq.results[0] else cos[1]
-    gmap = cos[1] if srcs[0] is qw.dq.results[0] else cos[0]
-    e = lambda d: [1 if j == d else 0 for j in range(8)]
-    if (wmap != [e(1), e(7), e(2), e(3), e(4)] or gmap != [e(0), e(1), e(7), e(5), e(6)]
-            or cos[2] != [e(d) for d in range(7)]):
-        raise Decline("per-tap contraction maps")
-    tshape = shape(t.results[0])
-    if tshape != (N, 1, C, KH, KW, OH, OW):
-        raise Decline("per-tap contraction extents")
-
-    def leaf(v):
-        return (0, 1.0) if v is t.results[0] else None
-
-    lm, region = linmap.extract(root, leaf)
-    if np.any(lm.coef != 1.0) or np.any(lm.const != 0):
-        raise Decline("shift-add chain is not a pure scatter-add")
-    n_, _, c_, kh_, kw_, oh_, ow_ = np.unravel_index(lm.idx, tshape)
-    on, oc, oy, ox = np.unravel_index(lm.out, (N, C, H, W))
-    if not (np.array_equal(on, n_) and np.array_equal(oc, c_)):
-        raise Decline("scatter mixes channels")
-    found = None
-    for sh in range(1, 5):
-        for dh in range(1, 4):
-            for ph in range(0, dh * (KH - 1) + 1):
-                g = ConvGeom(N, H, W, C, F, KH, KW, sh, sh, ph, ph, dh, dh, 1)
-                try:
-                    g.validate()
-                except ValueError:
-                    continue
-                if (g.oh, g.ow) != (OH, OW):
-                    continue
-                if not (np.array_equal(oy, oh_ * sh - ph + kh_ * dh) and np.array_equal(ox, ow_ * sh - ph + kw_ * dh)):
-                    continue
-                iy, ix = (np.arange(OH)[:, None] * sh - ph + np.arange(KH)[None] * dh), \
-                    (np.arange(OW)[:, None] * sh - ph + np.arange(KW)[None] * dh)
-                expect = int(((iy >= 0) & (iy < H)).sum() * ((ix >= 0) & (ix < W)).sum()) * N * C
-                if expect == lm.out.size:
-                    found = g
-                    break
-            if found:
-                break
-        if found:
-            break
-    if found is None:
-        raise Decline("scatter is not a transposed convolution of a square geometry")
-    k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q0.scale)
-    aten = getattr(t.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
-    return Match(aten, q0.op, [*region, t, q0.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)],
-                 ("y", q0.value), k, layout=dict(source="NCHW,OIHW->NCHW", transposes="on-device"),
-                 numeric=dict(output="grad_input", s_g=qg.scale, s_w=qw.scale, s_out=q0.scale,
-                              geometry=found.__dict__, verification="structural contraction + extracted scatter"))
-
-
-def match_conv_input(op: Operation) -> Match | None:
-    """grad_input (gather loop, or per-tap contractions with shifted insert-adds): the region is
-    bilinear in (grad_output, weight); with a random concrete weight it is linear in the grad, and
-    it is verified by evaluation against every transposed-convolution geometry consistent with
-    the shapes."""
-    from . import linmap
-    if name_of(op) != "quant_ext.quantize_per_tensor":
-        return None
-    q0 = quant_sink(op.operands[0])
-    if q0 is None or q0.op is not op:
-        return None
-    root = op.operands[0]
-    if shape(root) is None or len(shape(root)) != 4 or etype(root) != "f32":
-        return None
-    qs = [q for q in _dq_leaves(root) if q.dtype == "i8" and len(shape(q.value)) == 4]
-    if len(qs) != 2:
-        return None
-    N, C, H, W = shape(root)
-    a, b = qs
-    qg, qw = (a, b) if shape(a.value)[0] == N and shape(b.value)[1] == C else (b, a)
-    Ng, F, OH, OW = shape(qg.value)
-    Fw, Cw, KH, KW = shape(qw.value)
-    if (Ng, Fw, Cw) != (N, F, C):
-        return None
-    rng = np.random.default_rng(1234)
-    wv = rng.standard_normal((F, C, KH, KW))
-    gv = rng.standard_normal((N, F, OH, OW))
-
-    def leaf(v):
-        q = dequant(v)
-        if q is None:
-            return None
-        if q.value is qw.value:
-            return wv
-        if q.value is qg.value:
-            return (0, 1.0)
-        return None
-
-    try:
-        lm, region = linmap.extract(root, leaf)
-    except linmap.NotLinear as exc:
-        if "too large" not in str(exc):
-            return None
-        return _conv_input_two_stage(op, q0, root, qg, qw)
-    got = np.zeros(int(np.prod((N, C, H, W))))
-    np.add.at(got, lm.out, lm.coef * gv.reshape(-1)[lm.idx])
-    got += lm.const
-    found = None
-    for sh in range(1, 5):
-        for dh in range(1, 4):
-            for ph in range(0, dh * (KH - 1) + 1):
-                g = ConvGeom(N, H, W, C, F, KH, KW, sh, sh, ph, ph, dh, dh, 1)
-                try:
-                    g.validate()
-                except ValueError:
-                    continue
-                if (g.oh, g.ow) != (OH, OW):
-                    continue
-                if np.allclose(_numpy_grad_input(gv, wv, g).reshape(-1), got, atol=1e-9):
-                    found = g
-                    break
-            if found:
-                break
-        if found:
-            break
-    if found is None:
-        raise Decline("gather loop is not a transposed convolution of a square geometry")
-    q = q0
-    k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q.scale)
-    aten = getattr(root.owner.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
-    return Match(aten, q.op, [*region, q.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)], ("y", q.value), k,
-                 layout=dict(source="NCHW,OIHW->NCHW", transposes="on-device"),
-                 numeric=dict(output="grad_input", s_g=qg.scale, s_w=qw.scale, s_out=q.scale,
-                              geometry=found.__dict__))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1300,6 +1130,12 @@ def match_linear(op: Operation) -> Match | None:
     if not _region_closed(region, {op} | set(users(out_val))):
         raise Decline("region values escape the region")
     aten = getattr(region[-1].attributes.get("prov.aten"), "data", "") or "linear_region"
+    # The vectorized extractor currently stores binary64 coefficients. Only
+    # structural movement preserves source rationals through that representation.
+    # Arithmetic regions need rational extraction before they may reach hardware.
+    if any(x.name in ("arith.addf", "arith.subf", "arith.mulf", "arith.divf", "arith.negf", "arith.truncf", "arith.fptosi", "arith.fptoui", "linalg.reduce")
+           for region_op in region for x in region_op.walk()):
+        raise Decline("exact arithmetic: linear extractor has no rational coefficient proof")
     kernel = linmatch.kernel_for(aten, lm, srcs, s_out)
     operands = [(srcs[k].name, v) for v, (k, _) in sorted(by_value.items(), key=lambda kv: kv[1][0])]
     consumed = list(region) + ([op] if not integer else []) + [d for _, (k, d) in by_value.items() if d is not None]
@@ -1307,12 +1143,13 @@ def match_linear(op: Operation) -> Match | None:
                  numeric=dict(s_out=s_out, terms=int(lm.out.size), form=kernel.meta.get("form")))
 
 
-MATCHERS = (match_convolution, match_convolution_rows, match_conv_wgrad, match_conv_input, match_contraction, match_mean, match_elementwise,
+MATCHERS = (match_convolution, match_convolution_rows, match_conv_wgrad, match_contraction, match_mean, match_elementwise,
             match_movement, match_linear)
 
 
 def match_all(module) -> tuple[list[Match], list[dict]]:
     """Every matched region in program order, plus recorded declines (with reasons)."""
+    from .integer_regions import match_integer_region
     matches, declines = [], []
     taken: set[int] = set()
     for ordinal, op in enumerate(module.walk()):
@@ -1321,10 +1158,10 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         if any(any(d <= 0 for d in shape(v)) for v in (*op.operands, *op.results) if shape(v) is not None):
             declines.append(dict(ordinal=ordinal, op=op.name, reason="empty or dynamic tensor shape", aten=""))
             continue
-        for fn in MATCHERS:
+        for fn in (match_integer_region, *MATCHERS):
             try:
                 m = fn(op)
-            except Decline as exc:
+            except (Decline, ValueError, OverflowError, ZeroDivisionError) as exc:
                 declines.append(dict(ordinal=ordinal, op=op.name, reason=str(exc),
                                      aten=getattr(op.attributes.get("prov.aten"), "data", "")))
                 m = None
@@ -1333,4 +1170,6 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                 matches.append(m)
                 taken.update(id(x) for x in m.consumed if x is not None)
                 break
+        if name_of(op).startswith("quant_ext.quantize_") and id(op) not in taken and not any(d["ordinal"] == ordinal for d in declines):
+            declines.append(dict(ordinal=ordinal, op=name_of(op), reason="unsupported or unproved quantization scheme; device requires exact per-tensor signed int8 readout", aten=""))
     return matches, declines

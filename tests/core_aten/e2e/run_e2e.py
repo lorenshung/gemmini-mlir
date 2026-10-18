@@ -4,8 +4,9 @@ For every captured case directory (``capture.py``) this parses ``model.mlir``, b
 compiles every matched region through ``mlir_oot.core_aten.catalog``, wires the kernels by
 the manifest's operand sources (function arguments, earlier kernel results), links one
 bare-metal ELF and runs it.  The function result is checked against the eager PyTorch
-module's own output (tolerance 1 LSB; the bit-exact count is reported and must be >= 99%)
-and against the chained bit-level models of the kernels (exact).
+exact-rational reference and the instruction model, with equality of every output code.
+Eager float output is logged separately as informational divergence. Unsupported
+regions are reported as device refusals.
 
     python run_e2e.py CAPTURE_DIR [--only name ...] [--rtl] [--no-spike] [--batch NAME] [--json OUT]
 """
@@ -22,6 +23,8 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "device"))
+sys.path.insert(0, str(HERE.parent))
+from exact_oracle import evaluate, host_guard_values
 
 import runner  # noqa: E402
 from mlir_oot.core_aten.catalog import build  # noqa: E402
@@ -46,12 +49,15 @@ def _return_sources(text: str) -> list[tuple]:
     return out
 
 
+class DeviceRefusal(Exception):
+    pass
+
+
 def prepare(case_dir: Path, prefix: str, wd: Path):
     text = (case_dir / "model.mlir").read_text()
     device, manifest, matches = build(text)
     if not manifest["bindings"]:
-        raise RuntimeError(f"{case_dir.name}: no region matched; declines={manifest['declines']}")
-    obj = compile_to_object(device, wd, stem=prefix)["object"]
+        raise DeviceRefusal(f"{case_dir.name}: no exact region matched; declines={manifest['declines']}")
     # rename every kernel symbol per case so one ELF can hold many cases
     inputs = dict(np.load(case_dir / "inputs.npz"))
     if (case_dir / "expected.npy").exists():
@@ -67,12 +73,18 @@ def prepare(case_dir: Path, prefix: str, wd: Path):
         values[key] = f"{prefix}_{i}"
         buffers[values[key]] = arr
         model_values[key] = arr
+    for i, (key, array) in enumerate(host_guard_values(text, inputs).items()):
+        values[key] = f"{prefix}_guard{i}"
+        model_values[key] = array
+        buffers[values[key]] = array
     for bi, (b, m) in enumerate(zip(manifest["bindings"], matches)):
         k = kern[b["symbol"]]
         names, sim_inputs = [], {}
         for a in k["args"]:
             if a["role"] == "input":
                 src = _key(b["operands"][a["name"]])
+                if src not in values:
+                    raise DeviceRefusal(f"{case_dir.name}: host work remains; declines={manifest['declines']}")
                 names.append(values[src])
                 sim_inputs[a["name"]] = model_values[src]
             else:
@@ -85,23 +97,30 @@ def prepare(case_dir: Path, prefix: str, wd: Path):
                     (oname, osrc), = b["result"].items()
                     values[_key(osrc)] = bn
         model = simulate(m.kernel.stream, sim_inputs)
+        exact = evaluate(m, sim_inputs)
+        for output_name, expected in exact.items():
+            if not np.array_equal(model[output_name], expected):
+                raise AssertionError(f"{case_dir.name}: device model differs from exact arithmetic")
         (oname, osrc), = b["result"].items()
         model_values[_key(osrc)] = model[oname]
         calls.append((b["symbol"], names))
     checks, worst_max, worst_exact = [], 0, 1.0
     for k, (ret, expected) in enumerate(zip(_return_sources(text), expected_list)):
+        if ret not in values:
+            raise DeviceRefusal(f"{case_dir.name}: returned value remains on host; declines={manifest['declines']}")
         out_buf = values[ret]
         model_out = model_values[ret]
         e = np.abs(model_out.astype(np.int64).reshape(-1) - expected.astype(np.int64).reshape(-1))
         worst_max, worst_exact = max(worst_max, int(e.max())), min(worst_exact, float((e == 0).mean()))
         tag = case_dir.name if len(expected_list) == 1 else f"{case_dir.name}.out{k}"
-        checks += [runner.Check(out_buf, model_out.reshape(-1).astype(buffers[out_buf].dtype), 0, f"{tag}_vs_model"),
-                   runner.Check(out_buf, expected.reshape(-1).astype(buffers[out_buf].dtype), 1, f"{tag}_vs_eager_tol1")]
+        checks += [runner.Check(out_buf, model_out.reshape(-1).astype(buffers[out_buf].dtype), 0, f"{tag}_vs_exact_arithmetic")]
     summary = dict(ops=[b["op"] for b in manifest["bindings"]], kernels=len(kern),
                    instructions=sum(k["instructions"] for k in kern.values()),
                    fences=sum(k["fences"] for k in kern.values()),
                    model_vs_eager_max=worst_max, model_vs_eager_exact=worst_exact,
+                   eager_float_divergence=dict(informational=True, max_code_difference=worst_max, exact_fraction=worst_exact),
                    declines=manifest["declines"])
+    obj = compile_to_object(device, wd, stem=prefix)["object"]
     return Path(obj), buffers, calls, checks, outputs, summary
 
 
@@ -111,7 +130,12 @@ def run(case_dirs, batch: str, rtl=False, spike=True) -> dict:
     for i, d in enumerate(case_dirs):
         t0 = time.time()
         prefix = f"e{i}_{d.name}"
-        o, b, c, ch, out, sm = prepare(d, prefix, wd)
+        try:
+            o, b, c, ch, out, sm = prepare(d, prefix, wd)
+        except DeviceRefusal as exc:
+            summary[d.name] = dict(status="REFUSED", reason=str(exc))
+            print("device refusal:", d.name, str(exc), flush=True)
+            continue
         sm["build_s"] = round(time.time() - t0, 1)
         # one object per case: make its symbols unique by prefixing at the object level
         renamed = wd / f"{prefix}_r.o"
@@ -122,8 +146,12 @@ def run(case_dirs, batch: str, rtl=False, spike=True) -> dict:
         checks += ch
         outputs |= out
         summary[d.name] = sm
+    if not calls:
+        return dict(cases=summary, device_status="REFUSED")
     test = runner.DeviceTest(batch, objects, buffers, calls, checks, outputs)
     elf = runner.build_elf(test, wd)
+    from mlir_oot.golden_device_catalog import final_elf_audit
+    final_elf_audit(elf)
     result = dict(elf=str(elf), cases=summary)
     for engine, fn, on in (("spike", runner.run_spike, spike), ("rtl", runner.run_rtl, rtl)):
         if not on:

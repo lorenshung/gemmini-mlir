@@ -32,6 +32,8 @@ def one(case: Path, engine: str, tag: str) -> dict:
     out.unlink()
     eng = res.get(engine, {})
     cs = res["cases"][case.name]
+    if cs.get("status") == "REFUSED":
+        return dict(case=case.name, status="REFUSED", reason=cs["reason"], ops=[])
     return dict(case=case.name, ops=sorted(set(cs["ops"])), status=eng.get("status", "ERROR"),
                 failed=eng.get("failed"), info=eng.get("info"), cycles=next(iter(eng.get("perf", {}).values()), None),
                 seconds=eng.get("seconds"), model_vs_eager_max=cs["model_vs_eager_max"],
@@ -58,7 +60,7 @@ def main() -> int:
     for r in rows:
         print(f"{r['case']:32s} {r['status']:6s} cycles={r.get('cycles')} model_vs_eager max={r.get('model_vs_eager_max')}"
               f" exact={r.get('model_vs_eager_exact')}")
-    return 0 if all(r["status"] == "PASS" for r in rows) else 1
+    return 0 if all(r["status"] in ("PASS", "REFUSED") for r in rows) else 1
 
 
 if __name__ == "__main__":

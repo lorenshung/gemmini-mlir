@@ -29,6 +29,7 @@ import numpy as np
 from xdsl.dialects.builtin import ArrayAttr, FloatAttr, IntegerAttr, IntegerType, StringAttr, TensorType
 
 from . import linmatch, ops
+from .exactness import rational as Q, prove_affine, accumulator_bound
 from .emit import build_module
 from .linmap import LinearMap
 from .match import Decline
@@ -79,7 +80,10 @@ def _shape_dtype(v):
     t = v.type
     if not isinstance(t, TensorType):
         raise IfaceDecline("operand is not a tensor")
-    return tuple(int(d) for d in t.get_shape()), str(t.get_element_type())
+    shape = tuple(int(d) for d in t.get_shape())
+    if any(d <= 0 for d in shape):
+        raise IfaceDecline("empty or dynamic tensor shape")
+    return shape, str(t.get_element_type())
 
 
 # ---------------------------------------------------------------------------------------------
@@ -105,7 +109,7 @@ def _gather_map(out_tags: np.ndarray, ratios: dict, fill_codes: np.ndarray | Non
 def _requant_code(code: int, scale) -> int:
     if scale is None:
         return code
-    return int(np.clip(np.rint(np.float32(code) * np.float32(scale)), -128, 127))
+    return int(min(127, max(-128, round(Q(code) * Q(scale)))))
 
 
 def _check_range(attrs, dtype, op):
@@ -195,6 +199,10 @@ def affine_kernel(attrs, x_shape, y_shape, dst_dtype) -> ops.Kernel:
             raise IfaceDecline("AFFINE_MAP i32 has no readout", "AFFINE_MAP")
         if w == [1] and c == 0 and not two:
             return ops.to_copy_widen(x_shape)                      # args x -> y, exact widening
+    bound = abs(c) + sum(128 * abs(v) for v in w)
+    accumulator_bound(bound)
+    if dst_dtype == "i8":
+        prove_affine([Q(sc) * v for v in w], Q(sc) * c, w, c, Q(sc), relu)
     s = ops._begin(args)
     if not two and w == [1] and c == 0 and not relu and dst_dtype == "i8":
         ew.unary_scale(s, "x", "dst", n, sc)                      # the identical single rounding
@@ -248,18 +256,27 @@ def _adaptive_windows(size, out):
 
 
 def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
+    if not src_shape or any(d <= 0 for d in (*src_shape, *dst_shape)):
+        raise IfaceDecline("empty or dynamic window shape", "WINDOW_SUM", dst_shape)
+    if 'divisor_override' in attrs and attrs['divisor_override'] <= 0:
+        raise IfaceDecline("window divisor must be positive", "WINDOW_SUM", dst_shape)
+    for key in ('kernel','stride','dilation'):
+        if any(d <= 0 for d in attrs.get(key, [])):
+            raise IfaceDecline("window extents must be positive", "WINDOW_SUM", dst_shape)
     mode = attrs["mode"]
     dt = attrs["output_dtype"]
     _check_range(attrs, dt, "WINDOW_SUM")
     if dt != "i8":
         raise IfaceDecline("WINDOW_SUM i32 readout is not implemented", "WINDOW_SUM", dst_shape)
-    scale = float(attrs["readout_scale"])
+    scale = Q(attrs["readout_scale"])
     src_shape, dst_shape = tuple(src_shape), tuple(dst_shape)
     divisor = attrs.get("divisor_override")
     if mode == "reduce":
+        if not attrs["dims"] or any(d < -len(src_shape) or d >= len(src_shape) for d in attrs["dims"]):
+            raise IfaceDecline("invalid reduction dimensions", "WINDOW_SUM", dst_shape)
         dims = sorted({d % len(src_shape) for d in attrs["dims"]})
         count = int(np.prod([src_shape[d] for d in dims])) if attrs["average"] else 1
-        readout = float(np.float64(scale) / (divisor or count))
+        readout = scale / (divisor or count)
         try:
             return ops.mean_dim(src_shape, dims, len(dst_shape) == len(src_shape), s_x=1.0, s_out=1.0,
                                 w=readout, op="WINDOW_SUM")
@@ -273,7 +290,7 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
             np.zeros(cells.shape[1], np.int64)
         i = np.arange(cells.shape[1], dtype=np.int64)
         W = np.ones(o.size, np.int64)
-        rho = np.full(int(np.prod(dst_shape)), readout)
+        rho = np.full(int(np.prod(dst_shape)), readout, dtype=object)
         lm = LinearMap(dst_shape, o, np.zeros(o.size, np.int64), i, W * rho[o], np.zeros(rho.size), {})
         return _sum(lm, src_shape, W, rho, dst_shape)
     terms_o, terms_i, terms_w = [], [], []
@@ -298,7 +315,7 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
         o = np.concatenate([t.reshape(-1) for t in terms_o])
         i = np.concatenate([t.reshape(-1) for t in terms_i])
         W = np.ones(o.size, np.int64)
-        rho = np.full(int(np.prod(dst_shape)), np.float64(scale))
+        rho = np.full(int(np.prod(dst_shape)), scale, dtype=object)
     else:
         transpose = mode.endswith("_transpose")
         source_shape = dst_shape if transpose else src_shape
@@ -324,7 +341,7 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
         grid = list(np.ndindex(*[len(w) for w in per_dim]))
         counts = {g: (divisor or int(np.prod([per_dim[k][g[k]][2] for k in range(spatial)]))) for g in grid}
         L = lcm(*counts.values()) if transpose else 1
-        rho_full = np.zeros(int(np.prod(dst_shape)))
+        rho_full = np.full(int(np.prod(dst_shape)), Q(0), dtype=object)
         for g in grid:
             box = [range(per_dim[k][g[k]][0], per_dim[k][g[k]][1]) for k in range(spatial)]
             cells = np.array(list(np.ndindex(*[len(b) for b in box])), np.int64).reshape(-1, spatial)
@@ -354,11 +371,11 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
                     full_w[a] = np.full(other_idx.shape[1], g[k])
                 for j, d in enumerate(others):
                     full_w[d] = other_idx[j]
-                rho_full[np.ravel_multi_index(full_w, window_shape)] = np.float64(scale) / counts[g]
+                rho_full[np.ravel_multi_index(full_w, window_shape)] = scale / counts[g]
         o = np.concatenate(terms_o)
         i = np.concatenate(terms_i)
         W = np.concatenate(terms_w).astype(np.int64)
-        rho = np.full(int(np.prod(dst_shape)), np.float64(scale) / L) if transpose else rho_full
+        rho = np.full(int(np.prod(dst_shape)), scale / L, dtype=object) if transpose else rho_full
     if W.size and W.max() > 16:
         raise IfaceDecline("WINDOW_SUM weight L/count above 16 is not implemented", "WINDOW_SUM", dst_shape)
     lm = LinearMap(dst_shape, o, np.zeros(o.size, np.int64), i, W * rho[o], np.zeros(int(np.prod(dst_shape))), {})
@@ -438,7 +455,7 @@ def f32_literals(text: str) -> dict[tuple[str, str], float]:
 
 def build(module, text: str | None = None) -> tuple[dict, object, Stream]:
     """(command buffer, LLVM-dialect module defining @gemmini_kernel, the program stream)."""
-    literals = f32_literals(text) if text else {}
+    literals = {}
     prog = Program()
     target = getattr(module.attributes.get("merlin_iface.target"), "data", "gemmini")
     for op in module.walk():

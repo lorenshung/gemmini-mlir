@@ -15,12 +15,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from fractions import Fraction
-from math import lcm
 
 import numpy as np
 
 from . import ops
+from .exactness import prove_readout, rational as Q, require, accumulator_bound
 from .linmap import LinearMap
 from .match import Decline
 from .numerics import code as qcode
@@ -43,6 +42,8 @@ class Src:
 def gather_jobs(lm: LinearMap, srcs: dict[int, Src], s_out: float, out: str) -> list[mv.Copy]:
     if any(d <= 0 for d in lm.out_shape) or any(any(d <= 0 for d in src.shape) for src in srcs.values()):
         raise Decline("empty or dynamic gather shape")
+    for coefficient in np.unique(lm.coef):
+        prove_readout(Q(float(coefficient)) / Q(s_out), -128, 127)
     shp = lm.out_shape
     n = int(np.prod(shp)) if shp else 1
     cnt = np.bincount(lm.out, minlength=n)
@@ -122,35 +123,6 @@ def copy_kernel(op: str, lm: LinearMap, srcs: dict[int, Src], s_out: float) -> o
 # Sum maps
 # ---------------------------------------------------------------------------------------------
 
-def _integer_weights(lm: LinearMap, s_out: float, nrows: int, out_of_term, max_w: int = 16):
-    """Per term integer W and per output-row readout rho with rho W s_out == coef exactly."""
-    W = np.zeros(lm.coef.size, np.int64)
-    rho = np.zeros(nrows, np.float64)
-    order = np.argsort(out_of_term, kind="stable")
-    o, c = out_of_term[order], lm.coef[order]
-    starts = np.r_[0, np.flatnonzero(np.diff(o)) + 1]
-    ends = np.r_[starts[1:], o.size]
-    cache = {}
-    for a, b in zip(starts.tolist(), ends.tolist()):
-        cs = c[a:b]
-        key = tuple(np.round(cs / cs.min(), 12)) if cs.min() > 0 else None
-        if key is None:
-            raise Decline("non-positive pooling weight")
-        if key not in cache:
-            fr = [Fraction(float(v)).limit_denominator(1 << 10) for v in key]
-            L = 1
-            for f in fr:
-                L = lcm(L, f.denominator)
-            w = [int(f * L) for f in fr]
-            if any(abs(wi / L - v) > 1e-9 * v for wi, v in zip(w, key)) or max(w) > max_w:
-                raise Decline("weights are not small integer ratios")
-            cache[key] = (np.array(w, np.int64), L)
-        w, L = cache[key]
-        W[order[a:b]] = w
-        rho[o[a]] = float(cs.min()) / (L * s_out)
-    return W, rho
-
-
 def _identity_dims(lm: LinearMap, in_shape, out_shape):
     """Pairs (out dim, in dim) on which every term maps an index to itself."""
     oc = np.unravel_index(lm.out, out_shape)
@@ -193,7 +165,14 @@ def _refine(lm: LinearMap, in_shape, out_shape):
 def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float, *, weights: np.ndarray | None = None,
                rho: np.ndarray | None = None) -> ops.Kernel:
     """``weights`` (per term) and ``rho`` (per output element) state the integer form explicitly;
-    otherwise they are derived from the coefficients with ``s_out``."""
+    both are mandatory: floating coefficient approximation is not an exact source proof."""
+    require(weights is not None and rho is not None, "linear sum weights lack a rational source proof")
+    require(all(d > 0 for d in (*lm.out_shape, *src.shape)), "empty or dynamic sum shape")
+    require(np.all(np.asarray(weights) == np.trunc(weights)) and np.all((np.asarray(weights) > 0) & (np.asarray(weights) <= 16)), "sum requires integer weights in 1..16")
+    bounds = np.bincount(lm.out, weights=np.abs(weights), minlength=int(np.prod(lm.out_shape))) * 128
+    for scale, bound in set(zip(np.asarray(rho).reshape(-1), bounds)):
+        accumulator_bound(int(bound))
+        prove_readout(Q(scale), -int(bound), int(bound))
     if np.any(lm.const != 0):
         raise Decline("sum with an offset")
     out_shape = tuple(lm.out_shape)
@@ -223,12 +202,9 @@ def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float, *, weights: np.nd
         rows_out = int(np.prod(o_sp_shape)) if osp else 1
         sub = LinearMap(tuple(o_sp_shape), o_row[ref], np.zeros(int(ref.sum()), np.int64), i_row[ref],
                         lm.coef[ref], np.zeros(rows_out), {})
-        if weights is None:
-            W, rho_rows = _integer_weights(sub, s_out, rows_out, sub.out)
-        else:
-            W = np.asarray(weights)[ref]
-            rho_rows = np.zeros(rows_out)
-            rho_rows[o_row[ref]] = np.asarray(rho).reshape(-1)[lm.out[ref]]
+        W = np.asarray(weights)[ref]
+        rho_rows = np.zeros(rows_out)
+        rho_rows[o_row[ref]] = np.asarray(rho).reshape(-1)[lm.out[ref]]
         in_perm = isp + iid
         out_perm = osp + oid
         args = [Arg(src.name, "i8", arg_shape, "input"), Arg("y", "i8", out_shape, "output"),
@@ -248,10 +224,7 @@ def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float, *, weights: np.nd
             ops._permute_into(s, "ws_y", [out_shape[d] for d in out_perm], "y", inv)
         return ops._end(op, s, form="accumulate_sum", channels=C, rows=rows_out, terms=int(sub.out.size))
     n_out = int(np.prod(out_shape))
-    if weights is None:
-        W, rho = _integer_weights(lm, s_out, n_out, lm.out)
-    else:
-        W, rho = np.asarray(weights), np.asarray(rho).reshape(-1)
+    W, rho = np.asarray(weights), np.asarray(rho).reshape(-1)
     args = [Arg(src.name, "i8", arg_shape, "input"), Arg("y", "i8", out_shape, "output")]
     s = ops._begin(args)
     accumulate_sum(s, src.name, "y", 1, n_out, lm.out, lm.idx, W, rho)

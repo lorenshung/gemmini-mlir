@@ -26,6 +26,27 @@ def routing(directory, *, target, package, facts, eligible):
     operand, weight, accum = next(iter(triples))
     if operand != weight:
         raise ValueError("catalog requires identical operand storage types")
+    # A closed seeded MAC + byte readout needs the region ABI: its seed and
+    # result types differ from the old two-input/raw-i32 contraction ABI.
+    regions = _core_aten_module(package, "integer_regions")
+    parsing = _core_aten_module(package, "catalog")
+    source = (Path(directory) / "model.mlir").read_text()
+    if regions.has_integer_readout(parsing.parse_module(source)):
+        _, inventory, matches = parsing.build(source)
+        selected = [m for m in matches if m.kernel.meta.get("integer_readout")]
+        if not selected:
+            return None
+        def region_builder(prepared, workdir):
+            # Re-prove the actual prepared bytes, not a preceding capture.
+            if (Path(directory) / "spec-int8-admission.json").exists():
+                import json
+                policy = json.loads((Path(directory) / "spec-int8-admission.json").read_text())["selection"]["spec"]
+                admit_numeric_schedule(Path(prepared).read_text(), package=package, numeric_policy=policy)
+            return core_aten_offload(prepared, workdir, package=package)
+        audit = load_module(package, "mlir_oot.golden_device_catalog", package_name="core_aten_region_audit")
+        return DeviceRouting(device=target, package_dir=package, operand_dtype=operand,
+                             accum_dtype=accum, region_offload=region_builder,
+                             final_elf_audit=audit.final_elf_audit)
     # Immutable snapshots at different roots must not share cached Python modules.
     identity = hashlib.sha256(str(Path(package).resolve()).encode()).hexdigest()
     backend = load_module(package, "mlir_oot.golden_device_catalog", package_name=f"core_aten_backend_{identity}")
@@ -64,6 +85,7 @@ def routing(directory, *, target, package, facts, eligible):
         operand_dtype=operand,
         accum_dtype=accum,
         catalog_builder=selected_builder,
+        final_elf_audit=backend.final_elf_audit,
     )
 
 
@@ -73,7 +95,7 @@ def _core_aten_module(package, name):
 
 
 def core_aten_catalog(prepared, workdir, *, package, llvm_bin=None):
-    """Bind and compile every supported Core ATen region of ``prepared`` (all 39 support-set ops).
+    """Bind and compile the exactly implementable Core ATen regions of ``prepared``.
 
     Returns (manifest path, object path).  The manifest (schema gemmini_core_aten_catalog_v1)
     lists each kernel's argument table and each binding's root ordinal, replaced ordinals and
@@ -142,6 +164,10 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
     """Prove the actual default catalog's WS primitive and i32 aggregation bounds."""
     from merlin.targetgen.operation_numerics import integer_split_k_limit
 
+    regions = _core_aten_module(package, "integer_regions")
+    catalog_module = _core_aten_module(package, "catalog")
+    if regions.has_integer_readout(catalog_module.parse_module(source)):
+        return _admit_integer_regions(source, package=package, numeric_policy=numeric_policy)
     identity = hashlib.sha256(str(Path(package).resolve()).encode()).hexdigest()
     backend = load_module(package, "mlir_oot.golden_device_catalog", package_name=f"core_aten_backend_{identity}")
     _, catalog = backend.build_catalog(source)
@@ -223,3 +249,39 @@ def admit_numeric_schedule(source, *, package, numeric_policy):
     if not proofs or not catalog["coverage_complete"]:
         raise ValueError("provider did not cover every proposed integer contraction")
     return dict(status="proven", source_sha256=catalog["source_sha256"], kernels=proofs, bindings=catalog["bindings"])
+
+
+def _admit_integer_regions(source, *, package, numeric_policy):
+    """Prove the emitted seeded MAC/readout stream, including its source binding."""
+    from merlin.targetgen.operation_numerics import integer_split_k_limit
+    catalog_module = _core_aten_module(package, "catalog")
+    _, catalog, matches = catalog_module.build(source)
+    proofs = []
+    for binding, match in zip(catalog["bindings"], matches):
+        if not match.kernel.meta.get("integer_readout"):
+            continue
+        dims = match.kernel.meta["dimensions"]
+        bound = integer_split_k_limit(numeric_policy, tile_dim=16, full_k=dims["k"])
+        if bound is None or bound["max_padded_k"] < 16:
+            raise ValueError("provider padded mesh K exceeds selected internal MAC bound")
+        stream = match.kernel.stream
+        computes = [i for i in stream.ins if i.kind == "compute"]
+        if not computes or any(i.a("a_cols") > 16 or i.a("bd") != 0xffffffff for i in computes):
+            raise ValueError("seeded WS primitive differs from the proved independent dot product")
+        if any(i.a("dataflow") != 1 for i in stream.ins if i.kind == "config_ex"):
+            raise ValueError("seeded proof requires weight-stationary execution")
+        # ops.matmul proved all SRAM partial sums, constant seed and every
+        # rational RNE transition before this stream could be emitted.
+        proofs.append(dict(symbol=binding["symbol"], status="proven", schedule=match.kernel.meta,
+            primitive_k=sorted({i.a("a_cols") for i in computes}), padded_primitive_k=16,
+            k_split=[min(16, dims["k"]-k) for k in range(0,dims["k"],16)],
+            max_partial_sum_bound=16*bound["maximum_product"],
+            mac_positive_limit=(1 << (bound["mac_result_bits"]-1))-1,
+            headroom=((1 << (bound["mac_result_bits"]-1))-1)-16*bound["maximum_product"],
+            bound=bound, exact_arithmetic=True, seed=match.kernel.meta["seed"],
+            accumulator_min=match.kernel.meta["accumulator_min"], accumulator_max=match.kernel.meta["accumulator_max"],
+            emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest()))
+    if not proofs:
+        raise ValueError("provider did not cover any exact seeded readout region: " + str(catalog["declines"]))
+    return dict(status="proven", source_sha256=catalog["source_sha256"], kernels=proofs,
+                bindings=catalog["bindings"], declines=catalog["declines"], abi="gemmini_core_aten_catalog_v1")
