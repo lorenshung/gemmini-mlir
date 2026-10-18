@@ -16,6 +16,59 @@ from mlir_oot.core_aten.stream import simulate, FULL_BIT, ACC_BIT
 from exact_oracle import evaluate
 
 
+@pytest.mark.parametrize('alpha', [-1.0, -0.375])
+@pytest.mark.parametrize('bias', [False, True])
+def test_real_signed_addmm_retains_exact_source_readout(alpha, bias):
+    torch = pytest.importorskip('torch')
+    m2m = pytest.importorskip('m2m')
+    import torch.ao.quantization.fx._decomposed  # noqa: F401
+    from m2m.capture.pt2e_integerize import integerize_pt2e
+    from m2m.capture.pt2e_compat import allow_exported_model_train_eval
+    from mlir_oot.core_aten.quant_schema import ratios, attributes
+
+    class Addmm(torch.nn.Module):
+        def forward(self, a, b, offset):
+            qd = torch.ops.quantized_decomposed
+            a = qd.dequantize_per_tensor(a, 0.5, 0, -128, 127, torch.int8)
+            b = qd.dequantize_per_tensor(b, 0.25, 0, -128, 127, torch.int8)
+            y = torch.ops.aten.addmm.default(offset, a, b, alpha=alpha, beta=1 if bias else 0)
+            return qd.quantize_per_tensor(y, 0.125, 0, -128, 127, torch.int8)
+
+    inputs = (torch.tensor([[-128, -3, 0, 1, 127], [3, 5, 7, 9, 11]], dtype=torch.int8),
+              torch.arange(-7, 8, dtype=torch.int8).reshape(5, 3),
+              torch.tensor([0.25, -0.5, 0.75]))
+    graph = torch.export.export(Addmm(), inputs).module()
+    integer, receipt = integerize_pt2e(graph, inputs)
+    assert receipt['quantized_contractions_integerized'] == 1 and not receipt['refusals']
+    allow_exported_model_train_eval(integer)
+    converted = m2m.convert(integer, inputs, backend='fx_importer', fully_standard=True)
+    assert converted.ok, converted.diagnostics
+    _, manifest, matches = build(converted.mlir_text)
+    selected, = [m for m in matches if m.kernel.meta.get('integer_readout')]
+    assert all(int(n) < 0 for n in selected.kernel.meta['scale_numerator'])
+    feed = dict(a=inputs[0].numpy(), b=inputs[1].numpy())
+    raw = simulate(selected.kernel.stream, feed)['out']
+    assert np.array_equal(raw, evaluate(selected, feed)['out'])
+    rewritten = rewrite(converted.mlir_text, manifest)
+    assert 'prov.quant.arithmetic = "exact"' in rewritten
+    assert not selected.kernel.stream.readouts
+    # Interpret the retained source readout independently using the raw result.
+    from exact_oracle import SourceOracle
+    from mlir_oot.frontend.parse import parse_module
+    module = parse_module(converted.mlir_text)
+    fn = next(o for o in module.walk() if o.name == 'func.func')
+    oracle = SourceOracle(dict(zip(fn.body.blocks[0].args, [i.numpy().astype(object) for i in inputs])))
+    ret = next(o for o in fn.walk() if o.name == 'func.return')
+    expected = np.asarray(oracle.tensor(ret.operands[0]), dtype=np.int64).astype(np.int8)
+    from fractions import Fraction
+    acc = inputs[0].numpy().astype(object) @ inputs[1].numpy().astype(object)
+    values = acc * Fraction(alpha)
+    if bias:
+        values += np.asarray([2, -4, 6], dtype=object)
+    independent = np.array([min(127, max(-128, round(v))) for v in values.flat], dtype=np.int8).reshape(2, 3)
+    assert np.array_equal(expected, independent)
+
+
 @pytest.mark.parametrize('batch,m,k,n', [(1, 2, 17, 3), (3, 17, 33, 19)])
 def test_real_bmm_proof_covers_producer_and_retains_source_readout(batch, m, k, n):
     torch = pytest.importorskip('torch')

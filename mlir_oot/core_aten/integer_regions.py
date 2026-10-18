@@ -35,7 +35,7 @@ def readout(op):
         require(getattr(attrs.get('accumulator'),'data',None)=='i32','readout accumulator is not i32')
         require(getattr(attrs.get('numerics'),'data',None)=='integer_readout','readout numerics are not exact integer')
         factors = ratios(attrs)
-        require(all(s>0 for s in factors),'nonpositive exact readout scale')
+        require(all(s != 0 for s in factors),'zero exact readout coefficient')
         require(len(factors) in (1,shape(op.results[0])[-1]),'readout scale channel extent')
         if any(k.startswith('prov.quant.') for k in op.attributes):
             producer_attrs = attributes(op,'contraction')
