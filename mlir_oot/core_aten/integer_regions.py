@@ -131,14 +131,20 @@ def seed_guard(value):
     return guard, guard.operands[0], (int(lower),int(upper))
 
 
-def match_integer_region(op):
+def match_integer_region(op, *, allow_raw=False):
     dims = contraction(op)
     if dims is None:
         return None
     selected = readout(op)
     if selected is None:
-        return None
-    reader, scale, relu = selected
+        if not allow_raw or not _zero_init(op.operands[2]):
+            return None
+        if any(k.startswith('prov.quant.') for k in op.attributes):
+            from .quant_schema import attributes
+            attributes(op,'contraction')
+        scale, relu = None, False
+    else:
+        reader, scale, relu = selected
     rank = len(shape(op.operands[0]))
     batch = dims.batch if rank == 3 else 0
     seed = op.operands[2]
@@ -187,12 +193,16 @@ def match_integer_region(op):
                             batch=batch, s_out=None, bias=bias, bias_const=values,
                             bias_rows=bias_rows, relu=relu, bias_range=guarded_range)
     kernel.meta.update(output_dtype='i32', scale=1, relu=False, bias=bias,
-                       integer_readout=True, dimensions=dict(batch=dims.batch,m=dims.m,n=dims.n,k=dims.k),
+                       integer_producer=True, integer_readout=selected is not None, raw_integer=selected is None,
+                       dimensions=dict(batch=dims.batch,m=dims.m,n=dims.n,k=dims.k),
                        seed=('guarded_runtime' if runtime_seed is not None else 'constant') if bias else 'zero')
-    kernel.meta.update(readout="full_i32", requantization="retained_source_exact_integer",
-                       scale_numerator=[str(v.numerator) for v in scale],scale_denominator=[str(v.denominator) for v in scale])
+    kernel.meta.update(readout='full_i32',
+                       requantization='retained_source_exact_integer' if selected is not None else 'none')
+    if scale is not None:
+        kernel.meta.update(scale_numerator=[str(v.numerator) for v in scale],
+                           scale_denominator=[str(v.denominator) for v in scale])
     return Match(kernel.op, op, consumed, operands + ([('bias',runtime_seed)] if runtime_seed is not None else []),
                  ('out', op.results[0]), kernel,
-                 numeric=dict(integer_readout=True, scale=scale, relu=relu, seed=None if values is None else values.tolist(), runtime_seed=runtime_seed is not None,
+                 numeric=dict(integer_producer=True, integer_readout=selected is not None, raw_integer=selected is None, scale=scale, relu=relu, seed=None if values is None else values.tolist(), runtime_seed=runtime_seed is not None,
                               **(dict(centered_byte_contraction=kernel.meta["centered_byte_contraction"])
                                  if "centered_byte_contraction" in kernel.meta else {})))

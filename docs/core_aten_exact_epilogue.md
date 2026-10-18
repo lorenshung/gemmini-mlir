@@ -274,3 +274,35 @@ and the complete set of contributions with no duplicates or omissions. Only
 then does it select the existing exact weight-gradient kernel. Its metadata
 records `source_proof="complete_closed_bilinear_gather_map"`. These checks
 come from the source body and geometry, not its operation label.
+
+## Mixed raw and readout-backed integer producers
+
+A program using the integer region ABI may contain both bounded, from-zero raw
+integer contractions and contractions with explicit exact host readouts. The
+same catalog matches, lints, compiles and binds both. A raw producer need not
+have a direct readout user: its i32 result may feed retained integer layout,
+scatter/add or other host continuation operations. Raw-only programs preserve
+the existing legacy catalog selection.
+
+All integer region schedules record `integer_producer=true`,
+`output_dtype="i32"`, `readout="full_i32"`, `scale=1`, `relu=false`, their
+actual bias flag and accumulator bounds. Each binding keeps its original source
+operation ordinal and exact SSA operands/result:
+
+- Readout-backed schedules record `integer_readout=true`, `raw_integer=false`,
+  `requantization="retained_source_exact_integer"` and the source's exact
+  numerator/denominator arrays. The source readout remains on the host.
+- Raw schedules record `integer_readout=false`, `raw_integer=true`, `bias=false`,
+  `seed="zero"`, and `requantization="none"`. They have no invented readout
+  scale arrays or quantization. The proof records `quantization="none"` and
+  `full_result_bound` for the from-zero i32 result.
+
+Numeric admission uses Merlin's shared contraction observer and source liveness
+to require exactly one binding for every live integer contraction. An otherwise
+proven catalog that omits or duplicates a live producer returns `status="declined"`,
+empty kernel/binding proof lists, and reason
+`provider did not cover every live integer producer`. It
+cannot return a partial `proven` result. Dead producers impose no coverage
+obligation. Kernel symbols authenticate their distinct numeric schedule records,
+including whether a source readout is retained; all existing selected-MAC,
+full-width store, unit-scale and hazard checks still apply to each schedule.

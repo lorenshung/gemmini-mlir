@@ -29,7 +29,7 @@ def routing(directory, *, target, package, facts, eligible):
     parsed = parsing.parse_module(source)
     if regions.has_integer_readout(parsed) or limbs.has_limb_plan(parsed):
         _, inventory, matches = parsing.build(source)
-        selected = [m for m in matches if m.kernel.meta.get("integer_readout") or m.kernel.meta.get('limb_plan')]
+        selected = [m for m in matches if m.kernel.meta.get("integer_producer") or m.kernel.meta.get("integer_readout") or m.kernel.meta.get('limb_plan')]
         if not selected:
             return None
         # Logical centered operands are i32, but their proved physical
@@ -409,7 +409,7 @@ def _admit_integer_regions(source, *, package, numeric_policy):
         return dict(status='declined',reason=reason,source_sha256=catalog['source_sha256'],
                     kernels=[],bindings=[],declines=catalog['declines'])
     for binding, match in zip(catalog["bindings"], matches):
-        if not match.kernel.meta.get("integer_readout"):
+        if not (match.kernel.meta.get("integer_producer") or match.kernel.meta.get("integer_readout")):
             continue
         dims = match.kernel.meta["dimensions"]
         try:
@@ -442,10 +442,21 @@ def _admit_integer_regions(source, *, package, numeric_policy):
             mac_positive_limit=(1 << (bound["mac_result_bits"]-1))-1,
             headroom=((1 << (bound["mac_result_bits"]-1))-1)-16*bound["maximum_product"],
             bound=bound, exact_arithmetic=True, device_readout="full_i32",
-            quantization="retained_source_exact_integer_host_readout", seed=match.kernel.meta["seed"],
+            quantization=('none' if match.kernel.meta.get('raw_integer') else 'retained_source_exact_integer_host_readout'),
+            seed=match.kernel.meta["seed"],
             accumulator_min=match.kernel.meta["accumulator_min"], accumulator_max=match.kernel.meta["accumulator_max"],
             full_result_bound=max(abs(match.kernel.meta["accumulator_min"]),abs(match.kernel.meta["accumulator_max"])),
             emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest()))
+    parsed = catalog_module.parse_module(source)
+    from merlin.kernels.shapes import observe_contractions
+    live = _core_aten_module(package, 'liveness').live_source_ops(parsed)
+    ordinals = {op:i for i,op in enumerate(parsed.walk())}
+    proposed = {ordinals[op] for op,shape in observe_contractions(parsed)
+                if op in live and shape.dtypes[-1] == 'i32'}
+    covered = [binding['source_operation_ordinal'] for binding,match in zip(catalog['bindings'],matches)
+               if match.kernel.meta.get('integer_producer') or match.kernel.meta.get('integer_readout')]
+    if proofs and (set(covered) != proposed or len(covered) != len(set(covered))):
+        return refuse('provider did not cover every live integer producer')
     proofs = list({row['symbol']: row for row in proofs}.values())
     if not proofs:
         return dict(status='declined', reason='provider did not cover any exact seeded readout region',

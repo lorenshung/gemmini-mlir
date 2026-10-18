@@ -40,7 +40,7 @@ def _stream_digest(kernel) -> str:
     h = hashlib.sha256()
     if kernel.stream.bitwise:
         h.update(b'bitwise')
-    if kernel.meta.get('integer_readout'):
+    if kernel.meta.get('integer_producer') or kernel.meta.get('integer_readout'):
         # A source-retained readout contract belongs to its schedule proof.
         # Equal commands with different exact factors must not share metadata.
         h.update(json.dumps(kernel.meta,sort_keys=True).encode())

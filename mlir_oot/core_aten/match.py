@@ -1466,7 +1466,11 @@ def _bind_dense_layouts(match):
 
 def match_all(module) -> tuple[list[Match], list[dict]]:
     """Every matched region in program order, plus recorded declines (with reasons)."""
-    from .integer_regions import match_integer_region
+    from .integer_regions import match_integer_region, has_integer_readout
+    from functools import partial
+    # A region-ABI program must cover its raw producers as well as producers
+    # with retained exact readouts. Raw-only programs keep the legacy route.
+    match_integer_region = partial(match_integer_region, allow_raw=has_integer_readout(module))
     from .bitwise import match as match_bitwise
     from .limbs import match as match_limb
     from .liveness import live_source_ops, live_bindings
