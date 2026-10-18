@@ -95,6 +95,10 @@ def test_shared_default_kernel_retained_for_unselected_source_use(choices,tmp_pa
       ins(%a, %b : tensor<17x65xi8>, tensor<65x73xi8>)
       outs(%init : tensor<17x73xi32>) -> tensor<17x73xi32>
     func.return %result''')
+    # Both uses must be live; dead contractions are deliberately not bound.
+    text=text.replace('-> tensor<17x73xi32> {', '-> (tensor<17x73xi32>, tensor<17x73xi32>) {', 1)
+    text=text.replace('func.return %result : tensor<17x73xi32>',
+        'func.return %result, %other : tensor<17x73xi32>, tensor<17x73xi32>')
     input_path.write_text(text)
     record=json.loads(calibration.read_text())
     for index,options in enumerate(({},dict(dense_input_policy='resident_a_command_cost'))):
@@ -113,6 +117,7 @@ def test_shared_default_kernel_retained_for_unselected_source_use(choices,tmp_pa
     defined=subprocess.run([str(LLVM/'llvm-nm'),'--defined-only',str(tmp_path/'selected/kernel.o')],
                            check=True,capture_output=True,text=True).stdout
     for row in selected['kernels']:
+        assert row['hazard_lint'] == 'pass' and row['fences'] >= 2
         assert row['symbol'] in defined
 
 

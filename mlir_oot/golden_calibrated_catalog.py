@@ -90,9 +90,17 @@ def compile_calibrated_catalog(source_path, module, manifest, llvm_bin, workdir,
         if not any(k['symbol'] == row['selected_symbol'] for k in kernels):
             from .golden_device_catalog import hazard_report
             from .contraction_patterns import IntegerGemm
-            from .frontend.parse import parse_module
+            from .frontend.parse import context
+            from .ir.gemmini_dialect import GEMMINI
+            from xdsl.dialects.llvm import LLVM
+            from xdsl.parser import Parser
             actual_ir = Path(row['object_path']).with_name('kernel.gemmini.mlir')
-            checked = hazard_report(parse_module(actual_ir.read_text()),
+            ctx = context()
+            ctx.load_dialect(LLVM)
+            ctx.load_dialect(GEMMINI)
+            selected_module = Parser(ctx, actual_ir.read_text()).parse_module()
+            selected_module.verify()
+            checked = hazard_report(selected_module,
                                     IntegerGemm(**selected['dimensions']), False,
                                     symbol=row['selected_symbol'])
             kernels.append(dict(symbol=row['selected_symbol'], dimensions=selected['dimensions'],

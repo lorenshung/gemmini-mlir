@@ -70,20 +70,10 @@ def rewrite(source: str, manifest: dict) -> str:
                 op.erase()
                 alive.remove(op)
                 changed = True
-    # dead pure producers left behind (unused dequantizes of shape-only inputs, scale constants)
-    pure = ("arith.", "tensor.", "linalg.")         # value semantics on tensors: dead results are removable
-    changed = True
-    while changed:
-        changed = False
-        for op in reversed(list(fn.walk())):
-            nm = getattr(getattr(op, "op_name", None), "data", op.name)
-            if op is fn or op.name in ("func.return", "func.call") or op.parent_op() is not fn:
-                continue
-            if (nm.startswith(pure) or nm.startswith("quant_ext.")) and op.results and \
-                    all(not list(r.uses) for r in op.results):
-                op.detach()
-                op.erase()
-                changed = True
+    # Shared effect-aware cleanup; an unused tensor result does not make a
+    # runtime assertion or an unknown operation removable.
+    from .liveness import pure_tensor_dce
+    pure_tensor_dce(fn)
     for decl in declared.values():
         module.body.blocks[0].add_op(decl)
     fn.attributes["llvm.emit_c_interface"] = UnitAttr()

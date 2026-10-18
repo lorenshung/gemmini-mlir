@@ -67,6 +67,8 @@ def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool 
         dims = match_integer_gemm(op)
         if dims is None:
             continue
+        if not op.results[0].uses:
+            continue  # The closed tensor contraction has no observable result.
         matched_total += 1
         from .core_aten.quant_schema import attributes
         from .core_aten.match import Decline
