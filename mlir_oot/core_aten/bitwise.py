@@ -16,7 +16,7 @@ from .stream import Arg, Stream
 
 
 CARRIERS = {'tensor.splat', 'tensor.concat', 'tensor.insert_slice', 'tensor.extract_slice',
-            'tensor.collapse_shape', 'tensor.expand_shape', 'tensor.cast', 'linalg.generic',
+            'tensor.reshape', 'tensor.collapse_shape', 'tensor.expand_shape', 'tensor.cast', 'linalg.generic',
             'linalg.broadcast', 'linalg.transpose', 'linalg.fill'}
 
 

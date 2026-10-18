@@ -9,12 +9,21 @@ permission to replace a native operation with lossy quantization.
 ## F1: opaque element movement
 
 The provider recognizes closed tensor selectors: copies, concatenation, static
-slices/inserts, broadcast/repeat, permutations, constant splats/fills, and
+slices/inserts, broadcast/repeat, permutations, static reshapes, constant splats/fills, and
 parallel generics containing only static indexing, extract/yield/select and
 equal-width bitcasts on data. Arithmetic identities such as `x + 0` are rejected:
 they need not preserve floating payloads. Data-dependent predicates/indices and
 numeric conversions are not bitwise selectors. Structural carriers may form
 several dependent bindings; no provenance operator name chooses a schedule.
+
+Static reshapes preserve flattened element order and element type, with a literal
+shape equal to the declared result shape. A rank-zero result has one element;
+its zero-length shape descriptor is metadata, not an empty data tensor. This
+rule applies at every supported element width and rank. Actual empty payloads
+still decline as no device work. The F2/F4 plan has no native-dtype limb-count
+limit: each independently bounded component retains its full integer index and
+binary exponent, including plans wider than 64 native bits. Host splitting and
+recombination remain Merlin's obligations.
 
 Every element is an ordered group of bytes. Storage widths are i1/i8=1,
 i16/f16/bf16=2, i32/f32=4, i64/f64/complex<f32>=8, on little-endian RISC-V.

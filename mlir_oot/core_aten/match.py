@@ -1477,7 +1477,13 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     for ordinal, op in enumerate(module.walk()):
         if op not in live or id(op) in taken:
             continue
-        if any(any(d <= 0 for d in shape(v)) for v in (*op.operands, *op.results) if shape(v) is not None):
+        # Rank-zero reshapes have an empty *shape descriptor*, not empty data.
+        # It must not trigger the no-device-work rule for actual tensor payloads.
+        if op.name == 'arith.constant' and op.results and all(
+                use.operation.name == 'tensor.reshape' and use.index == 1 for use in op.results[0].uses):
+            continue
+        data_operands = op.operands[:1] if op.name == 'tensor.reshape' else op.operands
+        if any(any(d <= 0 for d in shape(v)) for v in (*data_operands, *op.results) if shape(v) is not None):
             declines.append(dict(ordinal=ordinal, op=op.name, reason="empty or dynamic tensor shape", aten=""))
             continue
         selected_matchers = (match_integer_region,match_convolution,match_convolution_rows,match_conv_wgrad,match_conv_input,match_contraction,match_elementwise,match_linear) if generalized_quant else (match_integer_region,*MATCHERS)

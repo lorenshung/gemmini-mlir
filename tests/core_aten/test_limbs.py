@@ -56,6 +56,29 @@ def linear_source(coefficient=-3, reduction=False, cast='arith.extsi', scalar_op
     }}'''
 
 
+def ranked_linear_source(shape):
+    text = linear_source()
+    rank = len(shape)
+    dims = ','.join(f'd{i}' for i in range(rank))
+    tensor = 'x'.join(map(str,shape))+('x' if shape else '')
+    return (text.replace('tensor<19x',f'tensor<{tensor}')
+            .replace('affine_map<(d0)->(d0)>',f'affine_map<({dims})->({dims})>')
+            .replace('iterator_types = ["parallel"]', 'iterator_types = ['+','.join(['"parallel"']*rank)+']'))
+
+
+@pytest.mark.parametrize('shape', [(),(1,),(1,2,1,3,5)])
+@pytest.mark.parametrize('count', [1,9,65])
+def test_ranked_linear_components_have_no_native_width_or_rank_limit(shape,count):
+    text = annotate(ranked_linear_source(shape),indices=(count-1,),exponents=(0,),
+                    mutate=lambda p:p['inputs'][0].update(count=count))
+    _, match = selected(text)
+    x = np.resize(np.array([-128,127,-1,0,1],np.int8),shape)
+    assert np.array_equal(simulate(match.kernel.stream,{'x0':x})['out'],x.astype(np.int32)*-3-3)
+    assert match.numeric['binary_exponent'] == 8*(count-1)
+    api,package = provider()
+    assert api.admit_numeric_schedule(text,package=package,numeric_policy=POLICY)['status'] == 'proven'
+
+
 def selected(text):
     _, manifest, matches = build(text)
     limbs = [m for m in matches if 'limb_plan' in m.numeric]

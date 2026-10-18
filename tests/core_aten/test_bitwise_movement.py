@@ -48,6 +48,34 @@ def test_nan_literal_declines_without_a_payload_proof():
         literal_bytes(float('nan'), 'f32')
 
 
+@pytest.mark.parametrize('dtype', ['i1','i8','f16','bf16','i32','i64','f32','f64','complex<f32>'])
+@pytest.mark.parametrize('rank', [0,1,5])
+def test_literal_reshape_preserves_bytes_including_scalar_shape_descriptors(dtype, rank):
+    text = reshape_source(dtype, rank)
+    _, manifest, matches = build(text)
+    assert len(matches) == 1, manifest
+    match, = matches
+    assert match.numeric['family'] == 'F1'
+    assert not manifest['declines'], manifest['declines']
+    data = np.arange(itemsize(dtype),dtype=np.uint8)+1
+    if dtype == 'i1': data[:] = 1
+    actual = np.ascontiguousarray(simulate(match.kernel.stream,{'x0':data})['y']).view(np.uint8).reshape(-1)
+    assert np.array_equal(actual,data)
+    lint(match.kernel.stream)
+
+
+def reshape_source(dtype, rank):
+    target = 'x'.join(['1']*rank+[dtype])
+    descriptor = f'dense<1> : tensor<{rank}xi64>' if rank else 'dense<> : tensor<0xi64>'
+    return f'''builtin.module {{
+      func.func @forward(%x: tensor<1x{dtype}>) -> tensor<{target}> {{
+        %shape = arith.constant {descriptor}
+        %y = tensor.reshape %x(%shape) : (tensor<1x{dtype}>, tensor<{rank}xi64>) -> tensor<{target}>
+        func.return %y : tensor<{target}>
+      }}
+    }}'''
+
+
 def test_float_add_zero_is_not_bitwise_movement():
     text = '''builtin.module {
       func.func @forward(%x: tensor<3xf32>) -> tensor<3xf32> {
