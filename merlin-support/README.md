@@ -167,3 +167,30 @@ and z3. A missing dependency is an explicit skipped test, not an optimum
 certificate. Independent exhaustive finite enumeration may revalidate the
 ten-candidate pool, but must report that evidence separately from a z3 run.
 `core_aten_migration.json` records predecessor and relocated content identities.
+
+## Core ATen device lowerings (all 39 support-set ops)
+
+`execution_provider.core_aten_catalog(prepared, workdir, package=...)` binds every supported region of a
+linalg-on-tensors model (model2MLIR forms, quantized dequantize/op/quantize sandwiches) to a direct-RoCC kernel
+(`mlir_oot/core_aten`). It compiles one object and writes `core_aten_catalog.json` (schema
+`gemmini_core_aten_catalog_v1`: kernels with argument tables, bindings with source ordinals and operand sources,
+declines with reasons).
+
+`core_aten_offload(...)` additionally rewrites the bound regions into `llvm.emit_c_interface` calls and emits
+the C shim from lowered memref descriptors to the kernels. The existing contraction `routing` is unchanged.
+
+The Spike lane does not yet call either entry point for graphs without a contraction. The required Merlin
+changes are listed in `/scratch/loren/core-aten-ref/ABI_NOTES.md`.
+
+Tests (set `GEMMINI_LLVM_BIN`, `GEMMINI_RISCV_TOOLS`, `GEMMINI_ROCC_TESTS`; for RTL also `GEMMINI_RTL_SIM`,
+`GEMMINI_DRAMSIM_INI`):
+
+```sh
+python -m pytest tests/core_aten                                          # models, matching, rewrite (no tools)
+python tests/core_aten/e2e/run_e2e.py tests/fixtures/core_aten [--rtl]    # kernels called directly
+python tests/core_aten/e2e/run_offload.py tests/fixtures/core_aten [--rtl] # whole graph via mlir-opt + shim
+python tests/core_aten/e2e/run_all.py CAPTURES --engine spike|rtl -j 8    # one ELF per op, parallel
+```
+
+`tests/core_aten/e2e/capture.py` (run with model2MLIR's interpreter, `MODEL2MLIR=<checkout>`) regenerates the
+quantized captures, small or representative (`--set all|all_small`).

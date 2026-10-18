@@ -911,6 +911,89 @@ def _dq_leaves(root: SSAValue, limit: int = 4000) -> list[QIn]:
     return out
 
 
+def _per_tap_contraction(root: SSAValue, qg: QIn, qw: QIn):
+    """The generic T[n, g, c, kh, kw, oh, ow] = sum_f g[n, g, f, oh, ow] w[g, f, c, kh, kw] in root's producers."""
+    seen, stack = set(), [root]
+    while stack:
+        v = stack.pop()
+        if id(v) in seen:
+            continue
+        seen.add(id(v))
+        p = producer(v)
+        if p is None or dequant(v) is not None:
+            continue
+        if (p.name == "linalg.generic" and iterators(p) == ["parallel"] * 7 + ["reduction"]
+                and [o.name for o in p.regions[0].blocks[0].ops] == ["arith.mulf", "arith.addf", "linalg.yield"]):
+            return p
+        stack.extend(p.operands)
+    return None
+
+
+def _conv_input_two_stage(op, q0, root, qg, qw):
+    from . import linmap
+    t = _per_tap_contraction(root, qg, qw)
+    if t is None:
+        raise Decline("grad_input region too large and not a per-tap contraction")
+    N, C, H, W = shape(root)
+    _, F, OH, OW = shape(qg.value)
+    _, _, KH, KW = shape(qw.value)
+    srcs = [_through_reshapes(x) for x in t.operands[:2]]
+    if not {id(s_) for s_ in srcs} <= {id(qw.dq.results[0]), id(qg.dq.results[0])} or splat_value(t.operands[2]) != 0.0:
+        raise Decline("per-tap contraction operands")
+    cos = [map_coeffs(m) for m in generic_maps(t)]
+    wmap = cos[0] if srcs[0] is qw.dq.results[0] else cos[1]
+    gmap = cos[1] if srcs[0] is qw.dq.results[0] else cos[0]
+    e = lambda d: [1 if j == d else 0 for j in range(8)]
+    if (wmap != [e(1), e(7), e(2), e(3), e(4)] or gmap != [e(0), e(1), e(7), e(5), e(6)]
+            or cos[2] != [e(d) for d in range(7)]):
+        raise Decline("per-tap contraction maps")
+    tshape = shape(t.results[0])
+    if tshape != (N, 1, C, KH, KW, OH, OW):
+        raise Decline("per-tap contraction extents")
+
+    def leaf(v):
+        return (0, 1.0) if v is t.results[0] else None
+
+    lm, region = linmap.extract(root, leaf)
+    if np.any(lm.coef != 1.0) or np.any(lm.const != 0):
+        raise Decline("shift-add chain is not a pure scatter-add")
+    n_, _, c_, kh_, kw_, oh_, ow_ = np.unravel_index(lm.idx, tshape)
+    on, oc, oy, ox = np.unravel_index(lm.out, (N, C, H, W))
+    if not (np.array_equal(on, n_) and np.array_equal(oc, c_)):
+        raise Decline("scatter mixes channels")
+    found = None
+    for sh in range(1, 5):
+        for dh in range(1, 4):
+            for ph in range(0, dh * (KH - 1) + 1):
+                g = ConvGeom(N, H, W, C, F, KH, KW, sh, sh, ph, ph, dh, dh, 1)
+                try:
+                    g.validate()
+                except ValueError:
+                    continue
+                if (g.oh, g.ow) != (OH, OW):
+                    continue
+                if not (np.array_equal(oy, oh_ * sh - ph + kh_ * dh) and np.array_equal(ox, ow_ * sh - ph + kw_ * dh)):
+                    continue
+                iy, ix = (np.arange(OH)[:, None] * sh - ph + np.arange(KH)[None] * dh), \
+                    (np.arange(OW)[:, None] * sh - ph + np.arange(KW)[None] * dh)
+                expect = int(((iy >= 0) & (iy < H)).sum() * ((ix >= 0) & (ix < W)).sum()) * N * C
+                if expect == lm.out.size:
+                    found = g
+                    break
+            if found:
+                break
+        if found:
+            break
+    if found is None:
+        raise Decline("scatter is not a transposed convolution of a square geometry")
+    k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q0.scale)
+    aten = getattr(t.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
+    return Match(aten, q0.op, [*region, t, q0.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)],
+                 ("y", q0.value), k, layout=dict(source="NCHW,OIHW->NCHW", transposes="on-device"),
+                 numeric=dict(output="grad_input", s_g=qg.scale, s_w=qw.scale, s_out=q0.scale,
+                              geometry=found.__dict__, verification="structural contraction + extracted scatter"))
+
+
 def match_conv_input(op: Operation) -> Match | None:
     """grad_input (gather loop, or per-tap contractions with shifted insert-adds): the region is
     bilinear in (grad_output, weight); with a random concrete weight it is linear in the grad, and
@@ -951,8 +1034,10 @@ def match_conv_input(op: Operation) -> Match | None:
 
     try:
         lm, region = linmap.extract(root, leaf)
-    except linmap.NotLinear:
-        return None
+    except linmap.NotLinear as exc:
+        if "too large" not in str(exc):
+            return None
+        return _conv_input_two_stage(op, q0, root, qg, qw)
     got = np.zeros(int(np.prod((N, C, H, W))))
     np.add.at(got, lm.out, lm.coef * gv.reshape(-1)[lm.idx])
     got += lm.const

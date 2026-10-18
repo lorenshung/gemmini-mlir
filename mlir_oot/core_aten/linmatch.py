@@ -166,10 +166,34 @@ def _identity_dims(lm: LinearMap, in_shape, out_shape):
     return pairs, oc, ic
 
 
+def _refine(lm: LinearMap, in_shape, out_shape):
+    """Split input dims so that an output dim is the leading factor of one (col2im's C*KK rows)."""
+    shape = list(in_shape)
+    changed = True
+    while changed:
+        changed = False
+        ic = np.unravel_index(lm.idx, shape)
+        oc = np.unravel_index(lm.out, out_shape)
+        for j, size in enumerate(shape):
+            for i, osz in enumerate(out_shape):
+                if osz <= 1 or size <= osz or size % osz:
+                    continue
+                inner = size // osz
+                if np.array_equal(oc[i], ic[j] // inner):
+                    shape[j:j + 1] = [osz, inner]
+                    changed = True
+                    break
+            if changed:
+                break
+    return tuple(shape)
+
+
 def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float) -> ops.Kernel:
     if np.any(lm.const != 0):
         raise Decline("sum with an offset")
-    out_shape, in_shape = tuple(lm.out_shape), tuple(src.shape)
+    out_shape = tuple(lm.out_shape)
+    arg_shape = tuple(src.shape)
+    in_shape = _refine(lm, arg_shape, out_shape)
     pairs, oc, ic = _identity_dims(lm, in_shape, out_shape)
     C = int(np.prod([out_shape[i] for i, _ in pairs])) if pairs else 1
     if C >= 16:
@@ -197,7 +221,7 @@ def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float) -> ops.Kernel:
         W, rho = _integer_weights(sub, s_out, rows_out, sub.out)
         in_perm = isp + iid
         out_perm = osp + oid
-        args = [Arg(src.name, "i8", in_shape, "input"), Arg("y", "i8", out_shape, "output"),
+        args = [Arg(src.name, "i8", arg_shape, "input"), Arg("y", "i8", out_shape, "output"),
                 Arg("ws_x", "i8", tuple(in_shape[d] for d in in_perm), "scratch"),
                 Arg("ws_y", "i8", tuple(out_shape[d] for d in out_perm), "scratch")]
         s = ops._begin(args)
@@ -215,7 +239,7 @@ def sum_kernel(op: str, lm: LinearMap, src: Src, s_out: float) -> ops.Kernel:
         return ops._end(op, s, form="accumulate_sum", channels=C, rows=rows_out, terms=int(sub.out.size))
     n_out = int(np.prod(out_shape))
     W, rho = _integer_weights(lm, s_out, n_out, lm.out)
-    args = [Arg(src.name, "i8", in_shape, "input"), Arg("y", "i8", out_shape, "output")]
+    args = [Arg(src.name, "i8", arg_shape, "input"), Arg("y", "i8", out_shape, "output")]
     s = ops._begin(args)
     accumulate_sum(s, src.name, "y", 1, n_out, lm.out, lm.idx, W, rho)
     return ops._end(op, s, form="accumulate_sum", channels=1, rows=n_out, terms=int(lm.out.size))
