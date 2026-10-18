@@ -1,7 +1,8 @@
 """LLVM implementation of the exact readout ABI (host CPU, never Gemmini FP32).
 
 Integer widths are derived from the actual rational parameters and all i32
-inputs, not calibration values. Eight threshold comparisons perform one RNE.
+inputs, not calibration values. Certified reciprocal multiplication performs
+one RNE; unsupported widths retain the exact threshold comparison path.
 """
 
 from fractions import Fraction
@@ -75,7 +76,22 @@ def emit(emitter, readouts=None):
             width = max(
                 64, (2 * bound).bit_length() + 2, (1024 * denominator).bit_length() + 2
             )
-            typ = IntegerType(width)
+            from .host_magic import interval, prove, verify_reachable
+            low, high, sources, safe = interval(readout, coeffs, emitter.meta)
+            proof = dict(prove(low, high, denominator, readout.quant_min,
+                               readout.quant_max, readout.zero_point, readout.relu))
+            if not safe:
+                proof = dict(method="comparison_search", reason="i64 intermediate bound failed")
+            if proof["method"] == "exact_reciprocal_multiply_shift":
+                verify_reachable(proof, coeffs, sources, denominator)
+            proof.update(output=readout.out, accumulator_bounds=sources,
+                         numerator_min=str(low), numerator_max=str(high),
+                         denominator=str(denominator), int64_intermediates_proven=bool(safe),
+                         coefficients=[str(v) for v in coeffs],
+                         elements=sum(end-start for start, end in pieces))
+            emitter.meta["host_requantization_proofs"].append(proof)
+            magic = proof["method"] == "exact_reciprocal_multiply_shift"
+            typ = i64 if magic else IntegerType(width)
 
             def c(v):
                 return fb.const(v, typ)
@@ -154,31 +170,58 @@ def emit(emitter, readouts=None):
                     )
                 if readout.relu:
                     value = select(compare(value, c(0), "slt"), c(0), value)
-                twice = binary(llvm.MulOp, value, c(2))
-                lo, hi = (
-                    c(readout.quant_min - readout.zero_point),
-                    c(readout.quant_max - readout.zero_point),
-                )
-                for _ in range(8):
-                    mid = binary(llvm.AShrOp, binary(llvm.AddOp, lo, hi), c(1))
-                    threshold = binary(
-                        llvm.MulOp,
-                        binary(llvm.AddOp, binary(llvm.MulOp, mid, c(2)), c(1)),
-                        c(denominator),
-                    )
-                    greater = compare(twice, threshold, "sgt")
-                    equal = compare(twice, threshold, "eq")
-                    odd = compare(binary(llvm.AndOp, mid, c(1)), c(0), "ne")
-                    above = binary(
-                        llvm.AndOp,
-                        binary(llvm.OrOp, greater, binary(llvm.AndOp, equal, odd)),
-                        compare(lo, hi, "slt"),
-                    )
+                if magic:
+                    negative = compare(value, c(0), "slt")
+                    magnitude = select(negative, binary(llvm.SubOp, c(0), value), value)
+                    shift = int(proof["shift"])
+                    multiplier = int(proof["multiplier"])
+                    if multiplier == 1:
+                        quotient = binary(llvm.LShrOp, magnitude, c(shift))
+                    else:
+                        wide = IntegerType(128)
+                        operand = fb.add(llvm.ZExtOp(magnitude, wide)).results[0]
+                        product = binary(llvm.MulOp, operand, fb.const(multiplier, wide))
+                        shifted = binary(llvm.LShrOp, product, fb.const(shift, wide))
+                        quotient = fb.add(llvm.TruncOp(shifted, i64)).results[0]
+                    remainder = binary(llvm.SubOp, magnitude,
+                                       binary(llvm.MulOp, quotient, c(denominator)))
+                    complement = binary(llvm.SubOp, c(denominator), remainder)
+                    odd = compare(binary(llvm.AndOp, quotient, c(1)), c(0), "ne")
+                    increment = binary(llvm.OrOp, compare(remainder, complement, "ugt"),
+                                       binary(llvm.AndOp, compare(remainder, complement, "eq"), odd))
+                    rounded = binary(llvm.AddOp, quotient, select(increment, c(1), c(0)))
+                    signed = select(negative, binary(llvm.SubOp, c(0), rounded), rounded)
+                    # Clamp before adding zero point to avoid signed overflow.
+                    lower, upper = c(readout.quant_min-readout.zero_point), c(readout.quant_max-readout.zero_point)
+                    clamped = select(compare(signed, lower, "slt"), lower, signed)
+                    clamped = select(compare(clamped, upper, "sgt"), upper, clamped)
+                    code = binary(llvm.AddOp, clamped, c(readout.zero_point))
+                else:
+                    twice = binary(llvm.MulOp, value, c(2))
                     lo, hi = (
-                        select(above, binary(llvm.AddOp, mid, c(1)), lo),
-                        select(above, hi, mid),
+                        c(readout.quant_min - readout.zero_point),
+                        c(readout.quant_max - readout.zero_point),
                     )
-                code = binary(llvm.AddOp, lo, c(readout.zero_point))
+                    for _ in range(8):
+                        mid = binary(llvm.AShrOp, binary(llvm.AddOp, lo, hi), c(1))
+                        threshold = binary(
+                            llvm.MulOp,
+                            binary(llvm.AddOp, binary(llvm.MulOp, mid, c(2)), c(1)),
+                            c(denominator),
+                        )
+                        greater = compare(twice, threshold, "sgt")
+                        equal = compare(twice, threshold, "eq")
+                        odd = compare(binary(llvm.AndOp, mid, c(1)), c(0), "ne")
+                        above = binary(
+                            llvm.AndOp,
+                            binary(llvm.OrOp, greater, binary(llvm.AndOp, equal, odd)),
+                            compare(lo, hi, "slt"),
+                        )
+                        lo, hi = (
+                            select(above, binary(llvm.AddOp, mid, c(1)), lo),
+                            select(above, hi, mid),
+                        )
+                    code = binary(llvm.AddOp, lo, c(readout.zero_point))
                 byte = fb.add(llvm.TruncOp(code, i8)).results[0]
                 fb.add(llvm.StoreOp(byte, fb.gep(bases[readout.out], target, i8)))
 

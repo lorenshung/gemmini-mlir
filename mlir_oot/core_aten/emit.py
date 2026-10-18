@@ -112,7 +112,9 @@ def verify_forms(stream: Stream) -> int:
 
 
 class _Emitter:
-    def __init__(self, stream: Stream, symbol: str):
+    def __init__(self, stream: Stream, symbol: str, meta=None):
+        self.meta = meta if meta is not None else {}
+        self.meta["host_requantization_proofs"] = []
         self.stream = stream
         self.symbol = symbol
         self.ptr_type = PTR
@@ -220,14 +222,14 @@ def instruction_tree(instructions):
     return nodes(instructions.nodes)
 
 
-def build_module(stream: Stream, symbol: str, *, check_expand: bool = True) -> tuple[ModuleOp, list]:
+def build_module(stream: Stream, symbol: str, *, check_expand: bool = True, meta=None) -> tuple[ModuleOp, list]:
     from .reroll import iter_expand
     from itertools import zip_longest
     tree = instruction_tree(stream.ins)
     if check_expand and any(a != b for a, b in zip_longest(iter_expand(tree), (encode(i) for i in stream.ins))):
         raise AssertionError("loop tree does not reproduce the recipe stream")
     verify_forms(stream)
-    module = _Emitter(stream, symbol).module(tree)
+    module = _Emitter(stream, symbol, meta).module(tree)
     module.attributes["gemmini.core_aten_kernel"] = StringAttr(symbol)
     return module, tree
 

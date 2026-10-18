@@ -60,6 +60,11 @@ def _stream_digest(kernel) -> str:
         h.update(name.encode() + data.tobytes())
     from dataclasses import asdict
     h.update(json.dumps(_jsonable([asdict(r) for r in kernel.stream.readouts]),sort_keys=True).encode())
+    # Reciprocal certificates specialize to these recorded intervals. Kernels
+    # with identical commands but different input bounds cannot share a symbol.
+    h.update(json.dumps({key: _jsonable(kernel.meta[key]) for key in
+                        ('accumulator_min', 'accumulator_max', 'accumulator_bounds',
+                         'zero_point_corrections') if key in kernel.meta}, sort_keys=True).encode())
     h.update(repr(kernel.stream.packs).encode())
     from .stream import CompactInstructions
     if isinstance(kernel.stream.ins, CompactInstructions):
@@ -107,7 +112,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
         accepted.append(m)
         symbol = "gemmini_ca_" + digest[:16]
         if symbol not in kernels:
-            km, tree = build_module(m.kernel.stream, symbol)
+            km, tree = build_module(m.kernel.stream, symbol, meta=m.kernel.meta)
             for op in list(km.body.blocks[0].ops):
                 op.detach()
                 device.body.blocks[0].add_op(op)
