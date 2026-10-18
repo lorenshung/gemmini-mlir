@@ -273,7 +273,8 @@ def _admit_limb_regions(source, *, package, numeric_policy):
     catalog_module = _core_aten_module(package, 'catalog')
     _, catalog, matches = catalog_module.build(source)
     parsed = catalog_module.parse_module(source)
-    proposed = sum('gemmini.limb' in o.attributes for o in parsed.walk())
+    live = _core_aten_module(package, 'liveness').live_source_ops(parsed)
+    proposed = sum('gemmini.limb' in o.attributes for o in live)
     proofs, covered = {}, 0
     for binding, match in zip(catalog['bindings'], matches):
         meta = match.kernel.meta

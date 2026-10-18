@@ -1462,6 +1462,8 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     from .integer_regions import match_integer_region
     from .bitwise import match as match_bitwise
     from .limbs import match as match_limb
+    from .liveness import live_source_ops, live_bindings
+    live = live_source_ops(module)
     matches, declines = [], []
     quantized_module = any(name_of(o).startswith('quant_ext.') for o in module.walk())
     generalized_quant = any(name_of(o).startswith('quant_ext.') and
@@ -1469,7 +1471,7 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         for o in module.walk() if len(o.operands)>=3 and etype(o.operands[0])!='i32')
     taken: set[int] = set()
     for ordinal, op in enumerate(module.walk()):
-        if id(op) in taken:
+        if op not in live or id(op) in taken:
             continue
         if any(any(d <= 0 for d in shape(v)) for v in (*op.operands, *op.results) if shape(v) is not None):
             declines.append(dict(ordinal=ordinal, op=op.name, reason="empty or dynamic tensor shape", aten=""))
@@ -1506,6 +1508,8 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                       'arith.andi', 'arith.ori', 'arith.xori', 'arith.cmpi'}
         reported = {d['ordinal'] for d in declines}
         for ordinal, candidate in enumerate(module.walk()):
+            if candidate not in live:
+                continue
             if id(candidate) in taken or ordinal in reported or any(k.startswith('prov.quant.') for k in candidate.attributes):
                 continue
             if candidate.results and all(not list(r.uses) for r in candidate.results):
@@ -1515,4 +1519,4 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                 declines.append(dict(ordinal=ordinal, op=candidate.name,
                     reason='no exact integer schedule for unquantized data arithmetic or numeric conversion',
                     aten=getattr(candidate.attributes.get('prov.aten'), 'data', '')))
-    return matches, declines
+    return live_bindings(matches, live), declines

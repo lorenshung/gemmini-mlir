@@ -284,7 +284,16 @@ def test_static_index_math_never_wraps_or_uses_rounded_division():
 def test_reused_component_kernel_has_one_proof_and_multiple_bindings():
     module = parse_module(annotate(FIXTURE.read_text()))
     op = next(o for o in module.walk() if 'gemmini.limb' in o.attributes)
-    op.parent_block().insert_op_after(op.clone(), op)
+    from xdsl.dialects import func
+    from xdsl.dialects.builtin import FunctionType
+    duplicate = op.clone()
+    op.parent_block().insert_op_after(duplicate, op)
+    fn = next(o for o in module.walk() if o.name == 'func.func')
+    ret = next(o for o in fn.walk() if o.name == 'func.return')
+    ret.parent_block().insert_op_before(func.ReturnOp(op.results[0], duplicate.results[0]), ret)
+    ret.parent_block().erase_op(ret)
+    fn.properties['function_type'] = FunctionType.from_lists(
+        [v.type for v in fn.body.block.args], [op.results[0].type]*2)
     api, package = provider()
     proof = api.admit_numeric_schedule(str(module), package=package, numeric_policy=POLICY)
     assert proof['status'] == 'proven', proof
