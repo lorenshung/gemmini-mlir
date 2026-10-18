@@ -1,0 +1,92 @@
+{
+  "schema": "phase2.exploratory.candidate_registry.v1",
+  "baseline_sha256": "b847c973da82f408a32c7622d0c49fb6902f0a58d0f716f131d8501e34175338",
+  "baseline_files": 21,
+  "selection_authority": "NONE: automatic sandboxed Phase2 was not launched; manual exploration stopped by user correction",
+  "candidates": [
+    {
+      "name": "rhs_residency",
+      "package_sha256": "5e83e4ebf744772fc662849f82b2212889d7dca81e2572a00f5f002d9ea0cf04",
+      "files": 21,
+      "mechanism": "bounded whole-RHS retention across M tiles",
+      "changed_baseline_files": [
+        "emitter.py"
+      ],
+      "status": "unpromoted_manual_exploration_stopped",
+      "formal_admission": false
+    },
+    {
+      "name": "rhs_config_state",
+      "package_sha256": "3afa948749e75185b04f533b5e5c966a00b12d5f84bd25f477f51842633abd8a",
+      "files": 21,
+      "mechanism": "hoist invariant store/load configuration",
+      "changed_baseline_files": [
+        "direct_codegen.py",
+        "emitter.py"
+      ],
+      "status": "unpromoted_manual_exploration_stopped",
+      "formal_admission": false
+    },
+    {
+      "name": "rhs_config_stream",
+      "package_sha256": "9f7eab6c29c2b78ad1493af7a9876a90bb5f471be3c86682703565f113feef34",
+      "files": 21,
+      "mechanism": "allow reservation-station dependencies inside fenced calls",
+      "changed_baseline_files": [
+        "direct_codegen.py",
+        "emitter.py"
+      ],
+      "status": "unpromoted_manual_exploration_stopped",
+      "formal_admission": false
+    },
+    {
+      "name": "rhs_panel_stream",
+      "package_sha256": "137d50078cd05bfa9ffe8aab92b14b55897f306a7029a5027d5bf3fceff0171f",
+      "files": 21,
+      "mechanism": "retain one K-by-16 RHS panel when whole-RHS retention exceeds capacity",
+      "changed_baseline_files": [
+        "direct_codegen.py",
+        "emitter.py"
+      ],
+      "status": "unpromoted_manual_exploration_stopped",
+      "formal_admission": false
+    },
+    {
+      "name": "rhs_panel_pingpong",
+      "package_sha256": "c94a8575e05456240dec022ea945583528956d6ebb448d8651ded250ca60a604",
+      "files": 21,
+      "mechanism": "alternate resident-schedule A rows 0 and16",
+      "changed_baseline_files": [
+        "direct_codegen.py",
+        "emitter.py"
+      ],
+      "status": "unpromoted_manual_exploration_stopped",
+      "formal_admission": false
+    },
+    {
+      "name": "rhs_acc_pingpong",
+      "package_sha256": "51dd8c878ac872c0aa45c1b092cbe8b3c39281e62539ecf00ba5f77cae848dbc",
+      "files": 21,
+      "mechanism": "add two private accumulator slots in rows[0,32)",
+      "changed_baseline_files": [
+        "direct_codegen.py",
+        "emitter.py"
+      ],
+      "status": "unpromoted_manual_exploration_stopped",
+      "formal_admission": false
+    },
+    {
+      "name": "rhs_load_states",
+      "package_sha256": "31b4a2829bee2a245ab8b9e7a697ac82c1dc2b298497dad30324321b9fba32d4",
+      "files": 21,
+      "mechanism": "separate A/B load states from seed/panel state on selected three-state hardware",
+      "changed_baseline_files": [
+        "direct_codegen.py",
+        "emitter.py"
+      ],
+      "status": "unpromoted_manual_exploration_stopped",
+      "formal_admission": false
+    }
+  ],
+  "measurement_evidence": "task out/artifacts/perf-studies/gemmini/el4-20261018/results.json; profiles and partial batches remain separate"
+}

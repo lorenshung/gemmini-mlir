@@ -7,6 +7,10 @@ byte-identical, with 21 files and tree SHA256
 The handwritten repository-root compiler is not substituted.
 
 These are experimental packages, not formally admitted Phase 2 incumbents.
+The user stopped manual optimization at 21:18 UTC and requested the existing
+automatic sandboxed experiment route. That process was not launched. Its Phase 1
+and performance-corpus admission prerequisites remain incomplete. These source
+snapshots preserve exploratory work only; they are not an automatic-search result.
 The copied `REPORT.md` files describe the historical Phase 1 author report;
 they do not qualify the new schedules. Numerical/readout policies are unchanged.
 
@@ -16,6 +20,13 @@ they do not qualify the new schedules. Numerical/readout policies are unchanged.
 | `rhs_config_state/package` | Additionally hoist invariant store configuration and unchanged reduction-load configuration. |
 | `rhs_config_stream/package` | Additionally let the selected reservation station order direct-schedule dependencies, preserving caller entry/exit fences and all host-packing fences. |
 | `rhs_panel_stream/package` | Additionally retain one K-by-array-width RHS panel across M tiles when the whole weight cannot fit. |
+| `rhs_panel_pingpong/package` | Additionally alternate two A scratchpad slots in resident schedules. |
+| `rhs_acc_pingpong/package` | Additionally alternate two private output accumulator slots. |
+| `rhs_load_states/package` | Fork the A-buffer candidate and use three independent load states for seed/panel, A and B. |
+
+`candidates.json` pins each 21-file package and its changed baseline files.
+Incomplete batches, timeouts and refusals remain in the task evidence; no
+complete cohort or full-model candidate regression was established.
 
 Choices follow contraction shapes, layouts, live storage and selected target
 capabilities. No model name, benchmark identity, reference tensor or golden
