@@ -4,7 +4,7 @@ import numpy as np
 from ..stream import ACC, SP, DIM
 
 
-def linear(s, lm, names):
+def linear(s, lm, names, *, out='out'):
     n = lm.const.size
     s.const('seed', np.asarray(lm.const, np.int32))
     coefficients = sorted({int(c) for c in lm.coef})
@@ -34,4 +34,4 @@ def linear(s, lm, names):
                 s.mvin(s.at('weights', weights.index(weight)), SP(0), 1, 1, 1)
                 s.matmul_tile(SP(32), SP(0), ACC(p-base, accumulate=True), 1, 1, 1)
         s.fence()
-        s.mvout(s.at('out', base*4), ACC(0, full=True), 1, rows)
+        s.mvout(s.at(out, base*4), ACC(0, full=True), 1, rows)

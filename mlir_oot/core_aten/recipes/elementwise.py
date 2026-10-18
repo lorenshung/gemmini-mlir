@@ -21,6 +21,33 @@ from ..stream import ACC, DIM, GARBAGE, NO_ACT, RELU, SP, Stream
 W64 = 4 * DIM
 
 
+def exact_byte_relu(s, x, out, n):
+    """ReLU of a signed-byte value, then identity widening to full i32.
+
+    Full ACC readout bypasses activation. Execute-to-SP clips before ReLU,
+    which is exact here because the identity product is already in [-128,127].
+    The second identity product widens [0,127] into ACC without activation.
+    """
+    s.const('relu_identity', np.eye(DIM, dtype=np.int8))
+    s.config_ld(1, DIM)
+    s.mvin(s.at('relu_identity'), SP(0), DIM, DIM, 1)
+    off = 0
+    while off < n:
+        cols = min(DIM, n-off)
+        rows = min(DIM, (n-off)//cols)
+        s.fence()
+        s.config_ld(0, cols)
+        s.config_st(cols*4)
+        s.mvin(s.at(x, off), SP(32), cols, rows)
+        s.config_ex(act=RELU)
+        s.matmul_tile(SP(32), SP(0), SP(64), rows, cols, cols)
+        s.fence()
+        s.config_ex()
+        s.matmul_tile(SP(64), SP(0), ACC(0), rows, cols, cols)
+        s.mvout(s.at(out, off*4), ACC(0, full=True), cols, rows)
+        off += rows*cols
+
+
 def _flat_blocks(n: int):
     """[n // 64, 64] row blocks of up to 16 rows, then one tail row of n % 64."""
     rows = n // W64

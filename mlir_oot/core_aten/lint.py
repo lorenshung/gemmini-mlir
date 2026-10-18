@@ -98,8 +98,8 @@ def lint(stream: Stream) -> dict:
             if st["acc_act"] and st["acc_scale"] < 0:
                 err(i, "C7: ReLU readout with a negative scale")
         elif k == "config_ex":
-            if ins.a("act"):
-                err(i, "EX activation is not used by these recipes")
+            if ins.a("act") not in (0, 1):
+                err(i, "unsupported EX activation")
         elif k == "mvin":
             cfg = ld[ins.a("load_id")]
             local = ins.a("local")

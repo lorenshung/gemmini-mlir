@@ -251,42 +251,41 @@ def conv_backward_weight(g, *, s_g, s_x, s_out):
 # Elementwise
 # ---------------------------------------------------------------------------------------------
 
-def _dense_linear(op, out_shape, inputs, constant=0, relu=False):
+def _dense_linear(op, out_shape, inputs, constant=0, relu=False, *, code_units=None):
     from .linmap import LinearMap
     from .linmatch import Src
     from .exact_linear import kernel
     n = _numel(out_shape)
     outs, ids, indices, coefficients, srcs = [], [], [], [], {}
     for sid, (name, shp, index, coefficient) in enumerate(inputs):
-        srcs[sid] = Src(name, tuple(shp), 1)
+        srcs[sid] = Src(name, tuple(shp), (code_units or {}).get(name, 1))
         outs.append(np.arange(n,dtype=np.int64))
         ids.append(np.full(n,sid,np.int64))
         indices.append(np.asarray(index,np.int64).reshape(-1))
         coefficients.append(np.broadcast_to(np.asarray(coefficient,dtype=object).reshape(-1),(n,)))
     lm = LinearMap(tuple(out_shape),np.concatenate(outs),np.concatenate(ids),np.concatenate(indices),
                    np.concatenate(coefficients),np.broadcast_to(np.asarray(constant,dtype=object).reshape(-1),(n,)),{})
-    result = kernel(op,lm,srcs,1)
-    result.stream.readouts[-1].relu = relu
+    result = kernel(op,lm,srcs,1,relu=relu)
     return result
 
 
 def scale_map(op, shape, c, *, s_x, s_out):
-    return _dense_linear(op,shape,[('x',shape,np.arange(_numel(shape)),Q(c)*Q(s_x)/Q(s_out))])
+    return _dense_linear(op,shape,[('x',shape,np.arange(_numel(shape)),Q(c)*Q(s_x)/Q(s_out))], code_units={'x':Q(s_x)/Q(s_out)})
 
 
 def relu(shape, *, s_x, s_out):
-    return _dense_linear('aten.relu.default',shape,[('x',shape,np.arange(_numel(shape)),Q(s_x)/Q(s_out))],relu=True)
+    return _dense_linear('aten.relu.default',shape,[('x',shape,np.arange(_numel(shape)),Q(s_x)/Q(s_out))],relu=True,code_units={'x':abs(Q(s_x)/Q(s_out))})
 
 
 def add_tensor(op, shape, b_shape, *, alpha=1, s_a, s_b, s_out, wa=1, c=0, relu=False, b_lead=None):
     shape,b_shape = tuple(shape),tuple(b_shape)
     bidx = np.broadcast_to(np.arange(_numel(b_shape)).reshape(b_shape),shape).reshape(-1)
     return _dense_linear(op,shape,[('a',shape,np.arange(_numel(shape)),Q(wa)*Q(s_a)/Q(s_out)),
-                                   ('b',b_shape,bidx,Q(alpha)*Q(s_b)/Q(s_out))],Q(c)/Q(s_out),relu)
+                                   ('b',b_shape,bidx,Q(alpha)*Q(s_b)/Q(s_out))],Q(c)/Q(s_out),relu, code_units={'a':Q(s_a)/Q(s_out),'b':Q(s_b)/Q(s_out)})
 
 
 def add_scalar(op, shape, c, *, s_x, s_out, w=1, relu=False):
-    return _dense_linear(op,shape,[('x',shape,np.arange(_numel(shape)),Q(w)*Q(s_x)/Q(s_out))],Q(c)/Q(s_out),relu)
+    return _dense_linear(op,shape,[('x',shape,np.arange(_numel(shape)),Q(w)*Q(s_x)/Q(s_out))],Q(c)/Q(s_out),relu, code_units={'x':Q(s_x)/Q(s_out)})
 
 
 # ---------------------------------------------------------------------------------------------

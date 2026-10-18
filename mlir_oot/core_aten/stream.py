@@ -225,8 +225,8 @@ class Machine:
 
     def _config_ex(self, ins):
         self.ex.update({k: ins.a(k) for k in ("dataflow", "act", "a_transpose", "b_transpose", "c_stride", "a_stride")})
-        if self.ex["dataflow"] != WS or self.ex["act"] != NO_ACT or self.ex["a_stride"] != 1:
-            raise NotImplementedError("model covers WS with no EX activation and unit a_stride")
+        if self.ex["dataflow"] != WS or self.ex["act"] not in (NO_ACT, RELU) or self.ex["a_stride"] != 1:
+            raise NotImplementedError("model covers WS with no activation or ReLU and unit a_stride")
 
     def _config_ld(self, ins):
         self.ld[ins.a("load_id")] = {k: ins.a(k) for k in ("stride", "scale", "shrunk", "block_stride", "pixel_repeats")}
@@ -325,7 +325,8 @@ class Machine:
                     self.acc[dst, :c_cols] = out[r, :c_cols]
         else:
             for r in range(c_rows):
-                self.spad[row + r * cs, :c_cols] = np.clip(out[r, :c_cols], -128, 127)
+                clipped = np.clip(out[r, :c_cols], -128, 127)
+                self.spad[row + r * cs, :c_cols] = np.maximum(clipped, 0) if self.ex['act'] == RELU else clipped
 
 
 def simulate(stream: Stream, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:

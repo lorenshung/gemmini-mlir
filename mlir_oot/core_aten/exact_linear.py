@@ -1,11 +1,14 @@
 """Target schedule for rational sparse linear maps: i32 sums, exact host readout.
 
-Coefficients are never approximated into int8 weights. Independent coefficient
-classes receive independent i32 tiles; the CPU combines their rational values
-before the sole quantization. Sparse maps derive solely from the source IR.
+Integral weights in proved common units combine on the device. When their
+bounds or instruction budget fail, separate i32 coefficient-class sums retain
+an exact rational host combination before the sole quantization. Coefficients
+are never approximated. Sparse maps derive solely from the source IR.
 """
 
 from fractions import Fraction as Q
+from functools import reduce
+from math import gcd, lcm
 
 import numpy as np
 
@@ -16,7 +19,80 @@ from .stream import Arg
 from .recipes.asm import accumulate_sum
 
 
-def kernel(op, lm, srcs, s_out):
+def _integer_plan(lm, srcs, s_out):
+    """Find exact common units, never approximate rational coefficients."""
+    n = lm.const.size
+    factors = np.ones(n, object)
+    weights = np.zeros(lm.coef.size, object)
+    seed = np.zeros(n, object)
+    residual = np.array([Q(v)/Q(s_out) for v in lm.const], object)
+    by_output = {}
+    for t, p in enumerate(lm.out):
+        by_output.setdefault(int(p), []).append(t)
+    work = 0
+    for p, terms in by_output.items():
+        coefficients = [Q(lm.coef[t])/Q(s_out) for t in terms]
+        unit = abs(Q(srcs[int(lm.src[terms[0]])].scale)/Q(s_out))
+        if not unit:
+            return None
+        # Prefer the input code unit: integer scalar multiplication/addition
+        # then remains device arithmetic. A small rational common divisor can
+        # also combine noninteger-ratio terms, subject to the same hard bounds.
+        if not all((c/unit).denominator == 1 for c in coefficients):
+            values = [unit, *coefficients]
+            denominator = lcm(*(v.denominator for v in values))
+            numerator = reduce(gcd, (abs(v.numerator)*(denominator//v.denominator) for v in values))
+            unit = Q(numerator, denominator)
+        ws = [int(c/unit) for c in coefficients]
+        candidate = residual[p]/unit
+        b = int(candidate) if candidate.denominator == 1 else 0
+        bound = abs(b)+128*sum(abs(w) for w in ws)
+        work += sum((abs(w)+126)//127 for w in ws)
+        if bound >= 1 << 31 or work > 1 << 18:
+            return None
+        factors[p], seed[p] = unit, b
+        residual[p] -= b*unit
+        weights[terms] = ws
+    return factors, weights, seed, residual
+
+
+def _affine_tiles(s, lm, weights, seed, input_names, out):
+    """Use vector c*I tiles for exact dense/broadcast affine maps when legal."""
+    from .recipes.elementwise import lincomb
+    from .numerics import parts127
+    n = lm.const.size
+    terms = []
+    period = n
+    for sid, name in input_names.items():
+        t = np.flatnonzero(lm.src == sid)
+        if not t.size:
+            continue
+        if t.size != n or not np.array_equal(lm.out[t], np.arange(n)) or not np.all(weights[t] == weights[t[0]]):
+            return False
+        indices = lm.idx[t]
+        size = int(indices.max())+1
+        if size <= 0 or n % size or not np.array_equal(indices, np.arange(n)%size):
+            return False
+        if size != n:
+            if period != n and period != size:
+                return False
+            period = size
+        w = int(weights[t[0]])
+        if abs(w) > 12*127:
+            return False
+        terms.append((name, size, parts127(w)))
+    if not terms or len(terms) > 2 or sum(len(parts) for _, _, parts in terms) > 12 or not np.all(seed == seed[0]):
+        return False
+    lincomb(s, [(name, 0 if size != n else period, parts) for name, size, parts in terms],
+            out, n//period, period, 1.0, bias=int(seed[0]) if seed[0] else None, out_i32=True)
+    return True
+
+
+def kernel(op, lm, srcs, s_out, *, relu=False):
+    from dataclasses import replace
+    nonzero = np.array([Q(c) != 0 for c in lm.coef], bool)
+    lm = replace(lm, out=lm.out[nonzero], src=lm.src[nonzero],
+                 idx=lm.idx[nonzero], coef=lm.coef[nonzero])
     n = int(np.prod(lm.out_shape)) if lm.out_shape else 1
     require(
         n > 0 and all(all(d > 0 for d in src.shape) for src in srcs.values()),
@@ -37,6 +113,44 @@ def kernel(op, lm, srcs, s_out):
             s.args.append(Arg(packed, "i8", tuple(src.shape), "scratch"))
             s.packs.append((src.name, packed))
             input_names[sid] = packed
+    plan = _integer_plan(lm, srcs, s_out)
+    if plan is not None and lm.coef.size:
+        factors, weights, seed, residual = plan
+        name = 'acc_combined'
+        s._index[name] = len(s.args)
+        s.args.append(Arg(name, 'i32', tuple(lm.out_shape), 'scratch'))
+        integer_map = replace(lm, coef=weights, const=seed)
+        mode = 'weighted_integer_compute'
+        device_relu = (relu and len(input_names) == 1 and np.all(weights == 1) and
+                       np.all(seed == 0) and np.all(residual == 0) and
+                       np.array_equal(lm.out, np.arange(n)) and np.array_equal(lm.idx, np.arange(n)))
+        if device_relu:
+            from .recipes.elementwise import exact_byte_relu
+            exact_byte_relu(s, next(iter(input_names.values())), name, n)
+            mode = 'signed_byte_execute_relu'
+        elif np.all(weights == 1):
+            accumulate_sum(s, next(iter(input_names.values())), name, 1, n, lm.out, lm.idx,
+                           np.ones(lm.out.size, np.int64), np.ones(n), out_i32=True,
+                           source_id=lm.src, sources=input_names, seed=seed)
+            repeated = np.bincount(lm.out, minlength=n).max(initial=0) > 1
+            mode = 'integer_accumulating_mvin' if repeated or np.any(seed) else 'integer_widening'
+        elif not _affine_tiles(s, lm, weights, seed, input_names, name):
+            from .recipes.limbs import linear
+            # The common sparse integer primitive has a configurable output.
+            linear(s, integer_map, input_names, out=name)
+        bound = np.abs(seed)
+        for p, w in zip(lm.out, weights):
+            bound[int(p)] += 128*abs(int(w))
+        s.readouts.append(Readout('y', [(name, factors.reshape(lm.out_shape))],
+                                  residual.reshape(lm.out_shape), relu=relu and not device_relu))
+        return ops._end(op, s, form='exact_linear_i32', readout='full_i32',
+                        rounding='host_exact_rational_RNE', components=1, terms=int(lm.out.size),
+                        arithmetic=mode, accumulator_bounds=[dict(tile=name, accumulator_min=-int(max(bound)), accumulator_max=int(max(bound)))],
+                        integer_weights=[str(w) for w in sorted(set(weights))],
+                        device_constant=bool(np.any(seed)), device_relu=bool(device_relu),
+                        execute_activation_proof=(dict(operation='identity_signed_byte_then_ReLU',
+                            input_range=[-128,127], output_range=[0,127], shift=0,
+                            clipping_is_identity=True) if device_relu else None))
     for sid in sorted(srcs):
         # Within each output, combine equal exact coefficients. Their ordinal
         # class may have a different factor at another output (pool divisors).
@@ -77,6 +191,7 @@ def kernel(op, lm, srcs, s_out):
             "y",
             components,
             np.asarray(lm.const, dtype=object).reshape(lm.out_shape) / Q(s_out),
+            relu=relu,
         )
     )
     return ops._end(
@@ -88,4 +203,6 @@ def kernel(op, lm, srcs, s_out):
         components=len(components),
         accumulator_bounds=bounds,
         terms=int(lm.out.size),
+        arithmetic='separate_rational_terms_host_combination',
+        combination_refusal='common integer units exceed exact i32 or instruction-part budget',
     )
