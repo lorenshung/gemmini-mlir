@@ -55,6 +55,12 @@ class CompilerCleanupOwner:
             "final_guard": _pin(
                 Path(__file__).with_name("gemmini_cleanup_final_guard.py")
             ),
+            "issued_program_checker": _pin(
+                Path(__file__).with_name("gemmini_cleanup_issue.py")
+            ),
+            "layer_artifact_checker": _pin(
+                Path(__file__).with_name("gemmini_cleanup_layer_artifacts.py")
+            ),
             "nm": _pin(nm),
         }
         self.identity = "gemmini.compiler_cleanup.v1:" + _digest(
