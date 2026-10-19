@@ -19,7 +19,7 @@ def _digest(value):
 
 
 class CompilerCleanupOwner:
-    def __init__(self, cleanup, library, *, original_host_roots):
+    def __init__(self, cleanup, library, *, original_host_roots, nm):
         from gemmini_cleanup_admission import OriginalCleanupAdmission
         from gemmini_timing_resources import _pin
         from merlin.common.paths import module_source_path
@@ -52,6 +52,10 @@ class CompilerCleanupOwner:
             "startup": _pin(
                 module_source_path("merlin.targetgen.selected_library_imports")
             ),
+            "final_guard": _pin(
+                Path(__file__).with_name("gemmini_cleanup_final_guard.py")
+            ),
+            "nm": _pin(nm),
         }
         self.identity = "gemmini.compiler_cleanup.v1:" + _digest(
             [
@@ -92,6 +96,27 @@ class CompilerCleanupOwner:
             "hardware_execution_qualified": False,
             "timing_authority": "NONE",
         }
+
+    @property
+    def nm(self):
+        return Path(self._sources["nm"]["path"])
+
+    def check_functional_guard(
+        self, baseline, candidate, baseline_result, candidate_result, *, grade_root
+    ):
+        from gemmini_cleanup_final_guard import check_functional_guard
+
+        self.revalidate()
+        result = check_functional_guard(
+            self,
+            baseline,
+            candidate,
+            baseline_result,
+            candidate_result,
+            grade_root=grade_root,
+        )
+        self.revalidate()
+        return result
 
     def prepare_compiler(self, source, destination, *, policy):
         self.revalidate()
@@ -277,7 +302,10 @@ def restore_registry(inputs, *, work_root):
         raise ValueError("original reviewed library selection changed")
     cleanup = run_original_admission(inputs, work_root=work_root, library=library)
     owner = CompilerCleanupOwner(
-        cleanup, library, original_host_roots=(Path(inputs["merlin"]) / "src",)
+        cleanup,
+        library,
+        original_host_roots=(Path(inputs["merlin"]) / "src",),
+        nm=Path(inputs["nm"]),
     )
     return ReviewedPassCapabilities(
         (
