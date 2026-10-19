@@ -14,7 +14,11 @@ from pathlib import Path
 
 from gemmini_source_execution_issuer_v4 import SourceExecutionIssuerV4
 from gemmini_staged_dense_capability import _digest, _leaf
-from gemmini_staged_rhs_capability import QualifiedRhsResidencyOwner, RhsResidencyCompilerPrototype
+from gemmini_staged_rhs_capability import (
+    QualifiedRhsResidencyOwner,
+    RhsResidencyCompilerPrototype,
+    scoped_original_rhs_metadata,
+)
 from gemmini_staged_rhs_relocation_effects import original_source_capsule
 from gemmini_staged_rhs_window import ClosedScratchEpochOwner
 from gemmini_zero_initializer_capability import ZeroInitializerCompilerPrototype
@@ -26,13 +30,47 @@ from merlin.llvmlower.reviewed_pass_capabilities import (
     ReviewedPassCapabilities,
     ReviewedPassCapability,
 )
-from merlin.targetgen.compiler_pass_selection import _pin
+from merlin.targetgen.compiler_pass_selection import _pin, _tree
 
 PROTOCOL = "merlin.original_parent_pass_qualification.v1"
 METADATA = "merlin.pass_metadata_operation.v1"
 SNAPSHOT = "gemmini.original_parent_full_k_rhs_qualification.v1"
 MECHANISM = "full_k_rhs_residency_raw_i32"
 DIAGNOSTIC = "source_execution_diagnostic"
+
+
+def _base_packages(inputs):
+    packages = inputs.get("base_compiler_preflight_packages", [])
+    if (
+        type(packages) is not list
+        or len(packages) > 8
+        or any(
+            type(row) is not dict
+            or set(row) != {"path", "sha256"}
+            or type(row["path"]) is not str
+            or not Path(row["path"]).is_absolute()
+            or type(row["sha256"]) is not str
+            or len(row["sha256"]) != 64
+            or any(character not in "0123456789abcdef" for character in row["sha256"])
+            for row in packages
+        )
+    ):
+        raise ValueError("RHS base preflight requires bounded explicit original compiler tree pins")
+    return packages
+
+
+def _preflight_base_packages(seed, packages):
+    """Early source/ledger refusal only; never compiler or execution admission."""
+    if type(seed) is not ZeroInitializerCompilerPrototype:
+        raise ValueError("RHS base preflight needs its original live base compiler owner")
+    checked = []
+    for row in packages:
+        if _tree(Path(row["path"])) != row["sha256"]:
+            raise ValueError("RHS base preflight compiler bytes differ from their original pin")
+        checked.append(dict(package=copy.deepcopy(row), binding=seed.check_compiler_binding(Path(row["path"]))))
+        if _tree(Path(row["path"])) != row["sha256"]:
+            raise ValueError("RHS base preflight compiler changed during its original source check")
+    return checked
 
 
 def _binding(owner):
@@ -50,14 +88,14 @@ def from_live_owner(owner):
     """The exact original constructor must already have issued this owner."""
     if type(owner) is not QualifiedRhsResidencyOwner:
         raise ValueError("RHS registry needs its original live qualified composite owner")
-    owner.revalidate()
-    binding = _binding(owner)
-    return ReviewedPassCapabilities(
-        (
-            ReviewedPassCapability(MECHANISM, binding, owner),
-            ReviewedPassCapability(DIAGNOSTIC, binding, SourceExecutionIssuerV4(owner)),
+    with scoped_original_rhs_metadata(owner):
+        binding = _binding(owner)
+        return ReviewedPassCapabilities(
+            (
+                ReviewedPassCapability(MECHANISM, binding, owner),
+                ReviewedPassCapability(DIAGNOSTIC, binding, SourceExecutionIssuerV4(owner)),
+            )
         )
-    )
 
 
 def _original_selection(registry):
@@ -303,6 +341,7 @@ def restore_registry(inputs, *, work_root):
         )
     ):
         raise ValueError("RHS selection disabled: explicit original protocols and actual source pairs required")
+    base_packages = _base_packages(inputs)
     allocation = inputs["rhs_allocation_epoch_source"]
     for role in ("native_result", "command_buffer_artifact", "lowered", "issue_invocation"):
         _leaf(allocation, role)
@@ -322,6 +361,12 @@ def restore_registry(inputs, *, work_root):
     with shared_compute_pool(timeout_s=120):
         from gemmini_source_execution import SourceExecutionOwner
 
+        seed = ZeroInitializerCompilerPrototype(StagedTilePrototype(staged))
+        preflight = _preflight_base_packages(seed, base_packages)
+        if preflight:
+            (Path(work_root) / "original-base-preflight.json").write_text(
+                json.dumps(dict(status="checked_base_sources_and_ledgers_only", packages=preflight), indent=2)
+            )
         pairs = tuple(inputs["rhs_residency_qualification_pairs"])
         # Preparation has its own original observed allocation basis. A fresh
         # compiler invocation at another path is independently checked below;
@@ -343,6 +388,6 @@ def restore_registry(inputs, *, work_root):
             },
         )
         epoch = ClosedScratchEpochOwner(source, capsule_dir=original_source_capsule(first, native))
-        prototype = RhsResidencyCompilerPrototype(ZeroInitializerCompilerPrototype(StagedTilePrototype(staged)), epoch)
+        prototype = RhsResidencyCompilerPrototype(seed, epoch)
         owner = QualifiedRhsResidencyOwner(prototype, pairs, status_path=Path(work_root) / "original-rhs-status.json")
         return from_live_owner(owner)

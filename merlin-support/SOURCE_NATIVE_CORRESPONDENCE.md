@@ -37,3 +37,12 @@ No qualification result is cached between operations. The bridge and original
 metadata implementation source bytes and callbacks are pinned. This changes host
 metadata cost only; it does not change the frozen timing model or grant numerical,
 completion, overlap, hardware, formal admission or promotion authority.
+
+For ordinary source-pinned factory restoration, select
+`gemmini_public_source_factory.original_factory(inputs, sources=...)`. Its new
+wrapper callback delegates to the unchanged canonical diagnostic implementation
+and explicitly pins that implementation alongside any original source leaves.
+Restoring the wrapper in a private module therefore preserves the exact original
+issuer class expected by the bridge. The old factory record and its observed
+class-identity refusal remain unchanged; this adds no type-check exception or
+qualification authority.

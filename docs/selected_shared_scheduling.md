@@ -552,6 +552,12 @@ kernel-authenticated parent protocol, plus the exact complete-program epoch.
 The explicit `rhs_allocation_epoch_source` factory input pins that original
 allocation observation's native result, compiler artifacts and trace. A new
 byte-identical compiler invocation does not replace its original path custody.
+An optional bounded `base_compiler_preflight_packages` list can name exact
+original compiler tree pins. After normal base admission, the factory reopens
+each tree and checks its base source/library/effect ledgers before spending the
+six-pair source qualification cost. It rechecks the tree afterward. This is an
+early refusal check only; it issues no compiler or execution qualification and
+does not replace any current-program proof.
 
 The original epoch first proves every issued access in one complete observed
 hart-0 functional call, one external immutable RHS, its original A/B windows,
@@ -578,3 +584,22 @@ diagnostics. Final original compiler qualification and ordinary sealed-worker
 execution are separate required gates. Asynchronous overlap, prefetch, connected
 residency, attention/KV, hardware timing and latency improvement remain outside
 this capability.
+
+The original six-pair retained-policy attempt hit its 600 aggregate CPU-second
+qualification guard after the six semantic checks completed, before the factory
+returned a registry. This is a bounded infrastructure refusal, not a failed
+compiler or a performance plateau. Repeated historical source-capture checks
+dominated metadata construction. The separate target-owned
+`scoped_original_rhs_metadata` operation now performs full original-owner checks
+at entry and exit, while every internal getter retains source, structure,
+original-object and implementation checks. Its result cannot leave before the
+final check; exceptions and nested/foreign owners remain checked. Current
+source, native, packet and numerical proofs never consume cached results.
+
+Within each full custody revalidation, each exact original session attestation
+is reopened once; every capsule still reopens its complete tree and independently
+checks that its raw captured source belongs to that verified complete session.
+There is no attestation verification state shared between revalidations. A fresh
+profile of the six capsules, containing three distinct attestations, took 36.74
+CPU seconds, mostly hashing the selected runtime trees. This cost remains part
+of job admission and is not accelerator cycles.

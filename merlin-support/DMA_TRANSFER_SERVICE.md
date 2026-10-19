@@ -28,7 +28,7 @@ The executable local checks derive transaction ownership and backpressure:
 
 - Reader request issue and source-ID allocation happen together at the
   **untranslated** request/reserve interface. They are not downstream A issue.
-- Reader source-ID release is `BeatMerger.in.fire && final_D_beat`. It precedes
+- Reader source-ID release is `BeatMerger.in.fire && final_D_beat`. It can precede
   final merged-row consumption and local storage completion. A released source
   ID cannot serve as a full-DMA fence.
 - Writer allocation happens on the first untranslated A beat. Continuation
