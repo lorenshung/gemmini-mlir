@@ -122,6 +122,24 @@ def check_host_output_writes(
                         "primitive zero-init order includes unsupported device effects"
                     )
             if word & 127 != custom_opcode:
+                may_store = (
+                    word & 3 == 3
+                    and word & 127 in {0x23, 0x27, 0x2F}
+                    or word & 3 in {0, 2}
+                    and word >> 13 & 7 in {5, 6, 7}
+                )
+                memory = [i for i, token in enumerate(parts) if token == "mem"]
+                if may_store and (
+                    len(memory) != 1
+                    or memory[0] + 2 >= len(parts)
+                    or not all(
+                        token.startswith("0x")
+                        for token in parts[memory[0] + 1 : memory[0] + 3]
+                    )
+                ):
+                    raise ValueError(
+                        "primitive host store has unresolved committed memory effects"
+                    )
                 for address, width in _cpu_writes(line, custom_opcode):
                     if any(
                         start < address + width and address < start + size
