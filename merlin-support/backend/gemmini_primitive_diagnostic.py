@@ -201,6 +201,7 @@ class PrimitiveDiagnosticOwner:
             )
             current.update(
                 elf=arm["elf"],
+                harness=arm["harness"],
                 build_record=arm["build_record"],
                 caller_order=caller_order,
             )
