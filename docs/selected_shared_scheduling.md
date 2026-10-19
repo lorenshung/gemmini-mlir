@@ -68,6 +68,19 @@ identity and cannot be used to turn a saved declaration into execution evidence.
 The preserved compiler's existing instruction emission remains its original
 route; these shared hooks are not inserted into that immutable compiler.
 
+There is also an important realization boundary. Shared
+`compile_schedule.ScheduleEncoding` currently handles finite straight-line
+programs with one schedule call per decoded instruction and actual operands
+reconstructed from final bytes alone. A RISC-V RoCC instruction contains scalar
+register indices; the values are computed by surrounding host instructions and
+loops. An issue-register observation supplies those values during execution,
+but is not a bytes-alone final machine decoder. Serializing requested commands
+as an invented packet stream does not check the emitted ELF. The existing
+compact dense/source route has a separate C emission and source-conformance
+boundary; a real integration must connect that route to its independent target
+checker or implement a checked realized-machine bridge. A reviewed software
+extension alone cannot erase this distinction.
+
 ## Smallest useful next enabling work
 
 Configuration cleanup is a narrow first adapter, but raw register equality is
@@ -95,3 +108,55 @@ dimensions, protocol routing and refusal. They are host tests. A source-rederive
 observer diagnostic is also useful evidence about intake, but it is neither a
 fresh accelerator execution nor complete-output checking. No hardware speedup
 or target adapter qualification follows from these tests.
+
+## Narrow copied-compiler integration
+
+`gemmini_quiescent_load_config.py` now implements an explicit Phase 2-only
+source-relative contract and hook, separate from the broad unavailable families
+above. It freezes selected input/source pins, reconstructs the preserved C
+helper bodies against selected operand encoding, and requires one-hart ownership
+with no external configuration writer. It supports only state zero, identity
+f32 scale, no shrink and a configuration following an original completion
+fence. It uses shared `eliminate_redundant_configuration`; policy compares
+actual configuration values rather than model names or known shape identities.
+
+The hook operates on the original direct emitter's bounded unrolled statement
+stream. Every other statement stays byte-identical. Unknown controller calls
+invalidate known state. Dynamic configuration, other modes and effectful pointer
+expressions are barriers. Loops retain the original route. The contract records
+source premises independently from hardware qualification; the intake's broad
+`configuration_cleanup` preflight remains unavailable.
+
+[The diagnostic driver](../experiments/shared_load_configuration/qualify.py)
+copies the original compiler twice and supplies the same library and effect
+contract to both copies. Their hook differs only in its enable flag. It reuses
+the existing public build/link/reference tools and Fire-aligned Spike runtime.
+It checks complete signed outputs against the independent reference, replays
+actual linked issue-register observations through the source-pinned observer,
+and independently permits only redundant setter omissions. Other accelerator
+commands and completion fences must match, with DRAM pointers normalized through
+actual linked symbols. Logical DMA spans must fit linked objects; stores must
+target declared output objects.
+
+Run this as an infrastructure diagnostic with explicit selected inputs, not as
+a resumed performance campaign:
+
+```sh
+python experiments/shared_load_configuration/qualify.py \
+  --merlin "$MERLIN_CHECKOUT" \
+  --facts "$SELECTED_FACTS" \
+  --observed-contract "$SELECTED_TARGET_CONTRACT" \
+  --baseline-package "$PRESERVED_COMPILER_PACKAGE" \
+  --rocket-core "$SELECTED_ROCKET_CORE_SOURCE" \
+  --capsule "$PUBLIC_CAPSULE_DIRECTORY" \
+  --output "$FRESH_DIAGNOSTIC_OUTPUT"
+```
+
+Select the task's existing shared CPU roots and TMPDIR before execution. The
+driver creates no campaign state and runs no gSIM or author session. Repeating
+`--capsule` adds independent public cases; output directories must be fresh.
+Compiler/library/contract, emitted object/ELF, input and trace identities are
+retained. Complete memory-guard/input readback, physical beat-level bounds,
+hardware completion qualification, qualified timing, automatic author routing
+and full-model execution are still separate requirements. Successful diagnostic
+issue and output checks do not silently promote the adapter into those domains.
