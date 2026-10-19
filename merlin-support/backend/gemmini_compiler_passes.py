@@ -107,6 +107,46 @@ class CompilerCleanupOwner:
     def nm(self):
         return Path(self._sources["nm"]["path"])
 
+    def check_compiler_binding(self, package):
+        """A saved program from another SDK is not this selected treatment."""
+        from gemmini_timing_resources import _pin
+
+        self.revalidate()
+        package = Path(package)
+        if (
+            not package.is_absolute()
+            or package.resolve() != package
+            or package.is_symlink()
+            or not package.is_dir()
+        ):
+            raise ValueError(
+                "compiler library binding requires an original canonical package directory"
+            )
+        values, pins = {}, {}
+        for name in ("selected-shared-library.json", "shared-library-sources.json"):
+            path = package / name
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > 1 << 20:
+                raise ValueError(
+                    "compiler library binding lacks a bounded original regular source ledger"
+                )
+            pins[name] = _pin(path)
+            values[name] = json.loads(path.read_bytes())
+        if (
+            values["selected-shared-library.json"] != self.library.record()
+            or values["shared-library-sources.json"]
+            != self.cleanup.revalidate()["shared_library_sources"]
+        ):
+            raise ValueError(
+                "compiled treatment selected a different reviewed compiler library or source release"
+            )
+        self.revalidate()
+        return {
+            "status": "verified_exact_compiler_library_binding",
+            "compiler_package": str(package),
+            "compiler_library_contract_sha256": self.library.contract.sha256,
+            "source_ledgers": pins,
+        }
+
     def check_functional_guard(
         self, baseline, candidate, baseline_result, candidate_result, *, grade_root
     ):

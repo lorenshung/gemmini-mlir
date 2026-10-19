@@ -178,6 +178,25 @@ class StagedDensePrototype:
             "dense_v1_enabled": False,
         }
 
+    def check_compiler_binding(self, package):
+        self.revalidate()
+        report = self.cleanup_owner.check_compiler_binding(package)
+        path = Path(package) / "staged-dense-public.json"
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 1 << 20:
+            raise ValueError(
+                "staged compiler lacks its original bounded public effect contract"
+            )
+        if json.loads(path.read_bytes()) != {
+            "schema": "gemmini.staged_dense_public.v1",
+            "contract": self._contract,
+            "library_contract_sha256": self.library.contract.sha256,
+        }:
+            raise ValueError(
+                "staged compiled treatment changed selected source/effect/numerical contracts"
+            )
+        self.revalidate()
+        return {**report, "staged_public_contract": _pin(path)}
+
     def prepare_compiler(self, source, destination, *, policy):
         self.revalidate()
         if (
