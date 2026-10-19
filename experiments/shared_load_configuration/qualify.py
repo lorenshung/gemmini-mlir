@@ -18,6 +18,51 @@ import time
 from pathlib import Path
 
 
+def _activate_library(path, merlin):
+    """Original operator selection; startup itself supplies no import grant."""
+    from merlin.targetgen.compiler_library import (
+        CompilerLibraryContract,
+        CompilerLibrarySelection,
+        LibraryMember,
+    )
+    from merlin.targetgen.selected_library_imports import activate_selected_sources
+
+    declaration = json.loads(Path(path).read_bytes())
+    selected = declaration.get("selection", declaration)
+    raw = selected["contract"]
+    contract = CompilerLibraryContract(
+        raw["review_id"],
+        tuple(raw["public_modules"]),
+        tuple(LibraryMember(**member) for member in raw["members"]),
+    )
+    selection = CompilerLibrarySelection(contract, Path(selected["root"]))
+    if selection.record() != selected:
+        raise ValueError("original selected compiler library record changed")
+    activate_selected_sources(selected, original_host_roots=(Path(merlin) / "src",))
+    return selection
+
+
+def _install_library_startup(package, selection, merlin):
+    """Both copied compilers use the same source projection before imports."""
+    source = Path(merlin) / "src/merlin/targetgen/selected_library_imports.py"
+    shutil.copyfile(source, package / "_selected_shared_sources.py")
+    record = selection.record()
+    (package / "selected-shared-library.json").write_text(
+        json.dumps(record, sort_keys=True)
+    )
+    driver = package / "compiler.py"
+    text = driver.read_text()
+    marker = "\ndef main():\n"
+    if text.count(marker) != 1:
+        raise ValueError("copied compiler lacks a unique original startup boundary")
+    startup = (
+        "\nfrom _selected_shared_sources import activate_selected_sources as _activate_selected_sources\n"
+        "_activate_selected_sources(json.loads(Path(__file__).with_name('selected-shared-library.json').read_text()), "
+        f"original_host_roots=(Path({str(Path(merlin) / 'src')!r}),))\n"
+    )
+    driver.write_text(text.replace(marker, startup + marker))
+
+
 def _symbols(elf, nm):
     result = subprocess.run(
         [str(nm), "-S", "--defined-only", str(elf)],
@@ -199,11 +244,17 @@ def main():
     parser.add_argument("--rocket-core", required=True, type=Path)
     parser.add_argument("--capsule", required=True, action="append", type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--compiler-library-selection", type=Path)
     args = parser.parse_args()
     started = time.monotonic()
     support = Path(__file__).resolve().parents[2] / "merlin-support/backend"
     sys.path.insert(0, str(support))
     sys.path.insert(0, str(args.merlin / "examples/gemmini/phase2/el4_20261018"))
+    library_selection = (
+        None
+        if args.compiler_library_selection is None
+        else _activate_library(args.compiler_library_selection, args.merlin)
+    )
     scheduling = importlib.import_module("gemmini_selected_scheduling")
     cleanup = importlib.import_module("gemmini_quiescent_load_config")
     evaluator = importlib.import_module("evaluate")
@@ -251,6 +302,8 @@ def main():
     for arm, enabled in (("baseline", False), ("candidate", True)):
         package = args.output / "compilers" / arm
         shutil.copytree(args.baseline_package, package)
+        if library_selection is not None:
+            _install_library_startup(package, library_selection, args.merlin)
         shutil.copyfile(
             support / "gemmini_quiescent_load_config.py",
             package / "gemmini_quiescent_load_config.py",
@@ -396,6 +449,11 @@ def main():
         "driver_sha256": driver_identity,
         "wall_s": time.monotonic() - started,
     }
+    if library_selection is not None:
+        from merlin.targetgen.selected_library_imports import __file__ as startup_source
+
+        report["compiler_library_selection"] = library_selection.record()
+        report["compiler_library_startup"] = cleanup._pin(startup_source)
     common.save(args.output / "report.json", report)
 
 

@@ -149,12 +149,20 @@ python experiments/shared_load_configuration/qualify.py \
   --baseline-package "$PRESERVED_COMPILER_PACKAGE" \
   --rocket-core "$SELECTED_ROCKET_CORE_SOURCE" \
   --capsule "$PUBLIC_CAPSULE_DIRECTORY" \
+  --compiler-library-selection "$ORIGINAL_SELECTED_LIBRARY_RECORD" \
   --output "$FRESH_DIAGNOSTIC_OUTPUT"
 ```
 
 Select the task's existing shared CPU roots and TMPDIR before execution. The
 driver creates no campaign state and runs no gSIM or author session. Repeating
 `--capsule` adds independent public cases; output directories must be fresh.
+The optional explicit library selection reopens its original reviewed contract,
+then installs the same stdlib-only selected-source startup into both copied
+compilers. Exact snapshot namespace stubs and leaves load before compiler code;
+already imported foreign leaves refuse. Original host dependencies remain a
+separate explicit path scope, with original sandbox/private masks unchanged.
+The startup performs source custody only: its JSON is no review or qualification
+grant. Original same-release import authority and final checks still apply.
 Compiler/library/contract, emitted object/ELF, input and trace identities are
 retained. Complete memory-guard/input readback, physical beat-level bounds,
 hardware completion qualification, qualified timing, automatic author routing
