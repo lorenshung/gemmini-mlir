@@ -20,7 +20,6 @@ from gemmini_staged_rhs_window import ClosedScratchEpochOwner, check_original_fo
 from gemmini_staged_tile_effects import check_output_tile_permutation
 from gemmini_timing_resources import _pin, _revalidate_sources
 from gemmini_zero_initializer_effects import canonical_issue_stream
-
 from merlin.common.paths import module_source_path
 
 
@@ -133,6 +132,7 @@ class RhsPlacementRealizationChecker:
         if type(selected) is not SelectedSchedulingTarget or type(arithmetic) is not IntegerArithmeticOwner:
             raise ValueError("RHS relocation requires its original live selected staged source/effect owners")
         self.selected, self.arithmetic, self.nm = selected, arithmetic, Path(nm)
+        self._symbol_tool = _pin(self.nm)
         self._selected = selected.report()["selected_inputs"]
         self._arithmetic = arithmetic.record()
         self._dim = selected.report()["geometry"]["array_rows"]
@@ -147,9 +147,14 @@ class RhsPlacementRealizationChecker:
                 "gemmini_staged_rhs_effects",
                 "gemmini_source_execution",
                 "gemmini_staged_source_pair",
+                "gemmini_cleanup_final_guard",
+                "gemmini_staged_dense_capability",
+                "gemmini_timing_resources",
+                "merlin.common.paths",
+                "merlin.compile.scheduling.staged_dense",
             )
         }
-        self._identity = _digest([self._selected, self._arithmetic, self._dim, self._sources])
+        self._identity = _digest([self._selected, self._arithmetic, self._dim, self._sources, self._symbol_tool])
         self.revalidate()
 
     @property
@@ -159,10 +164,11 @@ class RhsPlacementRealizationChecker:
     def revalidate(self):
         _revalidate_sources(self._sources)
         if (
-            self.selected.report()["selected_inputs"] != self._selected
+            _pin(self.nm) != self._symbol_tool
+            or self.selected.report()["selected_inputs"] != self._selected
             or self.arithmetic.record() != self._arithmetic
             or self._arithmetic["selected_inputs"] != self._selected
-            or _digest([self._selected, self._arithmetic, self._dim, self._sources]) != self._identity
+            or _digest([self._selected, self._arithmetic, self._dim, self._sources, self._symbol_tool]) != self._identity
         ):
             raise ValueError("original RHS relocation selection/checks changed")
 
@@ -171,6 +177,7 @@ class RhsPlacementRealizationChecker:
         return dict(
             identity=self.identity,
             sources=copy.deepcopy(self._sources),
+            symbol_tool=copy.deepcopy(self._symbol_tool),
             selected_inputs=copy.deepcopy(self._selected),
             arithmetic=copy.deepcopy(self._arithmetic),
             scope="current complete functional program/row placement/source/products/output checks only",
