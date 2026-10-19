@@ -271,3 +271,21 @@ complete source-to-output binding and selected readout effects. Raw i32 readout
 does not authorize replacing integer half-up source arithmetic with hardware
 half-even scaling. This additive development sidecar changes no Phase1 file,
 numerical policy, hardware qualification or timing model.
+
+## Explicit live cleanup admission
+
+`experiments/shared_load_configuration/admit.py` accepts the same explicit
+`--compiler-library-selection` and `--merlin` selection as the paired qualifier.
+It requires every loaded shared source to match that exact release, then reopens
+the actual linked programs, signed inputs, complete outputs, issued operands,
+fences and logical transfer windows. The original host API returns a live
+`LiveLoadCleanupOwner` carrying the original target and library owners. The
+written receipt and `record()` are evidence, with no JSON constructor for this
+live owner. A registry record cannot replace this admission call.
+
+This enables only bounded functional Spike load-configuration source effects;
+each newly realized program still requires its independent final pair and
+complete numerical checks. Hardware/timing authority and dense-v1 remain
+disabled. Ordinary compiler-child selection additionally needs its original
+frozen capability/resource projection; loading an SDK does not grant that
+projection or enable an unrelated device adapter.

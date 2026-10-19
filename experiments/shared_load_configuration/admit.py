@@ -16,7 +16,16 @@ from pathlib import Path
 import numpy as np
 
 
-def prepare(*, selected, effect_contract, completion_contract, reports, nm, output):
+def prepare(
+    *,
+    selected,
+    effect_contract,
+    completion_contract,
+    reports,
+    nm,
+    output,
+    compiler_library_selection=None,
+):
     import gemmini_load_cleanup_capability as capability
     import gemmini_quiescent_load_config as cleanup
     import qualify as checker
@@ -39,6 +48,17 @@ def prepare(*, selected, effect_contract, completion_contract, reports, nm, outp
             "load effects and completion contract have different selected inputs"
         )
     library = shared_library_sources()
+    selected_library = (
+        compiler_library_selection.record()
+        if compiler_library_selection is not None
+        else None
+    )
+    if selected_library is not None and library != {
+        member["module"]: member["sha256"]
+        for member in selected_library["contract"]["members"]
+        if member["module"] is not None
+    }:
+        raise ValueError("admission did not load the exact selected shared sources")
     observer = selected.operand_observer()
     pins = {
         "effect_contract": _pin(effect_contract.path),
@@ -60,6 +80,7 @@ def prepare(*, selected, effect_contract, completion_contract, reports, nm, outp
             or report["effect_contract_sha256"] != effect_contract.identity
             or report["shared_library_sources"] != library
             or report["adapter_implementation"] != pins["adapter"]
+            or report.get("compiler_library_selection") != selected_library
         ):
             raise ValueError(
                 "paired execution does not qualify this exact adapter/library/input selection"
@@ -161,6 +182,13 @@ def prepare(*, selected, effect_contract, completion_contract, reports, nm, outp
     selected.revalidate()
     if shared_library_sources() != library:
         raise ValueError("shared release changed during independent admission")
+    if (
+        compiler_library_selection is not None
+        and compiler_library_selection.record() != selected_library
+    ):
+        raise ValueError(
+            "original selected library changed during independent admission"
+        )
     payload = {
         "schema": capability.SCHEMA,
         "scope": capability.SCOPE,
@@ -194,12 +222,24 @@ def prepare(*, selected, effect_contract, completion_contract, reports, nm, outp
             "fence": "load_side_drain_only; solitary_preload_may_survive",
         },
     }
+    if selected_library is not None:
+        payload["compiler_library_selection"] = selected_library
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x") as stream:
         json.dump(payload, stream, sort_keys=True, indent=2)
         stream.write("\n")
-    return capability.LoadCleanupOwner.read(output)
+    receipt = capability.LoadCleanupOwner.read(output)
+    if compiler_library_selection is None:
+        return receipt
+    from gemmini_live_load_cleanup import _after_independent_checks
+
+    return _after_independent_checks(
+        receipt=receipt,
+        selected=selected,
+        library=compiler_library_selection,
+        checker=__file__,
+    )
 
 
 def main():
@@ -214,10 +254,23 @@ def main():
     ):
         parser.add_argument("--" + name, type=Path, required=True)
     parser.add_argument("--report", type=Path, action="append", required=True)
+    parser.add_argument("--compiler-library-selection", type=Path)
+    parser.add_argument("--merlin", type=Path)
     args = parser.parse_args()
     sys.path.insert(
         0, str(Path(__file__).resolve().parents[2] / "merlin-support/backend")
     )
+    selection = None
+    if args.compiler_library_selection is not None:
+        if args.merlin is None:
+            parser.error("--compiler-library-selection requires --merlin")
+        import qualify
+
+        selection = qualify._activate_library(
+            args.compiler_library_selection, args.merlin
+        )
+    elif args.merlin is not None:
+        parser.error("--merlin requires --compiler-library-selection")
     scheduling = importlib.import_module("gemmini_selected_scheduling")
     cleanup = importlib.import_module("gemmini_quiescent_load_config")
     from merlin.common.cpu_pool import shared_compute_pool
@@ -234,6 +287,7 @@ def main():
             reports=args.report,
             nm=args.nm,
             output=args.output,
+            compiler_library_selection=selection,
         )
     print(json.dumps(owner.record(), sort_keys=True))
 
