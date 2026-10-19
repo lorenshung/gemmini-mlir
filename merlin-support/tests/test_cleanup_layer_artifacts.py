@@ -110,10 +110,15 @@ def arm(tmp_path, modules):
     )
     result = run / "capsule_result.json"
     result.write_text(json.dumps(row))
-    owner = SimpleNamespace(
-        revalidate=lambda: None,
-        cleanup=SimpleNamespace(revalidate=lambda: {"runtime_inputs": runtime}),
-    )
+    class SyntheticOriginalOwner:
+        def revalidate(self):
+            pass
+
+        def check_compiler_binding(self, selected):
+            assert selected == package
+
+    owner = SyntheticOriginalOwner()
+    owner.cleanup = SimpleNamespace(revalidate=lambda: {"runtime_inputs": runtime})
     return owner, result, package, row
 
 
@@ -190,3 +195,10 @@ def test_original_artifact_method_dispatch_cannot_be_replaced_by_saved_callback(
     owner.check_pair_artifacts = lambda *a, **kw: {"success": True}
     with pytest.raises(ValueError, match="bound owner"):
         modules[1].check_pair_artifacts(owner, {}, {})
+
+
+def test_final_layer_requires_original_release_checker(arm, modules):
+    owner, path, package, _row = arm
+    owner.check_compiler_binding = lambda _package: None
+    with pytest.raises(ValueError, match="original bound release"):
+        modules[0].read_layer_arm(owner, result_path=path, package=package)

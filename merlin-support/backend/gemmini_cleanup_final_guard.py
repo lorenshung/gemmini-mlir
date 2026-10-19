@@ -186,6 +186,9 @@ def check_functional_guard(
             raise ValueError(
                 "final graded compiler differs from the selected retained compiler"
             )
+        from gemmini_cleanup_layer_artifacts import check_compiler_binding
+
+        check_compiler_binding(owner, expected_root / "compiler")
         found = {}
         for path in (expected_root / "runs").rglob("capsule_result.json"):
             record = json.loads(path.read_bytes())
