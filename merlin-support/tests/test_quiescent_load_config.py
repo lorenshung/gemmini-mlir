@@ -129,6 +129,29 @@ def test_loops_keep_original_route(adapter, contract):
     assert after == before and report["status"] == "refused"
 
 
+def test_copied_hook_requires_unchanged_selected_library(
+    adapter, contract, tmp_path, monkeypatch
+):
+    from merlin.compile.scheduling.library_sources import shared_library_sources
+
+    monkeypatch.setattr(
+        adapter, "__file__", str(tmp_path / "gemmini_quiescent_load_config.py")
+    )
+    (tmp_path / "load-config-contract.json").write_bytes(contract.payload)
+    manifest = tmp_path / "shared-library-sources.json"
+    statements = [
+        "gm_fence();",
+        "gm_ld_config(17,0,1.0f,0);",
+        "gm_fence();",
+        "gm_ld_config(17,0,1.0f,0);",
+    ]
+    manifest.write_text(json.dumps(shared_library_sources()))
+    assert len(adapter.rewrite_copied_compiler_statements(statements)) == 3
+    manifest.write_text("{}")
+    with pytest.raises(ValueError, match="shared library changed"):
+        adapter.rewrite_copied_compiler_statements(statements)
+
+
 def test_source_mutation_refuses_before_rewrite(adapter, contract):
     pin = json.loads(contract.payload)["runtime"]
     Path(pin["path"]).write_text("changed")

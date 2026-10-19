@@ -256,6 +256,7 @@ def main():
             package / "gemmini_quiescent_load_config.py",
         )
         shutil.copyfile(contract.path, package / "load-config-contract.json")
+        common.save(package / "shared-library-sources.json", library_identity)
         direct = package / "direct_codegen.py"
         source = direct.read_text()
         marker = "return declarations, statements"
@@ -368,7 +369,7 @@ def main():
     ):
         raise ValueError("shared library or diagnostic changed during paired execution")
     report = {
-        "schema": "gemmini.quiescent_load_configuration_diagnostic.v1",
+        "schema": "gemmini.quiescent_load_configuration_diagnostic.v2",
         "original_compiler_sha256": original_identity,
         "selected_target": selected.report(),
         "effect_contract_sha256": contract.identity,
@@ -379,6 +380,19 @@ def main():
         "timing_qualification": "not_established",
         "formal_phase2_admission": False,
         "shared_library_sources": library_identity,
+        "runtime_inputs": {
+            "spike": cleanup._pin(
+                Path(common.environment()["MERLIN_FIRE_ALIGNED_SPIKE_RUNTIME"])
+                / "bin/spike"
+            ),
+            "functional_extension": cleanup._pin(
+                Path(common.environment()["MERLIN_FIRE_ALIGNED_SPIKE_RUNTIME"])
+                / "lib/libgemmini.so"
+            ),
+        },
+        "adapter_implementation": cleanup._pin(
+            support / "gemmini_quiescent_load_config.py"
+        ),
         "driver_sha256": driver_identity,
         "wall_s": time.monotonic() - started,
     }
