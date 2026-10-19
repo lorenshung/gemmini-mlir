@@ -60,6 +60,15 @@ transport or selected source refuses. This rederivation supplies no new
 harness and does not equate an arithmetic-spec digest with a transport-contract
 digest. Actual linked-byte/product/output checks still follow it.
 
+The CPU-order checker keeps its strict default. After the same actual stream's
+complete device product/readout proof, this diagnostic explicitly permits a
+complete aligned integer zero fill before any device load, preload, compute or
+readout. Only checked FLUSH/configuration commands may precede it. Every output
+byte must be covered exactly once by committed zero-valued SW/SD or compressed
+SW/SD stores. Partial, repeated, nonzero, atomic, foreign and later stores refuse.
+The report counts these initialization writes as execution work; it never
+subtracts them from counts, cycles or a timing boundary.
+
 Call after original ordinary grading releases its CPU lease. The checker owns
 its leaf trace leases; a parent must not hold another lease while waiting.
 Setup/byte-custody/verification wall costs remain separate from target cycles.
