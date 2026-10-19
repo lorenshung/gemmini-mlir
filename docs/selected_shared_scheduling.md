@@ -399,3 +399,41 @@ consumer is present and checks the parent's child receipt. Its parent compiler
 profile is a neutral transport fixture; passing this test does not certify the
 original Phase1 experiment or authorize another capability. Do not hold a
 parent CPU lease while waiting for the original checker child.
+
+## Finite staged raw-i32 source route
+
+The explicit SDK v4 release adds the separate generic staged descriptor/consume
+API; earlier SDKs and synchronous dense-v1 retain their original meanings.
+`gemmini_staged_dense_source.py` projects the preserved direct emitter's actual
+finite C statements: complete logical pointer expressions, immutable zero row,
+identity load state, pending PRELOAD, following compute and raw-i32 readout.
+Unknown loops, calls, flags, scaling, bias or layouts refuse the projection.
+Its first physical renderer may omit only independently proved redundant RHS
+loads. It preserves every original configuration, compute, store and fence,
+including final persistent settings. New placements, added instructions and
+broader logical rewrites need separately qualified physical rendering.
+
+`gemmini_staged_dense_admission.prepare_original_prototype` reruns the original
+selected cleanup admission, derives arithmetic from the exact selected RTL and
+receiver and reruns the selected RTL completion proof. It prepares separate
+compiler copies using the same SDK and checked mechanisms. The candidate-owned
+`staged_dense_policy.py` chooses from current M/K/N and selected primitive size;
+no model or layer identity selects reuse. Both treatments keep configuration
+cleanup disabled to isolate the RHS mechanism. Unsupported members retain
+their original program and expose a compiler refusal reason.
+
+Prototype preparation grants no executable capability. The original
+`restore_registry` requires real sealed-source paired realizations and reruns
+the original complete source, packet-product, independent output and CPU-write
+checks. Initial scope is one contraction with original immutable external RHS.
+Independent actual issued-cell induction must prove every omitted load already
+has the exact source bytes in its private cells; all other commands, fences and
+settings must match. Qualification requires distinct M-boundary positives and
+independent K/N no-gain controls. New executions still repeat the complete final
+check. Saved success records cannot issue this owner.
+
+The newly requested positive/control source seal is currently blocked before
+capture by original sandbox readiness; its legacy diagnostics remain explicitly
+unsealed. The staged registry therefore remains disabled. No source admission,
+hardware timing, double buffering, asynchronous overlap, cross-operation leases,
+mixed attention or KV capability follows from the source API or prototype.
