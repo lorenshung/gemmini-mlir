@@ -139,9 +139,6 @@ class SourceNativeCorrespondenceOwner:
         for name, function, code in _ORIGINAL_API:
             if getattr(cls, name) is not function or function.__code__ is not code:
                 raise ValueError("original namespace correspondence callback changed")
-        callbacks += tuple(
-            (value, name, function, code) for name, function, code in _ORIGINAL_API
-        )
         _ISSUED[value] = (
             source_capability,
             count_capability,
@@ -190,6 +187,10 @@ class SourceNativeCorrespondenceOwner:
             callbacks,
             files,
         ) = state
+        for name, function, code in _ORIGINAL_API:
+            if function.__code__ is not code:
+                raise ValueError("original namespace callback code changed")
+            _bound(self, name, function)
         for owner, name, function, code in callbacks:
             if function.__code__ is not code:
                 raise ValueError("original namespace callback code changed")
