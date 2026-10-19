@@ -138,6 +138,18 @@ def describe(op, *, quantized=False):
     return [src],[(out,tuple(stride),0,ds)]
 
 
+def internal_view(op):
+    """Bufferization can retain these internal tensor operations as aliases.
+
+    An observable standalone movement still needs its independent result buffer.
+    Internal views should reach their consumer without an extra DMA allocation.
+    """
+    return (op.name in ('tensor.cast', 'tensor.reshape', 'tensor.collapse_shape',
+                        'tensor.expand_shape', 'tensor.extract_slice') and
+            len(op.results) == 1 and
+            all(use.operation.name != 'func.return' for use in op.results[0].uses))
+
+
 def native(op):
     if op.name == "arith.constant":
         return None  # Literal storage is already materialized by the host ABI.

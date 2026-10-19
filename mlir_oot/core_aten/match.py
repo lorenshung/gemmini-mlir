@@ -1510,12 +1510,13 @@ def match_all(module, *, constant_folds=None) -> tuple[list[Match], list[dict]]:
     from functools import partial
     # A region-ABI program must cover its raw producers as well as producers
     # with retained exact readouts. Raw-only programs keep the legacy route.
-    match_integer_region = partial(match_integer_region, allow_raw=has_integer_readout(module))
+    retained_integer_readout = has_integer_readout(module)
+    match_integer_region = partial(match_integer_region, allow_raw=retained_integer_readout)
     from .bitwise import match as match_bitwise
     from .limbs import match as match_limb
     from .liveness import live_source_ops, live_bindings
     from .quantized_movement import match as match_quantized_movement
-    from .layout_match import native as match_native_layout, describe as describe_layout
+    from .layout_match import native as match_native_layout, describe as describe_layout, internal_view
     from .constant_dma import specialize
     ordinals = {op: i for i, op in enumerate(module.walk())}
     folds = specialize(module, ordinals)
@@ -1528,6 +1529,7 @@ def match_all(module, *, constant_folds=None) -> tuple[list[Match], list[dict]]:
         (splat_value(o.operands[2]) != 0 or _prop_int(o,'quant_min') != -128 or _prop_int(o,'quant_max') != 127)
         for o in module.walk() if len(o.operands)>=3 and etype(o.operands[0])!='i32')
     taken: set[int] = set()
+    host_readout_values = set()
     # Prove whole selector islands before older local matchers consume their
     # carriers. A failed identity proof leaves the existing exact path intact.
     for op in module.walk():
@@ -1557,9 +1559,16 @@ def match_all(module, *, constant_folds=None) -> tuple[list[Match], list[dict]]:
             declines.append(dict(ordinal=ordinal, op=op.name, reason="empty or dynamic tensor shape", aten=""))
             continue
         selected_matchers = (match_integer_region,match_convolution,match_convolution_rows,match_conv_wgrad,match_conv_input,match_contraction,match_elementwise,match_linear) if generalized_quant else (match_integer_region,*MATCHERS)
-        if not quantized_module:
+        layout_plan = describe_layout(op) if host_readout_values else None
+        host_epilogue_layout = layout_plan is not None and any(v in host_readout_values for v in layout_plan[0])
+        if host_epilogue_layout:
+            # The numeric binding retains this readout on the host. Preserve
+            # its layout epilogue there too, where view/copy fusion is possible.
+            host_readout_values.update(op.results)
+        host_internal_view = retained_integer_readout and internal_view(op)
+        if not quantized_module and not host_epilogue_layout and not host_internal_view:
             selected_matchers = (match_bitwise, *selected_matchers)
-        elif (len(op.results)==1
+        elif (not host_epilogue_layout and not host_internal_view and len(op.results)==1
               and (etype(op.results[0])=='i8' or
                    ((plan := describe_layout(op)) is not None and not any(
                        producer(v) is not None and name_of(producer(v)).startswith('quant_ext.')
@@ -1589,6 +1598,11 @@ def match_all(module, *, constant_folds=None) -> tuple[list[Match], list[dict]]:
             if m is not None:
                 matches.append(m)
                 taken.update(id(x) for x in m.consumed if x is not None)
+                if m.kernel.meta.get('integer_readout'):
+                    from .integer_regions import readout
+                    selected = readout(m.root)
+                    if selected is not None:
+                        host_readout_values.update(selected[0].results)
                 break
         if name_of(op).startswith("quant_ext.quantize_") and id(op) not in taken and not any(d["ordinal"] == ordinal for d in declines):
             declines.append(dict(ordinal=ordinal, op=name_of(op), reason="unsupported or unproved quantization scheme; device requires exact per-tensor signed int8 readout", aten=""))

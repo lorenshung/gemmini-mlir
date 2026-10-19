@@ -65,8 +65,11 @@ def move(s, src, dst, shape, source_strides, *, width=1, destination_strides=Non
         require(offset >= 0 and offset + sum((d-1)*v for d,v in zip(shape,step)) + width <= s.args[s._index[name]].nbytes,
                 'movement exceeds declared buffer extent')
     # Collapse a shared contiguous suffix without inspecting any tensor values.
-    axes = list(shape)
-    ss, ds = list(strides), list(target)
+    # A singleton coordinate is always zero, independent of its recorded
+    # stride. Remove it before deciding which byte rectangles are contiguous.
+    active = [i for i, d in enumerate(shape) if d != 1]
+    axes = [shape[i] for i in active]
+    ss, ds = [strides[i] for i in active], [target[i] for i in active]
     while len(axes)>1 and ss[-2] == ss[-1]*axes[-1] and ds[-2] == ds[-1]*axes[-1]:
         axes[-2:] = [axes[-2]*axes[-1]]
         ss[-2:] = [ss[-1]]

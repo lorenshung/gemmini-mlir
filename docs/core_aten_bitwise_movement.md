@@ -318,3 +318,46 @@ GEMMs; this interface does not accept an arbitrary unexpanded convolution body.
 Numeric dtype-changing `_to_copy` is not an F1 selector; retain it after exact
 components or supply a separately proved source conversion. The existing F3
 quantized support is independent of this table.
+
+## Internal views and retained host readouts
+
+In a retained-integer-readout program, an internal `tensor.cast`,
+`tensor.reshape`, `tensor.collapse_shape`,
+`tensor.expand_shape` or `tensor.extract_slice` is left to host bufferization
+instead of receiving an independent DMA allocation. Its consumer still binds
+and checks the ordinary dense pointer ABI; required packing stays at that
+boundary. A standalone returned movement can still materialize its independent
+result on Gemmini. Pure F1 movement programs retain their complete byte
+schedules. These choices follow SSA uses and the selected numeric ABI.
+
+A source-bound integer producer with `integer_readout=true` retains its exact
+source readout on the host. Proven static selectors following that readout stay
+in the host epilogue too, allowing view/copy fusion and avoiding extra return
+buffers. Unrelated native movements in the same module remain eligible. The
+numeric binding, rational factors and source readout are unchanged.
+
+The structural DMA planner removes singleton axes after proving buffer bounds:
+their coordinates are zero, so their recorded strides make no contribution to
+any address. Contiguous byte groups can then coalesce even when a transpose
+moves singleton dimensions. This applies to every element width and does not
+alter quantization, byte order, fences or the instruction budget.
+
+A paired Phase 0 convolution qualification with Merlin `c4332ec60`, model2mlir
+`23b0cd5`, unchanged captures/inputs and `reference_scale` measured:
+
+| Provider | Retired target instructions | Retired CPU tail instructions |
+| --- | ---: | ---: |
+| `719bada` | 261 | 28,122 |
+| wtD layout changes, before the boundary fix | 770 | 69,769 |
+| `898d2ea` (wtD + wtE) | 770 | 69,769 |
+| Internal-view/readout boundaries and singleton coalescing | 184 | 28,122 |
+
+All four executions pass the exact oracle. The tail counts CPU instructions
+after the last accelerator instruction until the first return to
+`_mlir_ciface_forward`; it includes support calls and copies and excludes earlier
+interleaved epilogues. These are Spike retired instructions, not hardware cycles
+or a whole-model speedup. The identical wtD-only and merged counts isolate the
+regression from requant-A and overlap. The wtD-only control includes the
+matcher-callback identity compatibility fix needed to run it on `719bada`;
+requant-A and overlap are absent from that control. Their merged
+implementations remain enabled.

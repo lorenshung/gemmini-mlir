@@ -10,6 +10,12 @@ without depending on concurrent, unmerged changes.
 All arithmetic parameters and bounds are decimal integer **strings** in JSON;
 `S`, zero point, output bounds, counts and flags use JSON integers/booleans.
 Rationals have positive denominators and reduced numerator/denominator pairs.
+Compiler-side scalar parameters may be Python rational/integer values, NumPy
+scalars or proven 0-D arrays. A 0-D array is extracted with exact `.item()`;
+Fraction and wide-integer contents never pass through floating point. Arrays
+with positive rank belong to the channel/element broadcasting path and are
+rejected at a scalar conversion boundary, even when they contain one element.
+
 The canonical semantic record has these exact fields:
 
 ```
