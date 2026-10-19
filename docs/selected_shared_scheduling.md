@@ -538,3 +538,68 @@ the independent source/product/state/full-output proof. Hardware, timing,
 numerical, privacy and final-grade gates are unchanged. Real sealed-parent
 integration remains required; neutral dispatch and adversarial tests establish
 only the plumbing/refusal behavior.
+
+## Conditional finite full-K RHS placement
+
+The separate `gemmini_staged_rhs_registry` factory selects
+`full_k_rhs_residency_raw_i32` only through a live
+`QualifiedRhsResidencyOwner`. Its constructor requires six independently checked
+source/executable pairs: positive M/N/K remainders 0, 1 and D-1 and a single-panel
+fallback. Capacity declarations and successful JSON reports cannot construct
+this owner. `SourceExecutionIssuerV4` retains the original bounded current-ELF
+trace algorithm; inherited historical qualification requires the same original
+kernel-authenticated parent protocol, plus the exact complete-program epoch.
+The explicit `rhs_allocation_epoch_source` factory input pins that original
+allocation observation's native result, compiler artifacts and trace. A new
+byte-identical compiler invocation does not replace its original path custody.
+An optional bounded `base_compiler_preflight_packages` list can name exact
+original compiler tree pins. After normal base admission, the factory reopens
+each tree and checks its base source/library/effect ledgers before spending the
+six-pair source qualification cost. It rechecks the tree afterward. This is an
+early refusal check only; it issues no compiler or execution qualification and
+does not replace any current-program proof.
+
+The original epoch first proves every issued access in one complete observed
+hart-0 functional call, one external immutable RHS, its original A/B windows,
+and its sole accumulator stripe. Joint physical placement needs D rows for A
+and `ceil(K/D)*D` rows for B. A one-panel load cannot use the extra rows merely
+because hardware has capacity. Each new source/program repeats the independent
+ownership, source-product, zero/continuation, readout and complete-output checks.
+This is conditional functional-call ownership, not a hardware-wide free-memory
+or external-writer guarantee.
+
+The generic `staged_rhs_residency.py` proposer is copied identically into both
+candidate-owned `passes/` directories under the unchanged explicit SDK-v5
+selection. It composes complete-output-tile traversal, source-cell-aware row
+placement and proven RHS reload omission. The independent checker reads actual
+operands at COMPUTE consumption, including pending PRELOAD state, and permits
+only those relocations/omissions. Configurations, fences, arithmetic and outputs
+remain checked. The policy function and additional authorized passes can be
+edited; independent checkers and source/resource ledgers remain fixed.
+
+Six signed source controls checked 6,369 complete output values per arm. The
+five deep-K shapes removed 4, 6, 12, 6 and 9 actual RHS loads; the K=16 control
+kept its original schedule. These are original-source/native/issued-effect
+diagnostics. Final original compiler qualification and ordinary sealed-worker
+execution are separate required gates. Asynchronous overlap, prefetch, connected
+residency, attention/KV, hardware timing and latency improvement remain outside
+this capability.
+
+The original six-pair retained-policy attempt hit its 600 aggregate CPU-second
+qualification guard after the six semantic checks completed, before the factory
+returned a registry. This is a bounded infrastructure refusal, not a failed
+compiler or a performance plateau. Repeated historical source-capture checks
+dominated metadata construction. The separate target-owned
+`scoped_original_rhs_metadata` operation now performs full original-owner checks
+at entry and exit, while every internal getter retains source, structure,
+original-object and implementation checks. Its result cannot leave before the
+final check; exceptions and nested/foreign owners remain checked. Current
+source, native, packet and numerical proofs never consume cached results.
+
+Within each full custody revalidation, each exact original session attestation
+is reopened once; every capsule still reopens its complete tree and independently
+checks that its raw captured source belongs to that verified complete session.
+There is no attestation verification state shared between revalidations. A fresh
+profile of the six capsules, containing three distinct attestations, took 36.74
+CPU seconds, mostly hashing the selected runtime trees. This cost remains part
+of job admission and is not accelerator cycles.
