@@ -238,3 +238,28 @@ objective. It establishes no public-program source basis, sealed capture,
 private-validation exclusion, formal Phase 2 admission or hardware-equivalence
 receipt. The ordinary automatic public-program selector separately requires its
 real source/capture basis; writing a development descriptor cannot provide it.
+
+## Source-derived arithmetic scopes
+
+`backend/gemmini_arithmetic_scope.py` supplies an original live
+`IntegerArithmeticOwner`. Its constructor takes the selected target, explicit
+original software specification, selected source tree, exact functional receiver
+sources and deployed runtime. It checks every physical PE's multiply/add AST and
+active WS path, every tile partial-sum connection, the complete mesh's spatial
+transport and the distinct registered accumulator adder. Receiver source hashes
+must match the deployment's critical files and runtime artifact hashes.
+
+For the selected elaboration this derives signed8 operands, a20-bit spatial
+partial sum through16 rows, and signed32 accumulator storage/addition across
+panels. A16-product signed8 panel fits20 bits even when the complete K reduction
+exceeds that range. Never apply20 bits to the entire K reduction. The live
+`source_rule()` reopens its exact source pins; a saved JSON record cannot create
+this owner or grant executable support. Source proof must check every local
+panel prefix against20 bits and the complete source reduction against32 bits.
+
+Actual compiler admission remains separate: check actual WS configuration,
+panel K≤16, zero incoming partial sum, private storage, continuation addresses,
+complete source-to-output binding and selected readout effects. Raw i32 readout
+does not authorize replacing integer half-up source arithmetic with hardware
+half-even scaling. This additive development sidecar changes no Phase1 file,
+numerical policy, hardware qualification or timing model.
