@@ -146,3 +146,32 @@ def test_replaced_selected_facts_cannot_relabel_the_runtime(caller):
     selected._documents = lambda: ({"foreign": "facts"}, {}, {})
     with pytest.raises(ValueError, match="facts/runtime/ABI"):
         check_original_caller(selected, arm, values)
+
+
+def test_original_registry_may_reopen_fresh_identical_bound_data(caller, monkeypatch):
+    selected, arm, values, backend, _effects, _paths = caller
+    monkeypatch.setattr(
+        base,
+        "get_backend",
+        lambda target: BoundRoCCBackend(
+            backend.target, backend._selection_json, backend.rocc_semantics
+        ),
+    )
+    assert (
+        check_original_caller(selected, arm, values)["binding"]["original_harness"]
+        == arm["harness"]
+    )
+
+
+def test_fresh_registry_wrapper_cannot_change_the_selected_data(caller, monkeypatch):
+    selected, arm, values, backend, _effects, _paths = caller
+    calls = 0
+
+    def reopen(target):
+        nonlocal calls
+        calls += 1
+        return backend if calls == 1 else BoundRoCCBackend("gemmini", "{}", None)
+
+    monkeypatch.setattr(base, "get_backend", reopen)
+    with pytest.raises(ValueError, match="bytes/selection changed"):
+        check_original_caller(selected, arm, values)
