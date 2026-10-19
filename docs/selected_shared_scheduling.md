@@ -437,3 +437,22 @@ capture by original sandbox readiness; its legacy diagnostics remain explicitly
 unsealed. The staged registry therefore remains disabled. No source admission,
 hardware timing, double buffering, asynchronous overlap, cross-operation leases,
 mixed attention or KV capability follows from the source API or prototype.
+
+The same explicit SDK-v4 ordinary compiler copies have now exercised all five
+engineering guards. For M=17,31,32 with K=N=16, each candidate removed one actual
+RHS transfer (22 to 21 issued commands). Independent K=17 and N=17 controls
+retained 34 and 42 commands. All 1,841 complete signed output values per arm
+matched; fresh traces reconstructed every required source product, accumulator
+continuation and readout and reopened linked immutable input bytes and CPU-write
+effects. Five baseline native artifacts were reused only after their command
+buffers and LLVM matched the ordinary SDK-v4 baseline emission byte for byte;
+all five candidate native executions and all ten traces were fresh. These are
+unsealed functional diagnostics, not paired latency measurements or capability
+qualification. The original sealed-source checker still refuses each case.
+
+Fresh original admission retains a separate invocation and receipt for each
+process. Staged selection identity binds the original stable cleanup owner,
+selected sources, arithmetic, completion and contract; it does not bind the new
+receipt's output location as a scheduling choice. Each live owner still reopens
+its own exact original receipt. This permits original child re-admission without
+accepting a saved-success factory or allowing receipt replacement.
