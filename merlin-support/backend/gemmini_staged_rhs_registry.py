@@ -13,7 +13,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from gemmini_source_execution_issuer_v4 import SourceExecutionIssuerV4
-from gemmini_staged_dense_capability import _digest
+from gemmini_staged_dense_capability import _digest, _leaf
 from gemmini_staged_rhs_capability import QualifiedRhsResidencyOwner, RhsResidencyCompilerPrototype
 from gemmini_staged_rhs_relocation_effects import original_source_capsule
 from gemmini_staged_rhs_window import ClosedScratchEpochOwner
@@ -294,6 +294,7 @@ def restore_registry(inputs, *, work_root):
         type(inputs) is not dict
         or inputs.get("parent_delegation_protocol") != PROTOCOL
         or inputs.get("metadata_verification_protocol") != METADATA
+        or type(inputs.get("rhs_allocation_epoch_source")) is not dict
         or type(inputs.get("rhs_residency_qualification_pairs")) is not list
         or not 6 <= len(inputs["rhs_residency_qualification_pairs"]) <= 32
         or any(
@@ -302,6 +303,9 @@ def restore_registry(inputs, *, work_root):
         )
     ):
         raise ValueError("RHS selection disabled: explicit original protocols and actual source pairs required")
+    allocation = inputs["rhs_allocation_epoch_source"]
+    for role in ("native_result", "command_buffer_artifact", "lowered", "issue_invocation"):
+        _leaf(allocation, role)
     from merlin_experiments.phase1.feedback.compiler_pass_delegation import (
         active_original_parent_pass_qualification,
     )
@@ -319,7 +323,10 @@ def restore_registry(inputs, *, work_root):
         from gemmini_source_execution import SourceExecutionOwner
 
         pairs = tuple(inputs["rhs_residency_qualification_pairs"])
-        first = pairs[0]["before"]
+        # Preparation has its own original observed allocation basis. A fresh
+        # compiler invocation at another path is independently checked below;
+        # identical bytes cannot silently replace that original custody owner.
+        first = allocation
         native = json.loads(Path(first["native_result"]["path"]).read_bytes())
         source = SourceExecutionOwner(
             selected=staged.selected,

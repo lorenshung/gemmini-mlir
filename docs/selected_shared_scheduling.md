@@ -549,6 +549,9 @@ fallback. Capacity declarations and successful JSON reports cannot construct
 this owner. `SourceExecutionIssuerV4` retains the original bounded current-ELF
 trace algorithm; inherited historical qualification requires the same original
 kernel-authenticated parent protocol, plus the exact complete-program epoch.
+The explicit `rhs_allocation_epoch_source` factory input pins that original
+allocation observation's native result, compiler artifacts and trace. A new
+byte-identical compiler invocation does not replace its original path custody.
 
 The original epoch first proves every issued access in one complete observed
 hart-0 functional call, one external immutable RHS, its original A/B windows,
