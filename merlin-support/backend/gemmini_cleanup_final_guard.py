@@ -9,15 +9,10 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import resource
-import subprocess
 from pathlib import Path
 
-import numpy as np
+from gemmini_cleanup_issue import check_issued_program, check_pair_artifacts
 from gemmini_timing_resources import _pin
-from merlin.common import invocation_record
-from merlin.common.cpu_pool import shared_compute_pool
-from merlin.runtime.out_b64 import OutB64Decoder
 from merlin.targetgen import native_model_execution as native
 
 
@@ -37,25 +32,8 @@ def _logical(cb):
     return result
 
 
-def _values(path):
-    values, decoder = {}, OutB64Decoder()
-    for line in Path(path).read_text().splitlines():
-        decoder.consume(line.split(), values)
-    decoder.require_closed()
-    if not values:
-        raise ValueError("final realization has no complete native output values")
-    return {name: np.asarray(value).reshape(-1) for name, value in values.items()}
-
-
-def _limits():
-    resource.setrlimit(resource.RLIMIT_FSIZE, (64 << 20, 64 << 20))
-    resource.setrlimit(resource.RLIMIT_CPU, (60, 60))
-
-
 def check_native_arm(owner, *, native_result, command_buffer, lowered, work_root):
     """Consume the exact original native artifacts; run a new bounded issue trace."""
-    import qualify
-
     owner.revalidate()
     row = json.loads(Path(native_result).read_bytes())
     cb = json.loads(Path(command_buffer).read_bytes())
@@ -108,90 +86,19 @@ def check_native_arm(owner, *, native_result, command_buffer, lowered, work_root
     elf = native._pinned_native_file(row, "elf")
     if native._pinned_native_file(row["tiers"]["L2"], "elf") != elf:
         raise ValueError("complete outputs and final trace do not name the same ELF")
-    # Use the original native citation, never an ambient target/backend lookup.
-    argv = [
-        runtime["spike"]["path"],
-        *citation["flags"],
-        "-l",
-        "--log-commits",
-        str(elf),
-    ]
-    import os
-
-    env = dict(os.environ)
-    env["LD_LIBRARY_PATH"] = str(Path(runtime["functional_extension"]["path"]).parent)
-    with (
-        shared_compute_pool(timeout_s=120),
-        invocation_record.observe(
-            work_root,
-            stage="original_final_cleanup_issue",
-            argv=argv,
-            inputs=(elf,),
-            dependencies=(Path(__file__),),
-            env=env,
-        ) as observed,
-    ):
-        with (
-            (observed.directory / "stdout.bin").open("w") as stdout,
-            (observed.directory / "stderr.bin").open("w") as stderr,
-        ):
-            completed = subprocess.run(
-                argv,
-                check=False,
-                stdout=stdout,
-                stderr=stderr,
-                env=env,
-                timeout=60,
-                preexec_fn=_limits,
-            )
-        observed.complete_streams(completed.returncode)
-        invocation = observed.path
-    if completed.returncode:
-        raise ValueError("bounded final cleanup issue execution did not complete")
-    trace = invocation_record.verify(invocation)
-    if Path(trace["stderr"]["path"]).stat().st_size > 64 << 20:
-        raise ValueError(
-            "final cleanup trace exceeds unchanged independent byte budget"
-        )
-    actual, expected = (
-        _values(trace["stdout"]["path"]),
-        _values(native._pinned_native_file(row["tiers"]["L2"], "console")),
+    checked = check_issued_program(
+        owner,
+        elf=elf,
+        command_buffer=cb,
+        reference_console=native._pinned_native_file(row["tiers"]["L2"], "console"),
+        work_root=work_root,
     )
-    if set(actual) != set(expected) or any(
-        not np.array_equal(actual[name], value) for name, value in expected.items()
-    ):
-        raise ValueError(
-            "final cleanup trace changed complete original native output values"
-        )
-    outputs = {
-        name: tensor
-        for name, tensor in cb["tensors"].items()
-        if tensor.get("role") == "output"
-    }
-    if set(actual) != set(outputs) or any(
-        actual[name].size != int(np.prod(tensor["shape"]))
-        for name, tensor in outputs.items()
-    ):
-        raise ValueError(
-            "final cleanup trace does not cover every complete compiled output"
-        )
-    symbols = qualify._symbols(elf, owner.nm)
-    decoded, events = qualify._events(
-        Path(trace["stderr"]["path"]).read_text(),
-        owner.cleanup.selected.operand_observer().isa_constants("gemmini"),
-        symbols,
-    )
-    windows = qualify._check_transfer_windows(decoded, symbols, cb)
-    owner.revalidate()
     return {
+        **checked,
         "native_result": _pin(native_result),
         "source": row["source"],
-        "command_buffer": cb,
-        "events": events,
-        "commands": len(decoded["instructions"]),
-        "outputs": sum(value.size for value in actual.values()),
-        "logical_windows": windows,
-        "issue_invocation": _pin(invocation),
+        "command_buffer_artifact": _pin(command_buffer),
+        "lowered": _pin(lowered),
     }
 
 
@@ -211,9 +118,7 @@ def check_native_pair(owner, *, baseline, candidate, work_root):
         raise ValueError(
             "final cleanup pair changes original source, inputs, goldens or logical work"
         )
-    checked = owner.check_actual_pair(
-        before["events"], after["events"], execution_domain="functional_spike"
-    )
+    checked = check_pair_artifacts(owner, before, after)
     return {
         "status": "checked_actual_final_pair",
         "baseline": before,
@@ -294,9 +199,16 @@ def check_functional_guard(
                 record.get("candidate_emission"),
             )
             if type(native_record) is not dict or type(emission) is not dict:
-                raise ValueError(
-                    "final cleanup native-model realization unavailable for this capsule family"
-                )
+                if type(record.get("compiler_source")) is not dict:
+                    raise ValueError(
+                        "final cleanup native-model/layer realization unavailable for this capsule family"
+                    )
+                from gemmini_cleanup_layer_artifacts import read_layer_arm
+
+                arguments = {"result_path": path, "package": expected_root / "compiler"}
+                read_layer_arm(owner, **arguments)
+                found[name] = arguments
+                continue
             native_path = path.parent / "candidate_native/result.json"
             if json.loads(native_path.read_bytes()) != native_record:
                 raise ValueError(
@@ -314,8 +226,19 @@ def check_functional_guard(
         arms[label] = found
     if set(arms["baseline"]) != set(arms["candidate"]):
         raise ValueError("final cleanup changed the frozen functional cohort")
+    if any(
+        set(arms["baseline"][name]) != set(arms["candidate"][name])
+        for name in arms["baseline"]
+    ):
+        raise ValueError("final cleanup changed the original capsule execution route")
+    from gemmini_cleanup_layer_artifacts import check_layer_pair
+
     return {
-        name: check_native_pair(
+        name: (
+            check_layer_pair
+            if "result_path" in arms["baseline"][name]
+            else check_native_pair
+        )(
             owner,
             baseline=arms["baseline"][name],
             candidate=arms["candidate"][name],
