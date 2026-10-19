@@ -156,6 +156,8 @@ def apply(stream, buffers, readouts=None):
             values = np.full(count,readout.constant,dtype=object)
             for name,factor in readout.terms:
                 values += by_name[name].reshape(-1)[positions].astype(object)*factor
+            if readout.relu:
+                values = np.maximum(values, 0)
             out.reshape(-1)[positions] = [min(readout.quant_max,max(readout.quant_min,round(Fraction(v))+readout.zero_point)) for v in values]
             continue
         indices = np.arange(out.size) if readout.indices is None else np.asarray(readout.indices, dtype=np.int64)

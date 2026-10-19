@@ -138,3 +138,54 @@ def test_malformed_boolean_or_constant_fields_are_refused():
     bad=copy.deepcopy(p);bad['constants']['S']=1.0
     with pytest.raises(ValueError):validate(bad)
     with pytest.raises(ValueError):plan(F(1),relu='false')
+
+
+@pytest.mark.parametrize('placement', [
+    (12, 3, 2, 7),
+    dict(shape=(2, 2, 3), strides=(15, 5, 1), offset=1),
+])
+@pytest.mark.parametrize('factor', [F(3, 8), F(-17, 31)])
+@pytest.mark.parametrize('relu', [False, True])
+def test_native_structural_placement_preserves_exact_readout_and_unwritten_bytes(tmp_path, placement, factor, relu):
+    import ctypes, os, subprocess
+    from pathlib import Path
+    from mlir_oot.core_aten.stream import Stream, Arg, simulate
+    from mlir_oot.core_aten.requant import Readout
+    from mlir_oot.core_aten.emit import build_module
+    bindir = Path(os.environ.get('GEMMINI_LLVM_BIN', '/nonexistent'))
+    if not (bindir/'mlir-translate').exists():
+        pytest.skip('LLVM tools unavailable')
+    shape = (2, 3, 5)
+    raw = np.arange(-15, 15, dtype=np.int32).reshape(shape)
+    result = np.full(shape, -99, np.int8)
+    stream = Stream([Arg('x', 'i32', shape, 'input'), Arg('y', 'i8', shape, 'output')])
+    stream.readouts.append(Readout('y', [('x', factor)], constant=F(1, 2),
+                                  zero_point=-7, placement=placement, relu=relu))
+    meta = {}
+    module, _ = build_module(stream, 'placed_readout', meta=meta)
+    certificate, = meta['host_requantization_proofs']
+    assert certificate['output_placement'] == placement
+    assert certificate['elements'] == 12
+    validate(certificate)
+    source, ir, obj, shared = (tmp_path/('placed'+suffix) for suffix in ('.mlir', '.ll', '.o', '.so'))
+    source.write_text(str(module)+'\n')
+    subprocess.run([str(bindir/'mlir-translate'), '--mlir-to-llvmir', str(source), '-o', str(ir)], check=True)
+    subprocess.run([str(bindir/'llc'), '-mtriple=x86_64-unknown-linux-gnu', '-relocation-model=pic',
+                    '-O2', '-filetype=obj', str(ir), '-o', str(obj)], check=True)
+    subprocess.run(['cc', '-shared', str(obj), '-o', str(shared)], check=True)
+    fn = ctypes.CDLL(str(shared)).placed_readout
+    fn.argtypes = [ctypes.c_void_p]*2
+    fn(raw.ctypes.data, result.ctypes.data)
+    expected = np.full(shape, -99, np.int8)
+    if isinstance(placement, dict):
+        positions = [placement['offset']+sum(i*s for i,s in zip(index, placement['strides']))
+                     for index in np.ndindex(placement['shape'])]
+    else:
+        count, block, offset, stride = placement
+        positions = [i//block*stride+i%block+offset for i in range(count)]
+    for p in positions:
+        value = int(raw.flat[p])*factor+F(1, 2)
+        expected.flat[p] = min(127, max(-128, round(max(0, value) if relu else value)-7))
+    assert np.array_equal(result, expected)
+    simulated = simulate(stream, dict(x=raw))['y']
+    assert np.array_equal(simulated.flat[positions], expected.flat[positions])

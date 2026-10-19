@@ -1571,7 +1571,7 @@ def match_all(module, *, constant_folds=None) -> tuple[list[Match], list[dict]]:
         for fn in selected_matchers:
             # A return is a matching anchor, not a producer. Do not rebuild an
             # already bound byte-layout producer merely to discard it below.
-            if fn.__name__ == 'match_linear' and op.name == 'func.return' and any(
+            if fn is match_linear and op.name == 'func.return' and any(
                     etype(v) == 'i8' and id(producer(v)) in taken for v in op.operands):
                 continue
             try:

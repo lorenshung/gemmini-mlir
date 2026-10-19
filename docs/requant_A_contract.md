@@ -74,6 +74,20 @@ Single-term positive factors reduce to the original accumulator without an
 extra runtime multiply. Parameter broadcasting follows output tensor shape;
 channel indices and zero points must use the same channel axis as the scales.
 
+Structural DMA layouts can attach a scalar-parameter destination `placement`
+to a readout. Its logical ordinal maps to the output and source int32 element
+using either `{shape,strides,offset}` or `(count,block,offset,stride)`. For the
+shape form, `target = offset + sum(coordinate[j] * strides[j])`, with row-major
+coordinates of the logical ordinal. For the block form,
+`target = offset + (ordinal // block) * stride + ordinal % block`. These
+readouts use the same requant-A certificate; `output_indices` describes the
+logical ordinal domain and `output_placement` records this address map. Uniform
+scalar parameters retain a single loop and certificate without allocating
+tensor-sized parameter or index arrays. Compact structural command loops keep
+their serial, fenced exact readout boundary; the overlap planner records this
+reason rather than expanding them into individual commands or reusing their
+buffers under an unproved placement map.
+
 Gemmini records the semantic record plus `output`, `elements`, `output_indices` (`{start,stop,step}` or `{indices:[...]}`),
 `normal_form_width` (signed formation bit width), `normal_form` (ordered tile/decimal-weight pairs) and `accumulator_bounds` under
 `kernels[].meta.host_requantization_proofs`. These binding annotations do not
