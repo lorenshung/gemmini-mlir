@@ -370,9 +370,23 @@ command, fence and logical DMA window. This is functional command evidence,
 not accelerator latency or physical-memory-guard qualification.
 
 Preparation and registry transport do not satisfy the final formal search
-gate by themselves. The generic final guard requires an original owner's
-`check_functional_guard` over the newly realized paired programs; this owner
-currently exposes only its explicit `check_actual_pair` consumer. Until that
-ordinary final consumer is connected, selecting it for a formal search refuses
-with the missing final emitted-program checker. Hardware, timing, broad dense,
-asynchronous overlap and attention capabilities remain disabled.
+gate by themselves. The owner's `check_functional_guard` consumes the original
+complete functional regrades, exact frozen compiler copies, complete roster,
+clean integrity and certification results. It joins each original source-model
+grade to its durable native receipt and emitted LLVM/command buffer. The
+`gemmini_cleanup_final_guard` consumer reopens original build/source pins,
+checks the exact selected runtime and runs a new bounded issue trace of that
+same final ELF. It requires every complete output to reproduce the original
+independently graded native values, unchanged source/input/golden identities,
+unchanged logical work and only legal redundant-setter omissions. Traces retain
+the independent 64MiB ceiling and shared leaf compute admission.
+
+An actual ordinary-copy native pair for freshly sealed source34 passed this
+final issue/output consumer (217 complete values per arm). Its zero removals
+are an independent geometry control, not an improvement. This diagnostic did
+not fabricate a successful formal grade: the original Phase1 certification
+prerequisite remains pending. Missing original grades and non-model capsule
+families without this exact native receipt route refuse; neither a saved
+success nor a preparation record can bypass that requirement. Hardware,
+timing, broad dense, asynchronous overlap and attention capabilities remain
+disabled.
