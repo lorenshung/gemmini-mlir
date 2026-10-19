@@ -62,3 +62,24 @@ def literal_bytes(value, dtype):
             field, fraction = exponent + bias, mantissa - (1 << fraction_bits)
         bits = (sign << (exponent_bits + fraction_bits)) | (field << fraction_bits) | fraction
     return bits.to_bytes(width, 'little')
+
+
+def module_text(module):
+    """Emit target ABI literal/global storage without boxed scalar expansion.
+
+    xDSL's default dense printer unpacks all values even for hex output.
+    Hex preserves every payload bit and uses memory proportional to the bytes.
+    """
+    from io import StringIO
+    from xdsl.printer import Printer
+    from xdsl.dialects.builtin import DenseIntOrFPElementsAttr
+    class StoragePrinter(Printer):
+        def print_attribute(self, attribute):
+            if isinstance(attribute, DenseIntOrFPElementsAttr):
+                self.print_string('dense<"0x'+attribute.data.data.hex().upper()+'"> : ')
+                super().print_attribute(attribute.type)
+            else:
+                super().print_attribute(attribute)
+    output = StringIO()
+    StoragePrinter(stream=output).print_op(module)
+    return output.getvalue()

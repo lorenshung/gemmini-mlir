@@ -38,11 +38,13 @@ def _numel(shape) -> int:
     return int(np.prod(shape)) if len(shape) else 1
 
 
-def _begin(args) -> Stream:
+def _begin(args, constants=None) -> Stream:
     from .match import Decline
     if any(any(d <= 0 for d in a.shape) for a in args):
         raise Decline("empty or dynamic tensor shape")
     s = Stream(list(args))
+    for name, data in (constants or {}).items():
+        s.bind_constant(name,data)
     s.fence()
     s.flush()
     return s
@@ -62,6 +64,8 @@ def _end(op, s, **meta) -> Kernel:
         if instruction.kind not in ('config_ld','config_st'): continue
         factor=instruction.a('scale') if instruction.kind=='config_ld' else instruction.a('acc_scale')
         require(factor == 1, 'nonunit device scale requires an exact integer schedule and host requantization')
+    if s.constant_layouts:
+        meta['constant_layout_proofs']=s.constant_layouts
     meta['fp32_product_proofs']=[]
     return Kernel(op, s, meta)
 
@@ -172,7 +176,7 @@ def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float
 
 def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha: float = 1.0,
                      bias: bool = False, relu: bool = False, bias_const: np.ndarray | None = None,
-                     bias_repeat: int = 1) -> Kernel:
+                     bias_repeat: int = 1, constants=None) -> Kernel:
     """The source layout (NCHW x OIHW -> NCHW) with on-device transposes around the channels-last
     convolution: x and w are transposed into caller-provided scratch, fenced (DRAM RAW), convolved,
     fenced, and the NHWC result transposed into y.  Merlin's layout propagation can bind the
@@ -192,15 +196,15 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
              Arg("ws_x", "i8", (g.n, g.h, g.w, g.cin), "scratch"),
              Arg("ws_w", "i8", (g.kh, g.kw, g.cin, g.cout), "scratch"),
              Arg("ws_y", "i32", (g.n, g.oh, g.ow, g.cout), "scratch")]
-    s = _begin(args)
+    s = _begin(args,constants)
     bname = None
     if bias:
         bname = "bias"
         if bias_const is not None:
             bname = "bias_c"
             s.const(bname, np.asarray(bias_const, np.int32).reshape(g.cout))
-    mv.emit_transpose(s, "x", [g.n, g.cin, g.h, g.w], "ws_x", [0, 2, 3, 1])
-    mv.emit_transpose(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 1, 0])
+    _permute_into(s, "x", [g.n, g.cin, g.h, g.w], "ws_x", [0, 2, 3, 1])
+    _permute_into(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 1, 0])
     s.fence()
     scale = Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out)
     _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, 1.0, False, True, bias_repeat)
@@ -210,7 +214,7 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     return _end("aten.convolution.default", s, readout_scale=scale, accumulator_min=-bound, accumulator_max=bound, layout="NCHW,OIHW->NCHW via NHWC")
 
 
-def conv_backward_input(g, *, s_g, s_w, s_out):
+def conv_backward_input(g, *, s_g, s_w, s_out, constants=None):
     from .recipes.backward import conv_transpose
     from .requant import Readout
     g.validate()
@@ -222,7 +226,7 @@ def conv_backward_input(g, *, s_g, s_w, s_out):
             Arg('ws_g','i8',(g.n,g.oh,g.ow,g.cout),'scratch'),
             Arg('ws_w','i8',(g.kh,g.kw,g.cout,g.cin),'scratch'),
             Arg('acc','i32',(g.n,g.h,g.w,g.cin),'scratch')]
-    s = _begin(args)
+    s = _begin(args,constants)
     _permute_into(s,'g',args[0].shape,'ws_g',[0,2,3,1])
     _permute_into(s,'w',args[1].shape,'ws_w',[2,3,0,1])
     s.fence()
@@ -232,7 +236,7 @@ def conv_backward_input(g, *, s_g, s_w, s_out):
     return _end('aten.convolution_backward.default',s,output='grad_input',accumulator_min=-bound,accumulator_max=bound)
 
 
-def conv_backward_weight(g, *, s_g, s_x, s_out):
+def conv_backward_weight(g, *, s_g, s_x, s_out, constants=None):
     from .recipes.backward import conv_wgrad
     from .requant import Readout
     g.validate()
@@ -243,7 +247,7 @@ def conv_backward_weight(g, *, s_g, s_x, s_out):
             Arg('y','i8',(g.cout,g.cin,g.kh,g.kw),'output'),
             Arg('ws_x','i8',(g.n,g.h,g.w,g.cin),'scratch'),
             Arg('acc','i32',(g.kh,g.kw,g.cout,g.cin),'scratch')]
-    s = _begin(args)
+    s = _begin(args,constants)
     _permute_into(s,'x',args[1].shape,'ws_x',[0,2,3,1]); s.fence()
     conv_wgrad(s,g,'g','ws_x','acc',1,out_i32=True)
     s.readouts.append(Readout('y',[('acc',Q(s_g)*Q(s_x)/Q(s_out))],
@@ -358,6 +362,18 @@ def permute(shape, perm, *, s_x=1, s_out=1):
 def _permute_into(s: Stream, x: str, shape, out: str, perm) -> None:
     """Emit a byte permutation using strided row or column DMA."""
     from . import layout
+    require(x != out, 'internal layout permutation requires distinct buffers')
+    require(sorted(perm)==list(range(len(shape))), 'invalid internal layout permutation')
+    if x in s.consts:
+        from hashlib import sha256
+        source = s.consts[x].reshape(shape)
+        transformed = np.ascontiguousarray(source.transpose(perm))
+        s.bind_constant(out,transformed)
+        s.constant_layouts.append(dict(source=x,destination=out,shape=list(shape),permutation=list(perm),
+            source_storage_sha256=sha256(source.tobytes()).hexdigest(),
+            result_storage_sha256=sha256(transformed.tobytes()).hexdigest(),
+            proof='literal_byte_permutation',runtime_instructions=0))
+        return
     strides = layout.dense_strides(shape)
     layout.move(s,(x,0),(out,0),tuple(shape[p] for p in perm),tuple(strides[p] for p in perm))
 

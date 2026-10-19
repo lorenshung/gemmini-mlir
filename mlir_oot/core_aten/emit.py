@@ -22,7 +22,7 @@ from pathlib import Path
 
 import numpy as np
 from xdsl.dialects import llvm
-from xdsl.dialects.builtin import (DenseIntOrFPElementsAttr, Float32Type, FloatAttr, IntegerAttr, ModuleOp,
+from xdsl.dialects.builtin import (BytesAttr, DenseIntOrFPElementsAttr, Float32Type, FloatAttr, IntegerAttr, ModuleOp,
                                    StringAttr, TensorType, i8, i64)
 
 from ..codegen.builder import PTR, FnBuilder
@@ -125,8 +125,7 @@ class _Emitter:
             if arg.role == "const":
                 data = stream.consts[arg.name].reshape(-1).view(np.uint8)
                 name = f"{symbol}__{arg.name}"
-                value = DenseIntOrFPElementsAttr.create_dense_int(
-                    TensorType(i8, [data.size]), [int(x) if x < 128 else int(x) - 256 for x in data])
+                value = DenseIntOrFPElementsAttr(TensorType(i8,[data.size]),BytesAttr(data.tobytes()))
                 self.globals.append(llvm.GlobalOp(llvm.LLVMArrayType(data.size, i8), name,
                                                   "internal", constant=True, value=value, alignment=64))
                 ptr = self.fb.add(llvm.AddressOfOp(name, PTR)).results[0]
@@ -253,7 +252,8 @@ def compile_to_object(module: ModuleOp, workdir: Path, *, llvm_bin: Path | None 
     llvm_mlir = workdir / f"{stem}.llvm.mlir"
     llvm_ir = workdir / f"{stem}.ll"
     obj = workdir / f"{stem}.o"
-    llvm_mlir.write_text(str(module) + "\n")
+    from .storage import module_text
+    llvm_mlir.write_text(module_text(module) + "\n")
     commands = [[str(bindir / "mlir-translate"), "--mlir-to-llvmir", str(llvm_mlir), "-o", str(llvm_ir)]]
     if (bindir / "clang").exists():
         commands.append([str(bindir / "clang"), "--target=riscv64-unknown-elf", "-march=rv64gc", "-mabi=lp64d",

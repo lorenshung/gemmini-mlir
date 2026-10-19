@@ -10,7 +10,9 @@ from .stream import Arg, Stream
 
 
 def literal(op):
-    from .match import _scalar_const, producer
+    from .match import _scalar_const, producer, splat_value
+    if op.name == "arith.constant" and len(op.results) == 1:
+        return splat_value(op.results[0])
     if op.name in ('tensor.splat','linalg.fill'):
         return _scalar_const(producer(op.operands[0]))
     if op.name=='linalg.generic':
@@ -137,6 +139,8 @@ def describe(op, *, quantized=False):
 
 
 def native(op):
+    if op.name == "arith.constant":
+        return None  # Literal storage is already materialized by the host ABI.
     value = literal(op)
     plan = ([],[]) if value is not None else describe(op)
     if plan is None:

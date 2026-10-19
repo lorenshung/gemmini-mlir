@@ -39,6 +39,15 @@ def rewrite(source: str, manifest: dict) -> str:
     declared = {}
     doomed = []
     replacements = {}
+    if manifest.get('constant_folds'):
+        from hashlib import sha256
+        from .constant_dma import specialize
+        if sha256(source.encode()).hexdigest() != manifest['source_sha256']:
+            raise ValueError('constant DMA source identity differs from catalog')
+        folds = specialize(module)
+        if [proof for proof, _, _ in folds] != manifest['constant_folds']:
+            raise ValueError('constant DMA proof differs from catalog')
+        replacements.update((old.results[0], new.result) for _, old, new in folds)
     for b in manifest["bindings"]:
         k = kernels[b["symbol"]]
         (out_name, out_src), = b["result"].items()
@@ -78,7 +87,8 @@ def rewrite(source: str, manifest: dict) -> str:
         module.body.blocks[0].add_op(decl)
     fn.attributes["llvm.emit_c_interface"] = UnitAttr()
     module.verify()
-    return str(module)
+    from .storage import module_text
+    return module_text(module)
 
 
 _CT = {"i8": "int8_t", "i32": "int32_t"}

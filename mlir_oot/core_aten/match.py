@@ -85,9 +85,12 @@ def splat_value(v: SSAValue):
     if p.name == "arith.constant":
         attr = _attr_of(p, "value")
         if isinstance(attr, DenseIntOrFPElementsAttr):
-            vals = list(attr.get_values()) if hasattr(attr, "get_values") else None
-            if vals and all(x == vals[0] for x in vals):
-                return vals[0]
+            # Inspect packed storage, not millions of boxed Python scalars.
+            raw = attr.data.data
+            width = attr.get_element_type().compile_time_size
+            if raw and not np.any(np.frombuffer(raw, np.uint8).reshape(-1,width) !=
+                                  np.frombuffer(raw[:width], np.uint8)):
+                return attr.get_element_type().unpack(raw[:width],1)[0]
     return None
 
 
@@ -462,6 +465,7 @@ class Match:
     kernel: ops.Kernel
     layout: dict = field(default_factory=dict)
     numeric: dict = field(default_factory=dict)
+    constant_operands: list = field(default_factory=list)
 
 
 def _sandwich_out(v: SSAValue):
@@ -897,7 +901,7 @@ def match_convolution_rows(op: Operation) -> Match | None:
         raise Decline("constant epilogue offset")
     k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
                              relu=ch.relu, bias_const=None,
-                             bias_repeat=1)
+                             bias_repeat=1, constants=_literal_codes([("x",qx),("w",qw)]))
     _host_bias(k,bias,q.scale,convolution=True)
     _pack_inputs(k,[("x",qx),("w",qw)])
     ops.convolution_zero_points(k,("x",qx),("w",qw),g)
@@ -970,7 +974,7 @@ def match_convolution(op: Operation) -> Match | None:
         raise Decline("constant epilogue offset")
     k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
                              relu=ch.relu, bias_const=None,
-                             bias_repeat=1)
+                             bias_repeat=1, constants=_literal_codes([("x",qx),("w",qw)]))
     _host_bias(k,bias,q.scale,convolution=True)
     _pack_inputs(k,[("x",qx),("w",qw)])
     ops.convolution_zero_points(k,("x",qx),("w",qw),g)
@@ -1077,7 +1081,8 @@ def match_conv_wgrad(op: Operation) -> Match | None:
     if (g.oh, g.ow, Ng) != (OH, OW, N):
         raise Decline("weight-gradient extents")
     q = _sandwich_out(op.results[0])
-    k = ops.conv_backward_weight(g, s_g=qg.scale, s_x=qx.scale, s_out=q.scale)
+    k = ops.conv_backward_weight(g, s_g=qg.scale, s_x=qx.scale, s_out=q.scale,
+                                 constants=_literal_codes([("g",qg),("x",qx)]))
     _pack_inputs(k,[("g",qg),("x",qx)])
     ops.convolution_zero_points(k,("g",qg),("x",qx),g,"weight")
     cons = [op, q.op, qx.dq, qg.dq] + ([pad] if pad else [])
@@ -1200,7 +1205,8 @@ def _conv_input_two_stage(op, q0, root, qg, qw):
         raise Decline('transposed scatter does not cover each contribution exactly once')
     if found is None:
         raise Decline("scatter is not a transposed convolution of a square geometry")
-    k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q0.scale)
+    k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q0.scale,
+                                constants=_literal_codes([("g",qg),("w",qw)]))
     _pack_inputs(k,[("g",qg),("w",qw)])
     ops.convolution_zero_points(k,("g",qg),("w",qw),found,"input")
     aten = getattr(t.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
@@ -1435,10 +1441,35 @@ MATCHERS = (match_convolution, match_convolution_rows, match_conv_wgrad, match_c
             match_movement, match_linear)
 
 
+def _literal_codes(inputs):
+    """Literal source storage only; external parameters need Merlin's freeze contract."""
+    constants = {}
+    for name,q in inputs:
+        owner = producer(q.value)
+        attr = _attr_of(owner,'value') if owner is not None and owner.name=='arith.constant' else None
+        if isinstance(attr,DenseIntOrFPElementsAttr) and etype(q.value)=='i8':
+            raw=np.frombuffer(attr.data.data,np.uint8)
+            if raw.size == math.prod(shape(q.value)):
+                if q.unsigned:
+                    raw=np.bitwise_xor(raw,128)  # Same exact signed code packing as the ABI.
+                constants[name]=raw.view(np.int8).reshape(shape(q.value))
+    return constants
+
+
 def _pack_inputs(kernel, inputs):
     from .stream import Arg,Ins
     s=kernel.stream
     for name,q in inputs:
+        if name in s.consts:
+            from hashlib import sha256
+            raw=_attr_of(producer(q.value),'value').data.data
+            kernel.meta.setdefault('constant_code_packing',{})[name]=dict(
+                source_storage_sha256=sha256(raw).hexdigest(),
+                packed_storage_sha256=sha256(s.consts[name].tobytes()).hexdigest(),
+                proof='uint8_xor_0x80_to_signed_units' if q.unsigned else 'identity_storage_codes',
+                source_quant_attributes={key:str(value) for key,value in q.dq.attributes.items()
+                                         if key.startswith('prov.quant.')})
+            continue
         if not q.unsigned: continue
         old=s._index[name]; packed=name+'__signed'; new=len(s.args)
         s.args.append(Arg(packed,'i8',shape(q.value),'scratch'));s._index[packed]=new
@@ -1468,9 +1499,12 @@ def _bind_dense_layouts(match):
         if actual is None or etype(value) != arg.dtype or math.prod(actual) != math.prod(arg.shape):
             raise Decline("source tensor layout/type differs from the dense kernel ABI")
         match.kernel.stream.args[index] = replace(arg, shape=actual)
+    constant_names = {a.name for a in match.kernel.stream.args if a.role=='const'}
+    match.constant_operands.extend((name,value) for name,value in match.operands if name in constant_names)
+    match.operands[:] = [(name,value) for name,value in match.operands if name not in constant_names]
 
 
-def match_all(module) -> tuple[list[Match], list[dict]]:
+def match_all(module, *, constant_folds=None) -> tuple[list[Match], list[dict]]:
     """Every matched region in program order, plus recorded declines (with reasons)."""
     from .integer_regions import match_integer_region, has_integer_readout
     from functools import partial
@@ -1481,7 +1515,12 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     from .limbs import match as match_limb
     from .liveness import live_source_ops, live_bindings
     from .quantized_movement import match as match_quantized_movement
-    from .layout_match import native as match_native_layout
+    from .layout_match import native as match_native_layout, describe as describe_layout
+    from .constant_dma import specialize
+    ordinals = {op: i for i, op in enumerate(module.walk())}
+    folds = specialize(module, ordinals)
+    if constant_folds is not None:
+        constant_folds.extend(folds)
     live = live_source_ops(module)
     matches, declines = [], []
     quantized_module = any(name_of(o).startswith('quant_ext.') for o in module.walk())
@@ -1491,7 +1530,6 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     taken: set[int] = set()
     # Prove whole selector islands before older local matchers consume their
     # carriers. A failed identity proof leaves the existing exact path intact.
-    ordinals = {op: i for i, op in enumerate(module.walk())}
     for op in module.walk():
         if op not in live:
             continue
@@ -1505,7 +1543,8 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                 taken.update(id(o) for o in m.consumed)
         except (Decline, ValueError, OverflowError, ZeroDivisionError):
             pass  # The normal matcher records malformed/unsupported contracts.
-    for ordinal, op in enumerate(module.walk()):
+    for op in module.walk():
+        ordinal = ordinals[op]
         if op not in live or id(op) in taken:
             continue
         # Rank-zero reshapes have an empty *shape descriptor*, not empty data.
@@ -1520,7 +1559,11 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         selected_matchers = (match_integer_region,match_convolution,match_convolution_rows,match_conv_wgrad,match_conv_input,match_contraction,match_elementwise,match_linear) if generalized_quant else (match_integer_region,*MATCHERS)
         if not quantized_module:
             selected_matchers = (match_bitwise, *selected_matchers)
-        elif (len(op.results)==1 and etype(op.results[0])=='i8'
+        elif (len(op.results)==1
+              and (etype(op.results[0])=='i8' or
+                   ((plan := describe_layout(op)) is not None and not any(
+                       producer(v) is not None and name_of(producer(v)).startswith('quant_ext.')
+                       for v in plan[0])))
               and not any(k.startswith('prov.quant.') for k in op.attributes)):
             selected_matchers = (match_native_layout, *selected_matchers)
         if 'gemmini.limb' in op.attributes:
@@ -1528,7 +1571,7 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         for fn in selected_matchers:
             # A return is a matching anchor, not a producer. Do not rebuild an
             # already bound byte-layout producer merely to discard it below.
-            if fn is match_linear and op.name == 'func.return' and any(
+            if fn.__name__ == 'match_linear' and op.name == 'func.return' and any(
                     etype(v) == 'i8' and id(producer(v)) in taken for v in op.operands):
                 continue
             try:
@@ -1556,7 +1599,8 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                       'arith.uitofp', 'arith.fptoui', 'arith.divsi', 'arith.divui',
                       'arith.andi', 'arith.ori', 'arith.xori', 'arith.cmpi'}
         reported = {d['ordinal'] for d in declines}
-        for ordinal, candidate in enumerate(module.walk()):
+        for candidate in module.walk():
+            ordinal = ordinals[candidate]
             if candidate not in live:
                 continue
             if id(candidate) in taken or ordinal in reported or any(k.startswith('prov.quant.') for k in candidate.attributes):

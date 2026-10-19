@@ -12,6 +12,7 @@ command stream, and returns the combined device module plus a manifest:
     bindings  per matched region: root op ordinal (whose result the kernel writes), the
               ordinals it replaces, and each kernel argument's source value as a function
               argument index or an (op ordinal, result index) pair
+    constant_folds source-bound literal DMA specializations, with no runtime binding
     declines  recognised regions this backend refuses, with the reason
 
 It is opt-in beside the integer GEMM catalog (``golden_device_catalog``) and does not alter
@@ -48,6 +49,10 @@ def _stream_digest(kernel) -> str:
         # A symbol's metadata authenticates one representation plan. Identical
         # instructions with different host weights need distinct records.
         h.update(json.dumps(kernel.meta['limb_plan'], sort_keys=True).encode())
+    if 'constant_code_packing' in kernel.meta:
+        h.update(json.dumps(kernel.meta['constant_code_packing'],sort_keys=True).encode())
+    if 'constant_layout_proofs' in kernel.meta:
+        h.update(json.dumps(kernel.meta['constant_layout_proofs'],sort_keys=True).encode())
     if 'identical_qparam_proof' in kernel.meta:
         h.update(json.dumps(kernel.meta['identical_qparam_proof'], sort_keys=True).encode())
     h.update(json.dumps([(a.name, a.dtype, list(a.shape), a.role) for a in kernel.stream.args]).encode())
@@ -79,20 +84,27 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
     ordinals = {op: i for i, op in enumerate(module.walk())}
     funcs = [op for op in module.walk() if op.name == "func.func"]
     func_args = list(funcs[0].body.blocks[0].args) if funcs else []
-    matches, declines = match_all(module)
+    folds = []
+    matches, declines = match_all(module, constant_folds=folds)
+    for _, original, replacement in folds:
+        ordinals[replacement] = ordinals[original]
     kernels: dict[str, dict] = {}
     device = ModuleOp([])
     bindings = []
     accepted = []
+    audits = {}
     for m in matches:
+        digest = _stream_digest(m.kernel)
         try:
-            report = lint(m.kernel.stream)
+            report = audits.get(digest)
+            if report is None:
+                report = lint(m.kernel.stream)
+                audits[digest] = report
         except HazardError as exc:
             declines.append(dict(ordinal=ordinals[m.root], op=m.root.name,
                                  reason='unsafe device schedule: ' + str(exc), aten=m.op))
             continue
         accepted.append(m)
-        digest = _stream_digest(m.kernel)
         symbol = "gemmini_ca_" + digest[:16]
         if symbol not in kernels:
             km, tree = build_module(m.kernel.stream, symbol)
@@ -114,6 +126,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
             op=m.op, aten=provs[0] if provs else "", symbol=symbol, root_ordinal=ordinals[m.root],
             source_operation_ordinal=ordinals[m.root] if 'limb_plan' in m.numeric else ordinals[m.consumed[0]],
             replaced_ordinals=sorted({ordinals[o] for o in m.consumed if o is not None}),
+            **(dict(constant_operands={name:_source(value,ordinals,func_args) for name,value in m.constant_operands}) if m.constant_operands else {}),
             operands=argmap, result={out_name: _source(out_val, ordinals, func_args)},
             result_type=str(out_val.type), operand_types={n: str(v.type) for n, v in m.operands},
             region=getattr(m.root.attributes.get("prov.region_id"), "data", ""),
@@ -125,6 +138,7 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                              aliasing="none", completion="kernel fences before returning",
                              quantization="per-binding numeric contract: F1 opaque bytes without quantization; F2/F4 full-i32 components and retained exact host recombination; F3 identical-qparam movement storage codes or exact rational host RNE, zero point and declared clamp"),
                     kernels=list(kernels.values()), bindings=bindings, declines=declines,
+                    constant_folds=[proof for proof, _, _ in folds],
                     matched=len(bindings), unique_kernels=len(kernels))
     return device, manifest, accepted
 
@@ -157,7 +171,7 @@ def compile_catalog(source_path: Path, workdir: Path, *, llvm_bin: Path | None =
     source = Path(source_path).read_text()
     device, manifest, _ = build(source)
     workdir.mkdir(parents=True, exist_ok=True)
-    if manifest["kernels"]:
+    if manifest["kernels"] or manifest["constant_folds"]:
         receipt = compile_to_object(device, workdir, llvm_bin=llvm_bin, stem="core_aten")
         manifest["compilation"] = receipt
         manifest['status'] = 'compiled'
@@ -172,7 +186,7 @@ def merlin_builder(llvm_bin: Path):
 
     def build_fn(prepared: Path, workdir: Path):
         manifest = compile_catalog(Path(prepared), Path(workdir), llvm_bin=Path(llvm_bin))
-        return Path(workdir) / "core_aten_catalog.json", (Path(workdir) / "core_aten.o" if manifest['kernels'] else None)
+        return Path(workdir) / "core_aten_catalog.json", (Path(workdir) / "core_aten.o" if manifest['kernels'] or manifest['constant_folds'] else None)
 
     return build_fn
 

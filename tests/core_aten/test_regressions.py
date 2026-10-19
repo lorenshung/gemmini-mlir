@@ -18,7 +18,7 @@ def test_catalog_declines_a_hazardous_candidate_without_publishing_a_binding(mon
     from mlir_oot.core_aten.stream import SP
     from fixture_source import read
     original = catalog.match_all
-    def hazardous_candidate(module):
+    def hazardous_candidate(module, **kwargs):
         matches, declines = original(module)
         stream = matches[0].kernel.stream
         stream.config_ld(0, 1)

@@ -171,6 +171,7 @@ class Stream:
     readouts: list = field(default_factory=list)
     packs: list = field(default_factory=list)
     bitwise: bool = False
+    constant_layouts: list = field(default_factory=list)
 
     def __post_init__(self):
         self._index = {a.name: i for i, a in enumerate(self.args)}
@@ -196,6 +197,18 @@ class Stream:
             raise ValueError(f"constant {name} redefined")
         self.args.append(Arg(name, dtype, tuple(data.shape), "const"))
         self._index[name] = len(self.args) - 1
+        self.consts[name] = data
+
+    def bind_constant(self, name: str, data: np.ndarray):
+        """Specialize a declared target operand to immutable literal bytes."""
+        from dataclasses import replace
+        arg = self.args[self._index[name]]
+        from .storage import numpy_storage
+        data = np.array(data,copy=True,order='C')
+        data.flags.writeable = False
+        if data.dtype != numpy_storage(arg.dtype) or tuple(data.shape) != arg.shape:
+            raise ValueError('constant storage differs from declared target operand')
+        self.args[self._index[name]] = replace(arg, role='const')
         self.consts[name] = data
 
     def _emit(self, kind, dram=None, **attrs):
