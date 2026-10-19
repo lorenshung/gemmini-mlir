@@ -165,3 +165,45 @@ The separate [selected timing-resource adapter](selected_timing_resources.md)
 derives limited CPU issue/execution structure and audits accelerator queue and
 configuration ownership. Its model augmentation preserves unknown prices and
 does not qualify target latency or enable the unavailable shared families.
+
+## Explicit functional owner admission
+
+The copied-emitter hook now requires an adjacent exact
+`shared-library-sources.json`. Both copied arms receive that same manifest,
+and its bytes participate in the copied package digest. A changed ambient
+library refuses before rewriting. This also prevents the exploratory builder's
+package cache from silently reusing results across a library selection change.
+Historical copied packages and receipts retain their original interpretation.
+
+The operator can recheck a new v2 paired diagnostic with
+`experiments/shared_load_configuration/admit.py`. Supply the exact facts,
+observed contract, effect contract, staged completion sidecar, symbol inspector,
+one or more paired `--report` files and a fresh `--output` receipt. The checker
+reopens ELFs, inputs, traces, counter audits and runtime/library identities. It
+recomputes all independent outputs, reconstructs actual linked issue operands,
+checks logical DMA windows and permits only redundant fenced setter omissions.
+At least three independent public sources and two actual applications are
+required. Original v1 diagnostics cannot silently acquire this admission.
+
+`gemmini_load_cleanup_capability.LoadCleanupOwner.read(receipt)` exposes the
+explicit host-selected owner for the generic reviewed-capability registry:
+`identity`, `revalidate()`, `record()` and `selected_binding()`. The registry
+transports an original operator selection; it does not issue qualification.
+The receipt, checker and all original evidence must remain outside candidate
+writes. Missing or changed source, helper, runtime, library or evidence refuses
+selection. No target-name discovery or installed-library inference occurs.
+
+The owner's `rewrite(..., execution_domain="functional_spike")` consumes the
+same shared configuration pass. Each new realized compiler pair must still
+pass `check_actual_pair(...)` on its actual issue-register observations, along
+with fresh independent complete-output and memory checks owned by execution.
+Other execution domains refuse. The owner qualifies only bounded functional
+source effects under the original state-zero, identity-scale, straight-line,
+single-hart ownership conditions; unknown commands remain barriers. Its
+completion premise concerns loads. A solitary PRELOAD may survive a fence.
+
+This selection supplies no dense adapter, fresh-result model ABI, physical
+beat/guard qualification, hardware completion qualification or latency claim.
+Its record retains those limits and requires final pair checking. The original
+Phase 1 compiler, numerical contracts and broad unavailable mechanisms remain
+unchanged.

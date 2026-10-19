@@ -378,6 +378,13 @@ def optimize_statements(statements, contract, *, enabled=True):
 
 def rewrite_copied_compiler_statements(statements, *, enabled=True):
     """Explicit copied-package hook; no ambient curated backend or target lookup."""
+    from merlin.compile.scheduling.library_sources import shared_library_sources
+
+    library_path = Path(__file__).with_name("shared-library-sources.json")
+    if json.loads(library_path.read_bytes()) != shared_library_sources():
+        raise ValueError(
+            "copied compiler shared library changed; requalify the selection"
+        )
     contract = LoadConfigurationContract.read(
         Path(__file__).with_name("load-config-contract.json")
     )
