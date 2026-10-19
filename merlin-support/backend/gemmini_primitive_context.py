@@ -100,6 +100,7 @@ class PrimitiveCompilerContext:
             _original_methods(qualification, owner_type),
             _original_methods(binding_owner, self._binding_type),
         )
+        self._seed_callbacks = _original_methods(seed, ZeroInitializerCompilerPrototype)
         qualification.revalidate()
         self._origin = qualification.identity
         self._seed = seed.identity
@@ -132,6 +133,11 @@ class PrimitiveCompilerContext:
         return "gemmini.primitive_compiler_context.v1:" + self._identity
 
     def revalidate(self):
+        self._check_current_structure()
+        self.qualification.revalidate()
+        self._check_current_structure()
+
+    def _check_current_structure(self):
         seed, owner_type, binding, _modules = _selection(self.qualification, self.mode)
         if (
             seed is not self.seed
@@ -142,11 +148,12 @@ class PrimitiveCompilerContext:
                 _original_methods(binding, self._binding_type),
             )
             != self._callbacks
+            or _original_methods(seed, ZeroInitializerCompilerPrototype)
+            != self._seed_callbacks
         ):
             raise ValueError(
                 "primitive original compiler context or bound callbacks changed"
             )
-        self.qualification.revalidate()
         _revalidate_sources(self._sources)
         if (
             self.qualification.identity != self._origin
@@ -157,6 +164,39 @@ class PrimitiveCompilerContext:
             raise ValueError(
                 "primitive original compiler qualification/seed/source binding changed"
             )
+
+    def revalidate_current_seed(self):
+        """Fresh base-release/source selection, without historical pair ancestry.
+
+        Only the separately selected current-proof view uses this method. Its
+        original live historical owner still receives full checks immediately
+        before and after the complete current proof, including on failure.
+        """
+        self._check_current_structure()
+        self.seed.revalidate()
+        self._check_current_structure()
+
+    def check_current_binding(self, package):
+        self.revalidate_current_seed()
+        if (package / "staged-rhs-window-public.json").exists():
+            raise ValueError(
+                "primitive seed-only diagnostic does not admit an RHS compiler/ledger"
+            )
+        result = self.seed.check_compiler_binding(package)
+        self.revalidate_current_seed()
+        return result
+
+    def current_seed_record(self):
+        self.revalidate_current_seed()
+        return {
+            "identity": self.identity,
+            "selection": self.mode,
+            "original_qualification": self._origin,
+            "original_seed": self._seed,
+            "scope": "fresh current base-release binding; historical ancestry checked outside complete proof",
+            "transformation_support_issued": False,
+            "timing_authority": "NONE",
+        }
 
     def check_binding(self, package):
         self.revalidate()
