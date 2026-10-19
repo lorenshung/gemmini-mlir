@@ -14,7 +14,7 @@ from pathlib import Path
 from gemmini_arithmetic_scope import IntegerArithmeticOwner
 from gemmini_selected_scheduling import SelectedSchedulingTarget
 from gemmini_staged_dense_capability import _digest, _leaf
-from gemmini_staged_source_pair import _same_source, check_source_arms
+from gemmini_staged_source_pair import _arm, check_source_arms
 from gemmini_timing_resources import _pin, _revalidate_sources
 
 from merlin.common.paths import module_source_path
@@ -100,7 +100,7 @@ class ZeroInitializerRealizationChecker:
 
     @property
     def identity(self):
-        return "gemmini.zero_initializer_realization.v1:" + self._identity
+        return "gemmini.zero_initializer_realization.v2:" + self._identity
 
     def revalidate(self):
         self.selected.revalidate()
@@ -126,11 +126,32 @@ class ZeroInitializerRealizationChecker:
             "timing_authority": "NONE",
         }
 
+    def _source_arm(self, arm):
+        import yaml
+        from merlin_experiments.phase0.connected_integer_qualification import source_proof
+
+        from merlin.targetgen.native_model_execution import _pinned_native_file
+
+        native = json.loads(_leaf(arm, "native_result").read_bytes())
+        cap = _pinned_native_file(native["source"], "capsule_declaration").parent
+        proof = source_proof(yaml.safe_load((cap / "capsule.yaml").read_bytes()), cap)
+        return _arm(self, arm, proof, cap)
+
     def check_pair_artifacts(self, before, after, *, execution_domain):
         self.revalidate()
-        if execution_domain != "functional_spike" or _same_source(before, after) is None:
+        if execution_domain != "functional_spike":
+            raise ValueError("initializer comparison has no qualified target timing domain")
+        from merlin.targetgen.native_model_execution import _pinned_native_file
+
+        source_identities = []
+        for arm in (before, after):
+            sources = json.loads(_leaf(arm, "native_result").read_bytes())["source"]
+            for role in sources:
+                _pinned_native_file(sources, role)
+            source_identities.append({role: (pin["sha256"], pin.get("size_bytes")) for role, pin in sources.items()})
+        if source_identities[0] != source_identities[1]:
             raise ValueError(
-                "initializer comparison needs the same original source/input/reference leaves and functional runtime"
+                "initializer comparison changed original source, inputs, weights, policies or complete references"
             )
         base, candidate, proof_scope = check_source_arms(self, before, after)
         original, original_rhs, base_check, old_cb = base
