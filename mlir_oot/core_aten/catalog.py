@@ -56,9 +56,13 @@ def _stream_digest(kernel) -> str:
     from dataclasses import asdict
     h.update(json.dumps(_jsonable([asdict(r) for r in kernel.stream.readouts]),sort_keys=True).encode())
     h.update(repr(kernel.stream.packs).encode())
-    for ins in kernel.stream.ins:
-        r = encode(ins)
-        h.update(repr((r.key, r.values)).encode())
+    from .stream import CompactInstructions
+    if isinstance(kernel.stream.ins, CompactInstructions):
+        h.update(repr(kernel.stream.ins.nodes).encode())
+    else:
+        for ins in kernel.stream.ins:
+            r = encode(ins)
+            h.update(repr((r.key, r.values)).encode())
     return h.hexdigest()
 
 

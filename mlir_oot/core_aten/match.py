@@ -1393,6 +1393,8 @@ def match_linear(op: Operation) -> Match | None:
             return None  # A refused explicit component contract has no fallback.
     else:
         return None
+    if math.prod(shape(root)) > 1 << 16:
+        raise Decline('interpreted linear region exceeds bounded compiler capacity; use a structural schedule')
     srcs: dict[int, linmatch.Src] = {}
     by_value: dict = {}
 
@@ -1479,6 +1481,7 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
     from .limbs import match as match_limb
     from .liveness import live_source_ops, live_bindings
     from .quantized_movement import match as match_quantized_movement
+    from .layout_match import native as match_native_layout
     live = live_source_ops(module)
     matches, declines = [], []
     quantized_module = any(name_of(o).startswith('quant_ext.') for o in module.walk())
@@ -1496,6 +1499,7 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
             m = match_quantized_movement(op, ordinals)
             if m is not None and not any(id(o) in taken for o in m.consumed
                                         if name_of(o) != 'quant_ext.dequantize_per_tensor'):
+                _configure_quant(m)
                 _bind_dense_layouts(m)
                 matches.append(m)
                 taken.update(id(o) for o in m.consumed)
@@ -1516,9 +1520,17 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
         selected_matchers = (match_integer_region,match_convolution,match_convolution_rows,match_conv_wgrad,match_conv_input,match_contraction,match_elementwise,match_linear) if generalized_quant else (match_integer_region,*MATCHERS)
         if not quantized_module:
             selected_matchers = (match_bitwise, *selected_matchers)
+        elif (len(op.results)==1 and etype(op.results[0])=='i8'
+              and not any(k.startswith('prov.quant.') for k in op.attributes)):
+            selected_matchers = (match_native_layout, *selected_matchers)
         if 'gemmini.limb' in op.attributes:
             selected_matchers = (match_limb,)
         for fn in selected_matchers:
+            # A return is a matching anchor, not a producer. Do not rebuild an
+            # already bound byte-layout producer merely to discard it below.
+            if fn is match_linear and op.name == 'func.return' and any(
+                    etype(v) == 'i8' and id(producer(v)) in taken for v in op.operands):
+                continue
             try:
                 m = fn(op)
                 if m is not None:

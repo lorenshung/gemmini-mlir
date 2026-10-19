@@ -67,10 +67,14 @@ def match(op):
         return None
     if op.name not in CARRIERS or len(op.results) != 1 or not isinstance(op.results[0].type, TensorType):
         return None
+    from .layout_match import native
+    structural = native(op)
+    if structural is not None:
+        return structural
     root = op.results[0]
     width = itemsize(etype(root))
     n = int(np.prod(shape(root))) if shape(root) else 1
-    require(n * width <= 1 << 24, 'bitwise selector exceeds static byte-map capacity')
+    require(n <= 1 << 16 and n * width <= 1 << 24, 'interpreted selector exceeds bounded byte-map capacity; use a structural layout')
     sources, ids = [], {}
 
     def leaf(value):

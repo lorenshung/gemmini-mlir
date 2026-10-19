@@ -5,7 +5,7 @@ These are the ``_lib_movement.py`` recipes (``mv_copy2d[_multi]``, ``mv_vec``, `
 
 * a copy job moves an int8 [rows x cols] block, source row stride ``sld`` bytes, to one or
   more destinations with row stride ``dld``; every <=16x16 tile is one MVIN and one MVOUT
-  per destination, through four rotating scratchpad tiles (rows < 1024 so Spike can store
+  per destination, through a reused scratchpad tile (rows < 1024 so Spike can store
   them). Production copies retain integer codes; requantization uses the exact host boundary.
 * a fill job stores a 16x16 constant tile: the zero-fill primitive for code 0, otherwise a
   stride-0 MVIN of literal integer codes with unit scale.
@@ -79,14 +79,21 @@ def normalize(job: Copy) -> list[Copy]:
 
 
 def emit_plan(s: Stream, plan: Plan) -> None:
+    from .. import layout
     ld = st = None
     fill_code = None
-    t = 0
     for si, stage in enumerate(plan.stages):
         if si and stage:
             s.fence()
             fill_code = None
         for job in [x for j in stage for x in normalize(j)]:
+            if job.src is not None:
+                from ..exactness import require
+                require(job.scale==1,'movement DMA requires unit scale; retain exact host requantization')
+                for dst in job.dsts:
+                    layout.rectangle(s,job.src,dst,job.rows,job.cols,job.sld,job.dld)
+                ld=st=None
+                continue
             if job.src is None:
                 if fill_code != job.code:
                     if job.code == 0:
@@ -105,26 +112,20 @@ def emit_plan(s: Stream, plan: Plan) -> None:
                             ld = cfg
                         s.mvin(s.at(name), SP(FILL_SLOT), DIM, DIM, 0)
                     fill_code = job.code
-            else:
-                cfg = (job.sld, job.scale)
-                if ld != cfg:
-                    s.config_ld(0, job.sld, job.scale)
-                    ld = cfg
             if st != job.dld:
                 s.config_st(job.dld)
                 st = job.dld
-            for r0 in range(0, job.rows, DIM):
-                rh = min(DIM, job.rows - r0)
-                for c0 in range(0, job.cols, DIM):
-                    cw = min(DIM, job.cols - c0)
-                    if job.src is None:
-                        slot = FILL_SLOT
-                    else:
-                        slot = SLOTS[t & 3]
-                        t += 1
-                        s.mvin(s.at(job.src[0], job.src[1] + r0 * job.sld + c0), SP(slot), cw, rh, 0)
-                    for arg, off in job.dsts:
-                        s.mvout(s.at(arg, off + r0 * job.dld + c0), SP(slot), cw, rh)
+            def tile(r,c,rh,cw):
+                for arg,off in job.dsts:
+                    s.mvout(s.at(arg,off+r*job.dld+c),SP(FILL_SLOT),cw,rh)
+            for count,r,rh in ((job.rows//DIM,0,DIM),(bool(job.rows%DIM),job.rows//DIM*DIM,job.rows%DIM)):
+                if not count:
+                    continue
+                def row(r=r,rh=rh):
+                    layout.repeat(s,job.cols//DIM,{arg:DIM for arg,_ in job.dsts},lambda:tile(r,0,rh,DIM))
+                    if job.cols%DIM:
+                        tile(r,job.cols//DIM*DIM,rh,job.cols%DIM)
+                layout.repeat(s,count,{arg:DIM*job.dld for arg,_ in job.dsts},row)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -301,23 +302,10 @@ def emit_transpose(s: Stream, x: str, shape, out: str, perm, scale=1.0):
     """
     from ..exactness import require
     require(scale == 1, "permutation scaling requires exact host requantization")
-    r = len(shape)
-    oshape = [shape[q] for q in perm]
-    ist, ost = strides(shape), strides(oshape)
-    p = perm[-1]
-    others = [d for d in range(r) if d != p]
-    s.config_ld(0, ist[p], 1.0)
-    s.config_st(1)
-    t = 0
-    for idx in _iter([(0, shape[d]) for d in others]):
-        so = sum(i * ist[d] for d, i in zip(others, idx))
-        do = sum(i * ost[perm.index(d)] for d, i in zip(others, idx))
-        for start in range(0, shape[p], DIM):
-            rows = min(DIM, shape[p] - start)
-            slot = SLOTS[t & 3]
-            t += 1
-            s.mvin(s.at(x, so + start * ist[p]), SP(slot), 1, rows, 0)
-            s.mvout(s.at(out, do + start), SP(slot), 1, rows)
+    from .. import layout
+    ss=layout.dense_strides(shape)
+    oshape=[shape[q] for q in perm]
+    layout.move(s,(x,0),(out,0),oshape,tuple(ss[q] for q in perm))
     return oshape
 
 

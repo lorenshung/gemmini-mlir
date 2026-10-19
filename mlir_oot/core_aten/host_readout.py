@@ -29,8 +29,10 @@ def emit(emitter, readouts=None):
     }
     for readout in s.readouts if readouts is None else readouts:
         outarg = next(a for a in s.args if a.name == readout.out)
-        size = int(np.prod(outarg.shape))
-        factors = [
+        size = (int(np.prod(readout.placement['shape'])) if isinstance(readout.placement,dict) else
+                readout.placement[0] if readout.placement else int(np.prod(outarg.shape)))
+        uniform = all(np.ndim(f) == 0 for _,f in readout.terms) and np.ndim(readout.constant) == 0
+        factors = [] if uniform else [
             (
                 np.asarray(f, dtype=object).reshape(-1)
                 if np.size(f) == size
@@ -40,7 +42,7 @@ def emit(emitter, readouts=None):
             )
             for _, f in readout.terms
         ]
-        constants = (
+        constants = None if uniform else (
             np.asarray(readout.constant, dtype=object).reshape(-1)
             if np.size(readout.constant) == size
             else np.broadcast_to(
@@ -50,9 +52,9 @@ def emit(emitter, readouts=None):
         # Tensor outputs are private and cannot alias readout inputs. Share
         # one exact body for repeated parameter classes, including spatial
         # borders, instead of unrolling a body for every short run.
-        runs = []
+        runs = [(tuple(Fraction(f) for _,f in readout.terms)+(Fraction(readout.constant),),0,size)] if uniform else []
         start = 0
-        while start < size:
+        while not uniform and start < size:
             signature = tuple(Fraction(f[start]) for f in factors) + (
                 Fraction(constants[start]),
             )
@@ -92,9 +94,20 @@ def emit(emitter, readouts=None):
                 return fb.add(llvm.SelectOp(cond, a, b)).results[0]
 
             def body(iv):
+                target = iv
+                if isinstance(readout.placement,dict):
+                    p = readout.placement
+                    target = fb.const(p['offset'])
+                    for axis,(extent,stride) in enumerate(zip(p['shape'],p['strides'])):
+                        coord = fb.urem_i(fb.udiv_i(iv,fb.const(int(np.prod(p['shape'][axis+1:])))),fb.const(extent))
+                        target = fb.add_i(target,fb.mul_i(coord,fb.const(stride)))
+                elif readout.placement:
+                    _, block, offset, stride = readout.placement
+                    target = fb.add_i(fb.add_i(fb.mul_i(fb.udiv_i(iv,fb.const(block)),fb.const(stride)),
+                                               fb.urem_i(iv,fb.const(block))),fb.const(offset))
                 value = c(coeffs[-1])
                 for (name, _), weight in zip(readout.terms, coeffs):
-                    index = iv
+                    index = target
                     if readout.permutations and name in readout.permutations:
                         shp, perm = readout.permutations[name]
                         output_shape = outarg.shape
@@ -167,7 +180,7 @@ def emit(emitter, readouts=None):
                     )
                 code = binary(llvm.AddOp, lo, c(readout.zero_point))
                 byte = fb.add(llvm.TruncOp(code, i8)).results[0]
-                fb.add(llvm.StoreOp(byte, fb.gep(bases[readout.out], iv, i8)))
+                fb.add(llvm.StoreOp(byte, fb.gep(bases[readout.out], target, i8)))
 
             if len(pieces) == 1:
                 start, end = pieces[0]

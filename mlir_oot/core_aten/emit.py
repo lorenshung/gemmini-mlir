@@ -28,7 +28,7 @@ from xdsl.dialects.builtin import (DenseIntOrFPElementsAttr, Float32Type, FloatA
 from ..codegen.builder import PTR, FnBuilder
 from ..ir import gemmini_dialect as G
 from ..tables import isa
-from .reroll import Loop, Rec, expand, reroll
+from .reroll import Loop, Rec, reroll
 from .stream import Ins, Stream
 
 _OPS = {
@@ -95,7 +95,8 @@ def verify_forms(stream: Stream) -> int:
     """Verify one Gemmini-dialect op per distinct static command form against the RTL limits."""
     seen, ops = set(), []
     fb = FnBuilder([PTR])
-    for ins in stream.ins:
+    from .stream import CompactInstructions
+    for ins in (stream.ins.templates() if isinstance(stream.ins, CompactInstructions) else stream.ins):
         form = (ins.kind, tuple((k, v) for k, v in ins.attrs if k not in _DROP))
         if form in seen:
             continue
@@ -182,10 +183,10 @@ class _Emitter:
                 groups.setdefault(len(self.stream.ins) if r.after is None else r.after,[]).append(r)
             start=0
             for boundary,readouts in sorted(groups.items()):
-                self.nodes(reroll([encode(i) for i in self.stream.ins[start:boundary]]),[])
+                self.nodes(instruction_tree(self.stream.ins[start:boundary]),[])
                 emit(self,readouts)
                 start=boundary
-            self.nodes(reroll([encode(i) for i in self.stream.ins[start:]]),[])
+            self.nodes(instruction_tree(self.stream.ins[start:]),[])
         else:
             self.nodes(tree,[])
         fn = llvm.FuncOp(self.symbol, llvm.LLVMFunctionType([PTR] * len(self.fb.entry.args)),
@@ -200,11 +201,32 @@ def flat_values_of(node):
     return flat_values(node)
 
 
+def instruction_tree(instructions):
+    from .stream import CompactInstructions, InstructionLoop
+    from .reroll import Loop
+    if not isinstance(instructions, CompactInstructions):
+        return reroll([encode(i) for i in instructions])
+    def nodes(items):
+        result = []
+        for item in items:
+            if isinstance(item, InstructionLoop):
+                body = nodes(item.body)
+                strides = dict(item.strides)
+                templates = CompactInstructions(item.body).templates()
+                step = tuple(v for ins in templates for v in (strides.get(ins.arg, 0), 0))
+                result.append(Loop(item.count, tuple(body), step))
+            else:
+                result.append(encode(item))
+        return result
+    return nodes(instructions.nodes)
+
+
 def build_module(stream: Stream, symbol: str, *, check_expand: bool = True) -> tuple[ModuleOp, list]:
-    records = [encode(i) for i in stream.ins]
-    tree = reroll(records)
-    if check_expand and expand(tree) != records:
-        raise AssertionError("rerolled loop tree does not reproduce the recipe stream")
+    from .reroll import iter_expand
+    from itertools import zip_longest
+    tree = instruction_tree(stream.ins)
+    if check_expand and any(a != b for a, b in zip_longest(iter_expand(tree), (encode(i) for i in stream.ins))):
+        raise AssertionError("loop tree does not reproduce the recipe stream")
     verify_forms(stream)
     module = _Emitter(stream, symbol).module(tree)
     module.attributes["gemmini.core_aten_kernel"] = StringAttr(symbol)

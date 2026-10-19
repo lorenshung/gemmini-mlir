@@ -143,5 +143,16 @@ def expand(nodes) -> list[Rec]:
     return out
 
 
+def iter_expand(nodes):
+    """Streaming expansion used to check explicitly constructed affine loops."""
+    for node in nodes:
+        if isinstance(node, Rec):
+            yield node
+        else:
+            for it in range(node.count):
+                body, _ = _shift(node.body, [it * d for d in node.step])
+                yield from iter_expand(body)
+
+
 def node_count(nodes) -> int:
     return sum(1 if isinstance(n, Rec) else 1 + node_count(n.body) for n in nodes)

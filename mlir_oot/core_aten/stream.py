@@ -16,6 +16,8 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 from typing import NamedTuple
+from collections.abc import Sequence
+from itertools import islice
 
 import numpy as np
 
@@ -60,6 +62,90 @@ class Ins(NamedTuple):
 
 
 @dataclass(frozen=True)
+class InstructionLoop:
+    count: int
+    body: tuple
+    strides: tuple  # (argument index, byte increment) for each CPU loop iteration
+
+
+class CompactInstructions(Sequence):
+    """Affine CPU loop tree; expansion is streaming for simulation and hazard lint.
+
+    Only DRAM offsets vary. Local addresses and command fields are invariant,
+    so a completed MVOUT separates successive overwrites of the same tile.
+    """
+    def __init__(self, nodes=()):
+        self.nodes = list(nodes)
+
+    def append(self, instruction):
+        self.nodes.append(instruction)
+
+    def __repr__(self):
+        return f'CompactInstructions({self.nodes!r})'
+
+    def counts(self):
+        result = {}
+        def walk(nodes, weight):
+            for node in nodes:
+                if isinstance(node,InstructionLoop):
+                    walk(node.body,weight*node.count)
+                else:
+                    result[node.kind]=result.get(node.kind,0)+weight
+        walk(self.nodes,1)
+        return result
+
+    def __len__(self):
+        def size(nodes):
+            return sum(n.count * size(n.body) if isinstance(n, InstructionLoop) else 1 for n in nodes)
+        return size(self.nodes)
+
+    def __iter__(self):
+        def walk(nodes, offsets):
+            for node in nodes:
+                if isinstance(node, InstructionLoop):
+                    for i in range(node.count):
+                        shifted = dict(offsets)
+                        for arg, stride in node.strides:
+                            shifted[arg] = shifted.get(arg, 0) + i * stride
+                        yield from walk(node.body, shifted)
+                else:
+                    yield node._replace(off=node.off + offsets.get(node.arg, 0)) if node.arg is not None else node
+        return walk(self.nodes, {})
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            start, stop, step = key.indices(len(self))
+            if start == 0 and stop == len(self) and step == 1:
+                return self
+            if start == stop:
+                return []
+            if step == 1:
+                pos, selected = 0, []
+                for node in self.nodes:
+                    end = pos + len(CompactInstructions([node]))
+                    if pos >= start and end <= stop:
+                        selected.append(node)
+                    elif pos < stop and end > start:
+                        break
+                    pos = end
+                else:
+                    return CompactInstructions(selected)
+            return list(islice(self, start, stop, step))
+        if key < 0:
+            key += len(self)
+        return next(islice(self, key, key + 1))
+
+    def templates(self):
+        def walk(nodes):
+            for node in nodes:
+                if isinstance(node, InstructionLoop):
+                    yield from walk(node.body)
+                else:
+                    yield node
+        return walk(self.nodes)
+
+
+@dataclass(frozen=True)
 class Arg:
     name: str
     dtype: str            # MLIR element type; raw movement keeps the logical type
@@ -80,7 +166,7 @@ class Stream:
     """Recorder for one kernel's primitive command stream."""
 
     args: list[Arg]
-    ins: list[Ins] = field(default_factory=list)
+    ins: list[Ins] | CompactInstructions = field(default_factory=list)
     consts: dict[str, np.ndarray] = field(default_factory=dict)
     readouts: list = field(default_factory=list)
     packs: list = field(default_factory=list)
@@ -166,6 +252,8 @@ class Stream:
         self.compute(a, k, rows, accumulate=reuse)
 
     def counts(self) -> dict[str, int]:
+        if isinstance(self.ins,CompactInstructions):
+            return self.ins.counts()
         out: dict[str, int] = {}
         for i in self.ins:
             out[i.kind] = out.get(i.kind, 0) + 1

@@ -303,7 +303,7 @@ def _admit_quantized_linear_regions(source, *, package, numeric_policy):
     from merlin.targetgen.operation_numerics import integer_split_k_limit
     catalog_module = _core_aten_module(package, 'catalog')
     _, catalog, matches = catalog_module.build(source)
-    if not any(m.kernel.meta.get('form') == 'exact_linear_i32' or 'reduced' in m.kernel.meta
+    if not any(m.kernel.meta.get('form') in ('exact_linear_i32','exact_movement_dma') or 'reduced' in m.kernel.meta
                or m.numeric.get('readout') == 'storage_codes' for m in matches):
         return None
     parsed = catalog_module.parse_module(source)
@@ -321,18 +321,30 @@ def _admit_quantized_linear_regions(source, *, package, numeric_policy):
     kernels = {k['symbol']: k for k in catalog['kernels']}
     for binding, match in zip(catalog['bindings'], matches):
         meta, stream = match.kernel.meta, match.kernel.stream
+        instructions = list(stream.ins.templates()) if hasattr(stream.ins,'templates') else stream.ins
         if meta.get('readout') == 'storage_codes':
-            transfers = [i for i in stream.ins if i.kind in ('mvin', 'mvout')]
+            transfers = [i for i in instructions if i.kind in ('mvin', 'mvout')]
             if (stream.readouts or stream.packs or not transfers
                     or any(i.a('local') & (1 << 31) for i in transfers)
                     or any(i.kind not in ('fence', 'flush', 'config_ld', 'config_st', 'mvin', 'mvout')
-                           for i in stream.ins)
-                    or any(i.a('scale') != 1 for i in stream.ins if i.kind == 'config_ld')
-                    or any(i.a('acc_scale') != 1 for i in stream.ins if i.kind == 'config_st')
+                           for i in instructions)
+                    or any(i.a('scale') != 1 for i in instructions if i.kind == 'config_ld')
+                    or any(i.a('acc_scale') != 1 for i in instructions if i.kind == 'config_st')
                     or meta.get('identical_qparam_proof') != binding['numeric'].get('identical_qparam_proof')):
                 return decline('storage-code movement is not a proved scratchpad byte stream')
             proofs[binding['symbol']] = dict(symbol=binding['symbol'], status='proven', exact_arithmetic=True,
                 device_readout='storage_codes', schedule=meta, requantization=[],
+                emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest())
+            continue
+        if meta.get('form')=='exact_movement_dma':
+            if (not stream.readouts
+                    or any(i.kind not in ('fence','flush','config_ld','config_st','mvin','mvout') for i in instructions)
+                    or any(i.kind=='mvout' and i.a('local') & (1<<31) and not i.a('local') & (1<<29) for i in instructions)
+                    or any(i.a('scale')!=1 for i in instructions if i.kind=='config_ld')
+                    or any(i.a('acc_scale')!=1 for i in instructions if i.kind=='config_st')):
+                return decline('exact movement must use unit DMA and full-width widening before host requantization')
+            proofs[binding['symbol']]=dict(symbol=binding['symbol'],status='proven',exact_arithmetic=True,
+                device_readout='full_i32',schedule=meta,requantization=kernels[binding['symbol']]['requantization'],
                 emitted_schedule_sha256=hashlib.sha256(repr(stream.ins).encode()).hexdigest())
             continue
         if not (meta.get('form') == 'exact_linear_i32' or 'reduced' in meta):

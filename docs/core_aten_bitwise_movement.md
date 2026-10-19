@@ -23,7 +23,7 @@ accumulator access, signed/unsigned repacking, i32 scratch/readout or runtime
 requantization. Unsigned byte storage retains its original bits. Literal
 elements (pads and constant-only fills) are quantized once during compilation,
 using exact rational RNE, zero point and clamp, then loaded as literal bytes.
-Constant-only selectors have an empty input proof. Different qparams retain
+Constant-only selectors may have an empty input proof. Different qparams retain
 the existing full-i32 device schedule and exact rational host requantization.
 The original input quantization and final dequantization remain source host work.
 
@@ -71,6 +71,53 @@ that check for arithmetic. If this checker is extended to movement islands,
 accept `schedule.readout="storage_codes"` only with the identity proof above;
 do not treat a byte result type or an `exact_arithmetic` flag as sufficient.
 This change does not authorize arithmetic narrowing or floating readout scales.
+
+### Bounded layout schedules
+
+Structural copies, affine permutation/projection generics, transpose, concat,
+broadcast, static slice/insert, literal fills and dense shape changes use
+`selector_representation="shape_stride_map"`. Quantized matching walks a closed
+graph of these primitives to its DQ leaves, including composed pad/repeat forms.
+Native movement keeps ordered element-width byte groups. No tensor-sized
+coefficient/index arrays or per-element Python objects are constructed on this
+path. Provenance names do not affect recognition or scheduling.
+
+`CompactInstructions` retains explicit affine CPU loops before encoding, with
+fixed command fields/local addresses and affine DRAM byte offsets. Full tiles
+and tails have separate constant forms. LLVM emission consumes that loop tree
+directly; it does not first expand a stream and then discover loops. Command
+counts still describe dynamic primitive instructions. Hazard lint and the
+encoding round-trip check stream the expansion in O(tiles) time without storing
+it. Kernel digests authenticate the canonical loop descriptors. Form verification
+checks each template because only pointer offsets vary in these loops.
+
+Different qparams use full-i32 widening and the existing exact integer host
+readout. For a closed selector graph, pointwise requantization commutes with
+selection: each distinct input may be widened and exactly quantized into private
+destination-code storage before the DMA graph. It undergoes exactly one RNE and
+clamp; repeated selections copy that code. Literals receive their one output
+quantization at compilation. `Readout.after` records the primitive-stream
+boundary before subsequent DMA reads its converted storage. This changes no
+native-dtype arithmetic or numeric policy. Direct movement helpers may also
+use scalar readouts on disjoint destination regions; optional `placement`
+describes `(count, block, offset, stride)` or a static shape/stride/offset map.
+Uniform readout parameters emit one CPU loop without tensor-sized parameter
+arrays. These remain target ABI glue around the existing exact readout contract.
+
+Compiler resource limits are explicit: compact DMA kernels admit at most
+1,048,576 dynamic primitives and 64 MiB of total declared argument storage.
+General interpreted selector/linear fallback maps admit at most 65,536 points;
+larger unrecognized forms decline before materialization. These are compiler
+budgets, not claims about RTL capacity. Structural model-size layouts bypass
+the interpreted-map limit. Pure movement builders never delegate to dense
+linear arithmetic; already bound return producers are not rebuilt there.
+
+Merlin region admission must authenticate `full_i32` movement readouts and their
+`after` boundaries when checking a composed layout schedule, as well as the
+`storage_codes` identity proof above. It must not require every MVOUT to target
+the accumulator: scratchpad DMA after exact host conversion is byte movement.
+Accumulator MVOUTs still require full-width readout with unit scale. See
+`docs/taskD2_layout_scalability.md` for resource measurements and qualification.
 
 ## F1: opaque element movement
 

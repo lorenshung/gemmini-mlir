@@ -52,7 +52,11 @@ def _end(op, s, **meta) -> Kernel:
     s.fence()
     meta.update(device_arithmetic='exact_integer',quantize_rounding='host_exact_rational_RNE' if s.readouts else 'none',
                 device_readout='full_i32' if s.readouts else 'exact_integer_storage')
-    for instruction in s.ins:
+    from .stream import CompactInstructions
+    if isinstance(s.ins,CompactInstructions):
+        require(len(s.ins) <= 1 << 20, 'DMA schedule exceeds bounded compiler instruction capacity')
+        require(sum(a.nbytes for a in s.args) <= 64 << 20, 'DMA schedule exceeds bounded compiler byte capacity')
+    for instruction in (s.ins.templates() if isinstance(s.ins,CompactInstructions) else s.ins):
         if instruction.kind == 'mvout' and instruction.a('local') & ACC_BIT:
             require(instruction.a('local') & FULL_BIT, 'accumulator readout requires full int32 width')
         if instruction.kind not in ('config_ld','config_st'): continue
@@ -256,6 +260,7 @@ def _dense_linear(op, out_shape, inputs, constant=0, relu=False, *, code_units=N
     from .linmatch import Src
     from .exact_linear import kernel
     n = _numel(out_shape)
+    require(n <= 1 << 16, 'dense arithmetic map exceeds bounded compiler capacity; use a structural schedule')
     outs, ids, indices, coefficients, srcs = [], [], [], [], {}
     for sid, (name, shp, index, coefficient) in enumerate(inputs):
         srcs[sid] = Src(name, tuple(shp), (code_units or {}).get(name, 1))
@@ -334,64 +339,78 @@ def _plan_kernel(op, args, plan: mv.Plan, **meta) -> Kernel:
 
 
 def clone(shape, *, s_x=1, s_out=1):
-    return _dense_linear('aten.clone.default',shape,[('x',shape,np.arange(_numel(shape)),Q(s_x)/Q(s_out))])
+    from . import layout
+    _numel(shape)
+    return layout.quantized('aten.clone.default',[shape],shape,
+        [(shape,layout.dense_strides(shape),0,layout.dense_strides(shape))],[Q(s_x)/Q(s_out)],names=['x'])
 
 
 def permute(shape, perm, *, s_x=1, s_out=1):
-    index = np.arange(_numel(shape)).reshape(shape).transpose(perm)
-    return _dense_linear('aten.permute.default',index.shape,[('x',shape,index,Q(s_x)/Q(s_out))])
+    from . import layout
+    _numel(shape)
+    require(sorted(perm)==list(range(len(shape))), 'invalid movement permutation')
+    out = tuple(shape[p] for p in perm)
+    ss = layout.dense_strides(shape)
+    return layout.quantized('aten.permute.default',[shape],out,
+        [(out,tuple(ss[p] for p in perm),0,layout.dense_strides(out))],[Q(s_x)/Q(s_out)],names=['x'])
 
 
 def _permute_into(s: Stream, x: str, shape, out: str, perm) -> None:
     """Emit a byte permutation using strided row or column DMA."""
-    perm = list(perm)
-    if perm[-1] == len(shape) - 1:
-        plan, _ = mv.permute_plan(x, list(shape), out, perm)
-        mv.emit_plan(s, plan)
-    else:
-        mv.emit_transpose(s, x, list(shape), out, perm)
+    from . import layout
+    strides = layout.dense_strides(shape)
+    layout.move(s,(x,0),(out,0),tuple(shape[p] for p in perm),tuple(strides[p] for p in perm))
 
 
 def cat(shapes, dim, *, s_in=None, s_out=1):
+    from . import layout
     scales = [1]*len(shapes) if s_in is None else s_in
     dim %= len(shapes[0])
     out_shape = list(shapes[0]); out_shape[dim] = sum(sh[dim] for sh in shapes)
-    # Separate components have zero outside their source interval.
-    inputs = []
+    maps, placements = [], []
     offset = 0
     for sid,(sh,sc) in enumerate(zip(shapes,scales)):
-        index = np.zeros(out_shape,np.int64)
-        factor = np.full(out_shape,Q(0),dtype=object)
-        sl = [slice(None)]*len(out_shape); sl[dim] = slice(offset,offset+sh[dim])
-        index[tuple(sl)] = np.arange(_numel(sh)).reshape(sh)
-        factor[tuple(sl)] = Q(sc)/Q(s_out)
-        inputs.append((f'x{sid}',sh,index,factor.reshape(-1)))
+        require(all(d==dim or sh[d]==out_shape[d] for d in range(len(sh))), 'concat non-axis shape mismatch')
+        ds = layout.dense_strides(out_shape)
+        maps.append((sh,layout.dense_strides(sh),offset*ds[dim],ds))
+        placements.append((_numel(sh),sh[dim]*ds[dim],offset*ds[dim],out_shape[dim]*ds[dim]))
         offset += sh[dim]
-    return _dense_linear('aten.cat.default',out_shape,inputs)
+    return layout.quantized('aten.cat.default',shapes,out_shape,maps,[Q(sc)/Q(s_out) for sc in scales],placements=placements)
 
 
 def constant_pad_nd(shape, pad, value, *, s_x=1, s_out=1):
+    from . import layout
     lohi = [(0,0)]*len(shape)
     for i in range(len(pad)//2): lohi[-1-i] = (pad[2*i],pad[2*i+1])
-    # Negative padding is a source slice; positive padding is an exact constant.
-    slices = tuple(slice(max(-lo,0),d-max(-hi,0)) for d,(lo,hi) in zip(shape,lohi))
-    index = np.arange(_numel(shape)).reshape(shape)[slices]
-    positive = [(max(lo,0),max(hi,0)) for lo,hi in lohi]
-    mask = np.pad(np.ones(index.shape,bool),positive)
-    index = np.pad(index,positive)
-    return _dense_linear('aten.constant_pad_nd.default',index.shape,
-        [('x',shape,index,np.where(mask,Q(s_x)/Q(s_out),Q(0)).reshape(-1))],
-        np.where(mask,Q(0),Q(value)/Q(s_out)).reshape(-1))
+    out = tuple(d+lo+hi for d,(lo,hi) in zip(shape,lohi))
+    _numel(shape);_numel(out)
+    ss,ds = layout.dense_strides(shape),layout.dense_strides(out)
+    start = [max(0,-lo) for lo,_ in lohi]
+    extents = tuple(min(d,d+hi)-a for d,(_,hi),a in zip(shape,lohi,start))
+    require(all(d>0 for d in extents),'padding removes the entire input')
+    source_offset = sum(a*s for a,s in zip(start,ss))
+    offset = sum((a+lo)*s for a,(lo,_),s in zip(start,lohi,ds))
+    placement = dict(shape=extents,strides=ds,offset=offset)
+    return layout.quantized('aten.constant_pad_nd.default',[shape],out,
+        [(extents,ss,offset,ds,source_offset)],[Q(s_x)/Q(s_out)],names=['x'],placements=[placement],
+        fill_code=code(value,s_out) if any(lo>0 or hi>0 for lo,hi in lohi) else None)
 
 
 def slice_scatter(shape, src_shape, dim, start, end, step, *, s_self=1, s_src=1, s_out=1):
-    sel = [slice(None)]*len(shape); sel[dim] = slice(start,end,step)
-    index = np.arange(_numel(shape)).reshape(shape)
-    mask = np.ones(shape,bool); mask[tuple(sel)] = False
-    src_index = np.zeros(shape,np.int64); src_index[tuple(sel)] = np.arange(_numel(src_shape)).reshape(src_shape)
-    return _dense_linear('aten.slice_scatter.default',shape,
-      [('self',shape,index,np.where(mask,Q(s_self)/Q(s_out),Q(0)).reshape(-1)),
-       ('src',src_shape,src_index,np.where(mask,Q(0),Q(s_src)/Q(s_out)).reshape(-1))])
+    from . import layout
+    dim %= len(shape)
+    require(step>0,'scatter requires positive static stride')
+    start,end,step = slice(start,end,step).indices(shape[dim])
+    size = len(range(start,end,step))
+    copied = list(shape);copied[dim]=size
+    require(_numel(src_shape)==_numel(copied),'scatter source extent mismatch')
+    ds = layout.dense_strides(shape)
+    target = list(ds);target[dim]*=step
+    placement = dict(shape=tuple(copied),strides=tuple(target),offset=start*ds[dim])
+    return layout.quantized('aten.slice_scatter.default',[shape,src_shape],shape,
+        [(shape,ds,0,ds),(copied,layout.dense_strides(copied),start*ds[dim],target)],
+        [Q(s_self)/Q(s_out),Q(s_src)/Q(s_out)],names=['self','src'],staged=True,
+        placements=[None,placement])
 
 
 def full(op: str, shape, value: float, *, s_out: float, like: bool = False) -> Kernel:

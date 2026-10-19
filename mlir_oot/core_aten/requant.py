@@ -23,6 +23,7 @@ class Readout:
     permutations: dict = None
     broadcasts: dict = None
     after: int | None = None
+    placement: tuple | dict | None = None  # scalar-parameter destination region, in elements
 
 
 def evaluate(
@@ -116,6 +117,24 @@ def apply(stream, buffers, readouts=None):
     by_name = {a.name: buffers[i] for i, a in enumerate(stream.args)}
     for readout in stream.readouts if readouts is None else readouts:
         out = by_name[readout.out]
+        if readout.placement is not None:
+            if isinstance(readout.placement,dict):
+                from math import prod
+                p = readout.placement
+                count = prod(p['shape'])
+                logical = np.arange(count,dtype=np.int64)
+                positions = np.full(count,p['offset'],dtype=np.int64)
+                for axis,(extent,stride) in enumerate(zip(p['shape'],p['strides'])):
+                    positions += (logical//prod(p['shape'][axis+1:])%extent)*stride
+            else:
+                count, block, offset, stride = readout.placement
+                positions = np.arange(count,dtype=np.int64)
+                positions = positions//block*stride + positions%block + offset
+            values = np.full(count,readout.constant,dtype=object)
+            for name,factor in readout.terms:
+                values += by_name[name].reshape(-1)[positions].astype(object)*factor
+            out.reshape(-1)[positions] = [min(readout.quant_max,max(readout.quant_min,round(Fraction(v))+readout.zero_point)) for v in values]
+            continue
         constant = np.asarray(readout.constant, dtype=object)
         values = (
             constant.reshape(out.shape)
