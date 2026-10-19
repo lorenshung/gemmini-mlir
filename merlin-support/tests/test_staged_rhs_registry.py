@@ -70,12 +70,41 @@ def test_source_issuer_pins_original_actual_trace_function_and_code(monkeypatch)
     monkeypatch.setattr(SourceExecutionIssuer, "create_source_execution_owner", changed)
     with pytest.raises(ValueError, match="trace implementation changed"):
         issuer.revalidate()
+    with pytest.raises(ValueError, match="trace implementation changed"):
+        issuer.create_source_execution_owner(
+            native_result=None, command_buffer=None, lowered=None, work_root=None, remaining_s=1
+        )
     monkeypatch.setattr(SourceExecutionIssuer, "create_source_execution_owner", function)
     with monkeypatch.context() as mutation:
         mutation.setattr(function, "__code__", changed.__code__)
         with pytest.raises(ValueError, match="trace implementation changed"):
             issuer.revalidate()
     issuer.revalidate()
+
+
+def test_source_issuer_retains_original_full_entry_and_exit_checks_without_a_third_duplicate(monkeypatch):
+    from gemmini_source_execution_issuer import SourceExecutionIssuer
+
+    # Neutral call-boundary fixture, not a native execution or target owner.
+    checks = []
+    owner = object.__new__(QualifiedRhsResidencyOwner)
+    owner._identity = "neutral"
+    original = SimpleNamespace(identity="neutral-prototype")
+    owner.prototype = SimpleNamespace(seed=SimpleNamespace(tile=SimpleNamespace(prototype=original)))
+    monkeypatch.setattr(QualifiedRhsResidencyOwner, "revalidate", lambda _: checks.append("full"))
+
+    def original_trace(self, **kwargs):
+        self.revalidate()
+        self.revalidate()
+        return "neutral-boundary-check"
+
+    monkeypatch.setattr(SourceExecutionIssuer, "create_source_execution_owner", original_trace)
+    issuer = SourceExecutionIssuerV4(owner)
+    checks.clear()
+    assert issuer.create_source_execution_owner(
+        native_result=None, command_buffer=None, lowered=None, work_root=None, remaining_s=1
+    ) == "neutral-boundary-check"
+    assert checks == ["full", "full"]
 
 
 def test_active_child_dispatch_uses_original_factory_and_decoder(context, monkeypatch, tmp_path):
