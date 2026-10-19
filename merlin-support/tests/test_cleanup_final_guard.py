@@ -8,6 +8,16 @@ from pathlib import Path
 import pytest
 
 
+class SyntheticOriginalOwner:
+    """Routing fixture only: no live target or library qualification."""
+
+    def revalidate(self):
+        pass
+
+    def check_compiler_binding(self, package):
+        assert (package / "compiler.py").is_file()
+
+
 @pytest.fixture
 def consumer(monkeypatch):
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "backend"))
@@ -102,7 +112,7 @@ def test_final_consumer_joins_exact_original_rosters_to_actual_checker(
 
     monkeypatch.setattr(consumer, "check_native_pair", checked)
     report = consumer.check_functional_guard(
-        None, package, package, *results, grade_root=roots[1]
+        SyntheticOriginalOwner(), package, package, *results, grade_root=roots[1]
     )
     assert set(report) == {"public-source"}
     assert len(calls) == 1
@@ -172,7 +182,7 @@ def test_incomplete_or_foreign_original_grade_never_substitutes_saved_success(
     )
     with pytest.raises(ValueError):
         consumer.check_functional_guard(
-            None, package, package, *results, grade_root=roots[1]
+            SyntheticOriginalOwner(), package, package, *results, grade_root=roots[1]
         )
     assert not calls
 

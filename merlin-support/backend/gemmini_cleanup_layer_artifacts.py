@@ -9,12 +9,22 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
+from types import MethodType
 
 from gemmini_cleanup_issue import check_issued_program, check_pair_artifacts
 from gemmini_timing_resources import _pin
 from merlin.common.tree_hash import hash_tree
 from merlin.targetgen import executed_program as E
 from merlin.targetgen.contract.readback_policy import canonical_sha256
+
+
+def check_compiler_binding(owner, package):
+    """A final program must use the original owner's exact checked release."""
+    callback = getattr(owner, "check_compiler_binding", None)
+    if type(callback) is not MethodType or callback.__self__ is not owner:
+        raise ValueError("final compiler needs its original bound release checker")
+    callback(Path(package))
+    owner.revalidate()
 
 
 def _ordinary(path):
@@ -83,6 +93,7 @@ def read_layer_arm(owner, *, result_path, package):
         raise ValueError(
             "original complete layer grade, compiler or selected runtime is unavailable"
         )
+    check_compiler_binding(owner, package)
     from merlin_experiments.phase2.retained_revisions import source_inventory
 
     source_inventory(
