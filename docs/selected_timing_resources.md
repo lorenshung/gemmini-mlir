@@ -80,3 +80,49 @@ RTL establishes structural evidence. Neither result passes calibration or
 qualifies predictions. The report retains `prediction_authority: NONE` and
 `timing_qualification: not_established`; native event completeness and held-out
 timing gates remain necessary.
+
+## Staged completion and the PRELOAD fence exception
+
+`gemmini_staged_completion.py` emits a separate
+`gemmini.staged_completion_contract.v1` sidecar from the same selected inputs:
+
+```sh
+python merlin-support/backend/gemmini_staged_completion.py \
+  --facts "$SELECTED_FACTS" \
+  --observed-contract "$SELECTED_TARGET_CONTRACT" \
+  --source-root "$SELECTED_CHIPYARD_SOURCE_ROOT" \
+  --output "$FRESH_STAGED_CONTRACT"
+```
+
+It evaluates actual FIRRTL control cones under explicit state cutpoints, rather
+than treating Scala text or resource dimensions as executable support. It checks
+the reservation busy truth table, propagation through global busy, preload start
+with a following valid command and no RAW hazard, and execute-configuration
+completion only after the matmul and pending ROB completions drain. The sidecar
+retains the selected FIRRTL and controller-source identities, truth tables and
+source locators. Synthetic regression cones check refusal when those effects
+change; a run against the selected FIRRTL is separate evidence.
+
+The selected reservation station deliberately excludes a single solitary
+PRELOAD from its busy signal. With other frontend and scratchpad paths idle,
+the global RoCC busy signal can be false while that PRELOAD remains outstanding.
+A Rocket fence may therefore return before its retirement. A following valid
+command allows the execute controller to start the preload. The current native
+observer's unconditional event-engine fence drain does not implement this
+exception. It must retain the pending preload's reservation, descriptor and
+execute-configuration dependencies. Adding a read of execute configuration to
+the preload event alone does not fix the reservation or completion semantics.
+
+Load/store configuration has another important stage boundary: its reservation
+entry is released when accepted by the controller issue path, while its
+persistent configuration becomes visible when consumed in controller FIFO
+order. It does not allocate a DMA command tracker. Normal DMA reservations
+remain owned through actual completion. A load followed by a fence must wait
+for that load's busy work; the solitary-PRELOAD exception does not authorize
+skipping unfinished loads.
+
+The sidecar records these native event requirements and contrasting examples.
+It supplies no prices and does not implement or qualify the native engine.
+Standalone PRELOAD synchronous completion is unavailable, so the current
+`merlin.dense_schedule.v1` adapter remains disabled. A future checked composite
+must describe the complete preload/compute/completion effects explicitly.
