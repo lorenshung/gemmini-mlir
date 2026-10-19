@@ -11,7 +11,7 @@
 static int ca_npass = 0, ca_nfail = 0;
 
 static inline void ca_fence(void) { asm volatile("fence" ::: "memory"); }
-static inline uint64_t ca_rdcycle(void) { uint64_t x; asm volatile("rdcycle %0" : "=r"(x)); return x; }
+static inline uint64_t ca_rdcycle(void) { uint64_t x; asm volatile("csrr %0, mcycle" : "=r"(x)); return x; }
 
 static void ca_fill(void *p, size_t bytes, uint8_t v) {
   volatile uint8_t *q = (volatile uint8_t *)p;

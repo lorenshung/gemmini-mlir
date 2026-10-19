@@ -24,6 +24,29 @@ class Readout:
     broadcasts: dict = None
     after: int | None = None
     placement: tuple | dict | None = None  # scalar-parameter destination region, in elements
+    indices: object = None
+    source_offsets: dict = None
+    axis: int = -1
+    parameters_compact: bool = False
+
+
+def expanded(value, shape, axis=-1):
+    a = np.asarray(value, dtype=object)
+    size = int(np.prod(shape))
+    if a.size == size:
+        return a.reshape(-1)
+    if a.ndim == 1 and shape and a.size == shape[axis]:
+        dims = [1]*len(shape)
+        dims[axis] = a.size
+        a = a.reshape(dims)
+    return np.broadcast_to(a, shape).reshape(-1)
+
+
+def parameters(readout, value, shape):
+    if readout.parameters_compact:
+        return expanded(value, (len(readout.indices),))
+    a = expanded(value, shape, readout.axis)
+    return a if readout.indices is None else a[np.asarray(readout.indices,dtype=np.int64)]
 
 
 def evaluate(
@@ -135,12 +158,8 @@ def apply(stream, buffers, readouts=None):
                 values += by_name[name].reshape(-1)[positions].astype(object)*factor
             out.reshape(-1)[positions] = [min(readout.quant_max,max(readout.quant_min,round(Fraction(v))+readout.zero_point)) for v in values]
             continue
-        constant = np.asarray(readout.constant, dtype=object)
-        values = (
-            constant.reshape(out.shape)
-            if constant.size == out.size
-            else np.broadcast_to(constant, out.shape)
-        ).copy()
+        indices = np.arange(out.size) if readout.indices is None else np.asarray(readout.indices, dtype=np.int64)
+        values = parameters(readout, readout.constant, out.shape).copy()
         for name, factor in readout.terms:
             raw = by_name[name]
             if readout.permutations and name in readout.permutations:
@@ -148,21 +167,14 @@ def apply(stream, buffers, readouts=None):
                 raw = raw.reshape(shp).transpose(perm)
             if readout.broadcasts and name in readout.broadcasts:
                 raw = raw.reshape(readout.broadcasts[name])
-            if raw.size == out.size:
-                raw = raw.reshape(out.shape)
-            factor = np.asarray(factor, dtype=object)
-            if factor.size == out.size:
-                factor = factor.reshape(out.shape)
-            values += np.broadcast_to(raw, out.shape).astype(object) * factor
+            if readout.source_offsets and name in readout.source_offsets:
+                raw_values = raw.reshape(-1)[indices+readout.source_offsets[name]]
+            else:
+                raw_values = expanded(raw, out.shape)[indices]
+            values += raw_values.astype(object)*parameters(readout, factor, out.shape)
         if readout.relu:
             values = np.maximum(values, 0)
-        out.flat[:] = np.array(
-            [
-                min(
-                    readout.quant_max,
-                    max(readout.quant_min, round(Fraction(v)) + readout.zero_point),
-                )
-                for v in values.flat
-            ],
-            dtype=np.int64,
-        ).astype(out.dtype)
+        zps, lows, highs = [parameters(readout, v, out.shape) for v in
+                           (readout.zero_point, readout.quant_min, readout.quant_max)]
+        out.flat[indices] = np.array([min(int(hi), max(int(lo), round(Fraction(v))+int(zp)))
+                                     for v,zp,lo,hi in zip(values,zps,lows,highs)], dtype=np.int64).astype(out.dtype)

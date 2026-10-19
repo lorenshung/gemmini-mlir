@@ -99,6 +99,8 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
     accepted = []
     audits = {}
     for m in matches:
+        from .readout_pipeline import prepare
+        prepare(m.kernel.stream, m.kernel.meta)
         digest = _stream_digest(m.kernel)
         try:
             report = audits.get(digest)

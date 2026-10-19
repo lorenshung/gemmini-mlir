@@ -34,7 +34,7 @@ def device_test(cases, name: str) -> tuple[runner.DeviceTest, dict]:
         sym = f"ca_k{i}_{c.name}".replace(".", "_")
         t0 = time.time()
         lint(c.kernel.stream)
-        module, tree = build_module(c.kernel.stream, sym)
+        module, tree = build_module(c.kernel.stream, sym, meta=c.kernel.meta)
         obj = compile_to_object(module, wd, stem=sym)["object"]
         objects.append(Path(obj))
         model = simulate(c.kernel.stream, c.inputs)
