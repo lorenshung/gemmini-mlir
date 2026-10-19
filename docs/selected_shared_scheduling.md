@@ -289,3 +289,27 @@ complete numerical checks. Hardware/timing authority and dense-v1 remain
 disabled. Ordinary compiler-child selection additionally needs its original
 frozen capability/resource projection; loading an SDK does not grant that
 projection or enable an unrelated device adapter.
+
+## Actual contraction packet checks
+
+`gemmini_execute_state.py` derives additional EX fields from the selected
+elaboration and checks their original controller assignments, including every
+scale bit. The explicit supported state is identity WS with unit strides, no
+transpose, activation or shift. A missing or different state refuses.
+`gemmini_packet_contractions.py` independently follows actual issued load,
+preload, compute and store operands. Loads assign private cell provenance;
+preloads retain descriptors across fences; compute consumes the current cells
+or independently observed retained PE weights. Every output cell must contain
+each source K panel once, beginning from independently checked zero storage.
+Incomplete work, clobbers, changed owners, unsupported effects and a final lone
+preload refuse. Register-packet shape fields and capacities remain selected
+source evidence supplied by the original caller.
+
+The generic `merlin.llvmlower.source_contraction_bindings` bridge reconstructs
+current rank-two source arithmetic and complete source/ABI names. Those names
+alone prove no executed effects. The packet check still needs an original
+complete trace, exact source/input/output custody and independent numerical
+checks before a live capsule owner can use it. Batched, mixed attention and
+nonidentity readout contracts remain disabled unless separately checked.
+This staged state induction changes neither the old synchronous dense-v1
+contract nor any timing evaluator.
