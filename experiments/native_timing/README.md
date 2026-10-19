@@ -5,6 +5,21 @@ target-specific correspondence between a frozen native evaluator release and
 the current software/RTL selection. It imports no generated or handwritten
 compiler. Original Phase 1 compiler and functional-extension bytes stay fixed.
 
+`gemmini_execute_service.derive` additionally reads the selected FIRRTL
+`ExecuteController.total_rows` cone and the accepted-row counter. It exhaustively
+checks primitive-sized operand extents and explicit control cutpoints, preserving
+source locators and exact input pins. The shortened-stream floor and primitive
+extent come from the actual expressions; neither 16 rows nor a four-cycle floor
+is a default in the proof. Selected evidence gives a 16-row default and a
+four-row minimum when the dataflow, garbage operand and transposer predicates
+permit shortening. The counter admits at most one input row per cycle.
+
+This is input-row service evidence only. It does not establish reachable states,
+mesh propagation, bank stalls, output service, completion or end-to-end latency.
+Existing nominal padded-MAC counters keep their interpretation. A future
+operand-sensitive evaluator must select this evidence explicitly and obtain its
+own source/runtime review and unchanged held-domain validation.
+
 The original host constructs the live owner:
 
 ```python
