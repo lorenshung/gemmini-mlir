@@ -15,6 +15,15 @@ an existing managed task; use the receiving server's resource admission tools.
 | https://github.com/copparihollmann/riscv-isa-sim-gemmini.git | recorded standalone packager/build helper at `dea21091bc2164989eaacd0c7acf62c79d004ee8` |
 | https://github.com/llvm/llvm-project.git | LLVM/MLIR23 `a47bddccec30255619bb8c37fa59700e661d4e66` |
 
+The separate published Merlin `shared-scheduling` branch is
+`dbc762306e87af176104c348ccace0263937d1b9`. It is not claimed merged into the
+published f8a43c6 branch. Our combined EL4/Phase2 integration and new preparation,
+queue and native-owner fixes are local commits awaiting publication; another
+server cannot obtain them merely by fetching either published branch. The newly
+reported shared-session `08570e926` is unpushed and unavailable locally, so this
+guide assigns it no source, API or qualification claims. Request reviewed commits
+or an explicit source bundle before requiring those additional interfaces.
+
 The helper's `examples/gemmini/functional_baseline/build.py` matches the actual
 source package builder SHA `10c6529b7fedebc7410a0d9a9ea3cee7bb94689d802a06187a154f24228d2468`.
 Its simulator sources are the pristine pinned objects above, not its instrumented
