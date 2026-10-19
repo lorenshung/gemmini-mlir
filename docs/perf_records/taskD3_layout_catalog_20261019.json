@@ -1,0 +1,4129 @@
+{
+  "schema": "gemmini_taskD3_layout_catalog_receipt_v1",
+  "date": "2026-10-19",
+  "base_commit": "8ddbad9ef7b9613ec5f10f3d08e4e41b32a4c0e8",
+  "implementation_commit": "41652edc974bd4cb4f8a26fb4c40684f3fe953ad",
+  "source_census": {
+    "source": {
+      "path": "/scratch/loren/core-aten-snap/models-out/resnet50/prepared.mlir",
+      "bytes": 5792035,
+      "sha256": "b613c453912788539cb7b0a0917d5c51728ed9c79121a551d4d2e34fbb3052aa"
+    },
+    "function_arguments": 109,
+    "literal_tensor_constants": 0,
+    "structural_layouts": {
+      "tensor.insert_slice:i8": 17,
+      "tensor.extract_slice:i8": 458,
+      "linalg.transpose:i8": 368,
+      "linalg.generic:i8": 245,
+      "tensor.collapse_shape:i8": 314,
+      "tensor.expand_shape:i8": 314,
+      "tensor.concat:i8": 17,
+      "tensor.collapse_shape:f32": 23,
+      "tensor.expand_shape:f32": 23,
+      "linalg.transpose:f32": 21,
+      "linalg.generic:f32": 21,
+      "tensor.cast:i8": 1,
+      "tensor.cast:f32": 1
+    },
+    "large_layouts": {
+      "tensor.insert_slice:i8": 10,
+      "tensor.extract_slice:i8": 237,
+      "tensor.concat:i8": 17,
+      "tensor.collapse_shape:f32": 21,
+      "tensor.expand_shape:f32": 21,
+      "linalg.transpose:f32": 21,
+      "linalg.generic:f32": 21,
+      "linalg.transpose:i8": 174,
+      "tensor.collapse_shape:i8": 139,
+      "tensor.expand_shape:i8": 139,
+      "linalg.generic:i8": 94
+    },
+    "largest": [
+      {
+        "ordinal": 13191,
+        "op": "linalg.transpose",
+        "shape": [
+          512,
+          3,
+          3,
+          512
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 13194,
+        "op": "linalg.generic",
+        "shape": [
+          512,
+          3,
+          3,
+          512
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 13196,
+        "op": "tensor.collapse_shape",
+        "shape": [
+          2359296
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 13197,
+        "op": "tensor.expand_shape",
+        "shape": [
+          512,
+          4608
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 13199,
+        "op": "linalg.transpose",
+        "shape": [
+          4608,
+          512
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 14262,
+        "op": "linalg.transpose",
+        "shape": [
+          512,
+          3,
+          3,
+          512
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 14265,
+        "op": "linalg.generic",
+        "shape": [
+          512,
+          3,
+          3,
+          512
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 14267,
+        "op": "tensor.collapse_shape",
+        "shape": [
+          2359296
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 14268,
+        "op": "tensor.expand_shape",
+        "shape": [
+          512,
+          4608
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 14270,
+        "op": "linalg.transpose",
+        "shape": [
+          4608,
+          512
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 15120,
+        "op": "linalg.transpose",
+        "shape": [
+          512,
+          3,
+          3,
+          512
+        ],
+        "numel": 2359296
+      },
+      {
+        "ordinal": 15123,
+        "op": "linalg.generic",
+        "shape": [
+          512,
+          3,
+          3,
+          512
+        ],
+        "numel": 2359296
+      }
+    ]
+  },
+  "pinned_inputs": [
+    {
+      "path": "/scratch/loren/core-aten-snap/models-out/resnet50/prepared.mlir",
+      "bytes": 5792035,
+      "sha256": "b613c453912788539cb7b0a0917d5c51728ed9c79121a551d4d2e34fbb3052aa"
+    },
+    {
+      "path": "/scratch/loren/core-aten-snap/models-out/resnet50/bundle/model.mlir",
+      "bytes": 5792035,
+      "sha256": "b613c453912788539cb7b0a0917d5c51728ed9c79121a551d4d2e34fbb3052aa"
+    },
+    {
+      "path": "/scratch/loren/core-aten-snap/models-out/resnet50/bundle/weights.safetensors.manifest.json",
+      "bytes": 15807,
+      "sha256": "58fc94de3b70567687c71aab98176f452f19aea14a1cf6340a16085d7e7090ca"
+    },
+    {
+      "path": "/scratch2/loren/gemmini-coverage/workloads/paper_models/diag_catalog.py",
+      "bytes": 4188,
+      "sha256": "5b54b143f49d001008a5de9373f333e8c47d5dff88796030fa64c8a75b3f82e9"
+    },
+    {
+      "path": "/scratch2/loren/gemmini-coverage/workloads/paper_models/build_model.py",
+      "bytes": 26731,
+      "sha256": "052a50d5a8d289e6c83d295e244837ca61af446b44d69cdb6cbd86ff05bf1749"
+    }
+  ],
+  "diagnostic": {
+    "before": {
+      "data": {
+        "parse_s": 5.6,
+        "match_s": 8.2,
+        "cap": 100000000,
+        "matches": {
+          "bitwise_movement": 1751,
+          "aten.mm.default": 54,
+          "aten.mean.dim": 1
+        },
+        "declines": 18,
+        "decline_reasons": {
+          "unsupported or unproved quantization scheme; device requires exact per-tensor signed int8 readout": 12,
+          "interpreted linear region exceeds bounded compiler capacity; use a structural schedule": 6
+        },
+        "matcher_seconds": {
+          "match_conv_input": 0.0,
+          "match_linear": 0.0,
+          "match_elementwise": 0.0,
+          "match_mean": 0.0,
+          "match_movement": 0.0,
+          "match_contraction": 0.0,
+          "match_convolution": 0.0,
+          "match_conv_wgrad": 0.0,
+          "match_convolution_rows": 0.0
+        },
+        "movement_calls": [],
+        "slow_matcher_calls": []
+      },
+      "timing": {
+        "user_seconds": 13.62,
+        "system_seconds": 0.9,
+        "peak_rss_kib": 1539660,
+        "exit_status": 0,
+        "artifact": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/before.time"
+      }
+    },
+    "after": {
+      "data": {
+        "parse_s": 6.6,
+        "match_s": 9.8,
+        "cap": 100000000,
+        "matches": {
+          "bitwise_movement": 1836,
+          "aten.mm.default": 54,
+          "aten.mean.dim": 1
+        },
+        "declines": 18,
+        "decline_reasons": {
+          "unsupported or unproved quantization scheme; device requires exact per-tensor signed int8 readout": 12,
+          "interpreted linear region exceeds bounded compiler capacity; use a structural schedule": 6
+        },
+        "matcher_seconds": {
+          "match_conv_input": 0.1,
+          "match_linear": 0.0,
+          "match_elementwise": 0.0,
+          "match_mean": 0.0,
+          "match_movement": 0.0,
+          "match_contraction": 0.0,
+          "match_convolution": 0.0,
+          "match_conv_wgrad": 0.0,
+          "match_convolution_rows": 0.0
+        },
+        "movement_calls": [],
+        "slow_matcher_calls": []
+      },
+      "timing": {
+        "user_seconds": 15.7,
+        "system_seconds": 0.9,
+        "peak_rss_kib": 1539972,
+        "exit_status": 0,
+        "artifact": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/diag-final.time"
+      }
+    },
+    "cap": 100000000,
+    "scope": "parsing and match_all, not LLVM emission, object compilation or model execution"
+  },
+  "full_build": {
+    "before": {
+      "status": "timeout",
+      "limit_seconds": 300,
+      "timing": {
+        "user_seconds": 277.11,
+        "system_seconds": 1.24,
+        "peak_rss_kib": 1643924,
+        "exit_status": 124,
+        "artifact": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/before-build.time"
+      }
+    },
+    "after": {
+      "status": "ok",
+      "matched": 1891,
+      "kernels": 289,
+      "declines": 18,
+      "folds": 0,
+      "llvm_operations": 83054,
+      "seconds": 165.6772238939884,
+      "peak_rss_kib": 1673244
+    },
+    "after_timing": {
+      "user_seconds": 159.92,
+      "system_seconds": 1.27,
+      "peak_rss_kib": 1673244,
+      "exit_status": 0,
+      "artifact": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/delivery-build.time"
+    },
+    "earlier_after_sample": {
+      "status": "ok",
+      "matched": 1891,
+      "kernels": 289,
+      "declines": 18,
+      "folds": 0,
+      "llvm_operations": 83054,
+      "seconds": 229.11417537095258,
+      "peak_rss_kib": 1673320
+    },
+    "address_space_limit_mib": 3072,
+    "scope": "catalog.build including parsing, matching, hazard lint, encoding/form verification and LLVM module generation; excludes imports and external object compilation"
+  },
+  "synthetic": {
+    "runtime_movements": 280,
+    "constant_transposes": 40,
+    "constant_elements": 2359296,
+    "runtime_shape": [
+      1,
+      256,
+      56,
+      56
+    ],
+    "runtime_dtypes": [
+      "i8",
+      "f32"
+    ],
+    "before": {
+      "status": "timeout",
+      "limit_seconds": 60,
+      "timing": {
+        "user_seconds": 57.44,
+        "system_seconds": 0.27,
+        "peak_rss_kib": 90376,
+        "exit_status": 124,
+        "artifact": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/synthetic-before.time"
+      }
+    },
+    "after": {
+      "status": "ok",
+      "bindings": 280,
+      "folds": 40,
+      "kernels": 4,
+      "llvm_operations": 162,
+      "templates": 1960,
+      "seconds": 8.068248022987973,
+      "peak_rss_kib": 91904
+    },
+    "limits": {
+      "address_space_mib": 768,
+      "peak_rss_mib": 384,
+      "build_seconds": 60,
+      "subprocess_timeout_seconds": 90
+    },
+    "dynamic_instructions_per_constant_transpose_before": 313347,
+    "dynamic_instructions_after": 0,
+    "scope": "all 320 results escape, four runtime kernels, no runtime constant transpose kernels; excludes imports and input string generation"
+  },
+  "spike": {
+    "layout_batches": [
+      {
+        "group": "raw",
+        "checks": 12,
+        "bit_exact": true,
+        "spike_cycles": {
+          "layout_raw": 1370
+        },
+        "audit": {
+          "config": {
+            "ex_acc_scales": [],
+            "ex_shifts": [],
+            "ld_scales": [
+              1.0
+            ],
+            "st_acc_scales": [
+              1.0
+            ],
+            "st_acts": [
+              0
+            ]
+          },
+          "counts": {
+            "CONFIG": 216,
+            "FLUSH": 12,
+            "MVIN": 206,
+            "MVOUT": 206
+          },
+          "design_rule": "OK_full_i32",
+          "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/layout_raw.elf",
+          "full_i32_readout": true,
+          "gemmini_instructions": 640,
+          "mvout": {
+            "acc_full": 0,
+            "acc_narrow": 0,
+            "spad": 206
+          },
+          "narrow_examples": [],
+          "narrow_readouts": 0,
+          "spike_rc": 0,
+          "stdout_tail": "",
+          "violations": []
+        },
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/kernel.o",
+          "object_sha256": "b95ae2cafba980d1d5af015416d5b49479fdab7d7b6e0dcb4fc1109e5de851a6",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "group": "requant",
+        "checks": 6,
+        "bit_exact": true,
+        "spike_cycles": {
+          "layout_requant": 148823
+        },
+        "audit": {
+          "config": {
+            "ex_acc_scales": [],
+            "ex_shifts": [],
+            "ld_scales": [
+              1.0
+            ],
+            "st_acc_scales": [
+              1.0
+            ],
+            "st_acts": [
+              0
+            ]
+          },
+          "counts": {
+            "CONFIG": 152,
+            "FLUSH": 6,
+            "MVIN": 106,
+            "MVOUT": 106
+          },
+          "design_rule": "OK_full_i32",
+          "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/layout_requant.elf",
+          "full_i32_readout": true,
+          "gemmini_instructions": 370,
+          "mvout": {
+            "acc_full": 18,
+            "acc_narrow": 0,
+            "spad": 88
+          },
+          "narrow_examples": [],
+          "narrow_readouts": 0,
+          "spike_rc": 0,
+          "stdout_tail": "",
+          "violations": []
+        },
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/kernel.o",
+          "object_sha256": "f6349fb1168118516c2c6fad07261517019af59fb0347077a51ed9c1bf52cee1",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      }
+    ],
+    "constant_literals": {
+      "checks": 2,
+      "bit_exact": true,
+      "spike_cycles": {
+        "constant_layout": 122
+      },
+      "audit": {
+        "config": {
+          "ex_acc_scales": [],
+          "ex_shifts": [],
+          "ld_scales": [
+            1.0
+          ],
+          "st_acc_scales": [
+            1.0
+          ],
+          "st_acts": [
+            0
+          ]
+        },
+        "counts": {
+          "CONFIG": 16,
+          "FLUSH": 2,
+          "MVIN": 14,
+          "MVOUT": 14
+        },
+        "design_rule": "OK_full_i32",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/constant_layout.elf",
+        "full_i32_readout": true,
+        "gemmini_instructions": 46,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 14
+        },
+        "narrow_examples": [],
+        "narrow_readouts": 0,
+        "spike_rc": 0,
+        "stdout_tail": "",
+        "violations": []
+      }
+    },
+    "internal_convolution_layouts": {
+      "checks": 3,
+      "bit_exact": true,
+      "spike_cycles": {
+        "constant_conv": 8638
+      },
+      "constant_layout_proofs": [
+        {
+          "source": "w",
+          "destination": "ws_w",
+          "shape": [
+            3,
+            2,
+            2,
+            2
+          ],
+          "permutation": [
+            2,
+            3,
+            1,
+            0
+          ],
+          "source_storage_sha256": "ecb0bf47351327fe6f714f0f071cf457c545da132c154e4db709375ff34add4d",
+          "result_storage_sha256": "0d42f8e5dfbce1ca5911214722b8970018b69d84127ba302c1cc45c1481064d4",
+          "proof": "literal_byte_permutation",
+          "runtime_instructions": 0
+        },
+        {
+          "source": "w",
+          "destination": "ws_w",
+          "shape": [
+            3,
+            2,
+            2,
+            2
+          ],
+          "permutation": [
+            2,
+            3,
+            0,
+            1
+          ],
+          "source_storage_sha256": "ecb0bf47351327fe6f714f0f071cf457c545da132c154e4db709375ff34add4d",
+          "result_storage_sha256": "d09a5111da936c5823b566d47e2a67dba2213a15118cfa3f3633b1b1e34e5b44",
+          "proof": "literal_byte_permutation",
+          "runtime_instructions": 0
+        },
+        {
+          "source": "x",
+          "destination": "ws_x",
+          "shape": [
+            1,
+            2,
+            4,
+            5
+          ],
+          "permutation": [
+            0,
+            2,
+            3,
+            1
+          ],
+          "source_storage_sha256": "9537b118003dbed50bf68caec409df3736f337c0344b49a307deab0249222efa",
+          "result_storage_sha256": "4ce25d6487a82ac807c52e139a360980744a7cab4e8e501ace28059bfbb9ddd7",
+          "proof": "literal_byte_permutation",
+          "runtime_instructions": 0
+        }
+      ],
+      "audit": {
+        "config": {
+          "ex_acc_scales": [
+            1.0
+          ],
+          "ex_shifts": [
+            0
+          ],
+          "ld_scales": [
+            1.0
+          ],
+          "st_acc_scales": [
+            1.0
+          ],
+          "st_acts": [
+            0
+          ]
+        },
+        "counts": {
+          "COMPUTE_ACCUMULATE": 4,
+          "COMPUTE_PRELOADED": 26,
+          "CONFIG": 80,
+          "FLUSH": 3,
+          "MVIN": 62,
+          "MVIN2": 26,
+          "MVIN3": 11,
+          "MVOUT": 43,
+          "PRELOAD": 30
+        },
+        "design_rule": "OK_full_i32",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/constant_conv.elf",
+        "full_i32_readout": true,
+        "gemmini_instructions": 285,
+        "mvout": {
+          "acc_full": 11,
+          "acc_narrow": 0,
+          "spad": 32
+        },
+        "narrow_examples": [],
+        "narrow_readouts": 0,
+        "spike_rc": 0,
+        "stdout_tail": "",
+        "violations": []
+      }
+    },
+    "real_captures": [
+      {
+        "name": "clone",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__clone__default/capture-bundle/model.mlir",
+        "source_sha256": "9a47a28f29c1ae8ddbdd68f64e68d3282e335aebba8071573171bc7ef309fc8c",
+        "inputs_sha256": "f649878c3e7f30108a6959a50c31cb0b5d3315fcc67f839d55a68d0dac894e40",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 13,
+        "spike_cycles": 37,
+        "gemmini_instructions": 9,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 2
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "e94d82986abad961ddbe21a433468cd0c6f5e7730c591fdac1b8ce3d7c36aa84",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/kernel.o",
+          "object_sha256": "7d7e61f21ddf42b7ec3ef7b5edb5072e91f551b28f1c56a980f519b3c7e1f84e",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "cat",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__cat__default/capture-bundle/model.mlir",
+        "source_sha256": "34119281006f2018c57d5bace8cb8832fb460b0422a6b57984d4014419ec4a05",
+        "inputs_sha256": "6f1d647b02533df5088b428a3055fb2e9815784e49f41053c21757486d4b04d4",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 14,
+        "spike_cycles": 40,
+        "gemmini_instructions": 9,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 2
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "2382b446aa401ed8f38b2e099995344940335e987da0fd012711a3557f53dbf5",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/kernel.o",
+          "object_sha256": "b40b02e0546413778a7902247dcfb1405bb745911bebff75d134e58703f6efaf",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "constant_pad_nd",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__constant_pad_nd__default/capture-bundle/model.mlir",
+        "source_sha256": "056662db580526a7fa6320542ed72a735cc17f5df65efddc200748181858ab60",
+        "inputs_sha256": "d0e4f2d0d375e1bd9be4638ea917830a11f51e3bcf13a41b584cee67849d2e50",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 28,
+        "spike_cycles": 68,
+        "gemmini_instructions": 22,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 6
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "aa6cf15b49a7d676e0583ff9032b827292b4b2a63edd4f8356c6e14d6f083c4a",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/kernel.o",
+          "object_sha256": "052d039fb1d64a96a0e8e36bb26bcf8f2ebd3b5850b79e3828c2941ec0f3f850",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "reflection_pad1d",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__reflection_pad1d__default/capture-bundle/model.mlir",
+        "source_sha256": "f430267153bfae3fdd39bdb58d615a05db9e8ad6814938e4199ec0ec162c0857",
+        "inputs_sha256": "9a375c69f710bebdbdc99822f3c2439201faab4c5f8b67cb547d8a3b5b91d3ac",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 70,
+        "spike_cycles": 121,
+        "gemmini_instructions": 57,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 14
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "6caa985487216e07560514d8e81617bb5275850d0700147a28a790596e8f7937",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/kernel.o",
+          "object_sha256": "39a25acfe50e8e078911b4d94b1d42ba5ffba0dc3106d2f18b2c1e829256543a",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "reflection_pad2d",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__reflection_pad2d__default/capture-bundle/model.mlir",
+        "source_sha256": "79a10db9f4ad7624e49c3a86951f474254696ff9ecec4b778f0ad57578b7bd9b",
+        "inputs_sha256": "a5a48ecb3ad4a610740a8f4eb8ac7c65bf2326ecbfe14a7b9701510f7b8ee0a5",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 81,
+        "spike_cycles": 155,
+        "gemmini_instructions": 63,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 16
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "07a22adc72975ce2a112481af9515562e8fc98fbb9c26aa03af52cb020a4bc8f",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/kernel.o",
+          "object_sha256": "aa9562f0050b7b15f1a31c5a9fabedfc31ffdb83fa0718f5f3bec651e1206410",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "reflection_pad3d",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__reflection_pad3d__default/capture-bundle/model.mlir",
+        "source_sha256": "d15cf17523243e41fb037fab3135a233bbdaf9d1d66acf0e637797c60498bc4d",
+        "inputs_sha256": "550e43c875fcbe08cfb3b57b7082aed4f5943b9119354eaf1b1ce8ca884e3ded",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 241,
+        "spike_cycles": 422,
+        "gemmini_instructions": 215,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 62
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "fc265d2d5b8de07b32a55baa1c1e2787d00ee17b7e9513222e7e018528a23ff5",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/kernel.o",
+          "object_sha256": "2c4fc4b043dd158d0c2488dce3129af59d715032119be8e247e6ae3da351adc9",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "replication_pad2d",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__replication_pad2d__default/capture-bundle/model.mlir",
+        "source_sha256": "efaaf4ab2c21d5dc1ae0939281585a066aea11d8994cf2598cae3a146eacdf8e",
+        "inputs_sha256": "dcb5fca82e9fd564f67fcb96521944a0db8b43ac71fc54c548ef6339b60912fa",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 81,
+        "spike_cycles": 151,
+        "gemmini_instructions": 63,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 16
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "362babf6d8ad21d3f0382bb1240ec284ae014c46a129c8e6455a28e84fdb3d38",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/kernel.o",
+          "object_sha256": "288ef294aecd1bf9893a0ffe93efeab89e1955aab2d271e09c2d295abec2018c",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "replication_pad3d",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__replication_pad3d__default/capture-bundle/model.mlir",
+        "source_sha256": "3a78fa72a2bfb4d71837c8b237c7c4de20b1ea466255543ccdae24abfc35dd16",
+        "inputs_sha256": "0d2dbbf9ef3dfb47def8de580bb71ac4abfbed7c4ccbf11f684e7877313dd2e0",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 241,
+        "spike_cycles": 414,
+        "gemmini_instructions": 215,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 62
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "bf29763e65e617eb02651083222ba42d22273e132b8eb45d9b45b97e6ed298df",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/kernel.o",
+          "object_sha256": "b449f0c6f88392c6797466835e861145b67e9d4b5b989893839fa0ee1ee6d124",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "slice_scatter",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__slice_scatter__default/capture-bundle/model.mlir",
+        "source_sha256": "0ff0dc32f7a84a7b8154fb370a7862091cfda9730a9789d8112706376e3df656",
+        "inputs_sha256": "10956d2d4015a7aaccbede1c76d4edeebc17a30a17ecad32e237558c9fa2687d",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 14,
+        "spike_cycles": 40,
+        "gemmini_instructions": 9,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 2
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "73177a3f32158abefbc35d2f7bbe81e3bb0425a40cca216c407e6c113c38f1fa",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/kernel.o",
+          "object_sha256": "78cb41e2dd9fa0070d703218c638c2598235c916698a244cda0c42293c148144",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "select_scatter",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__select_scatter__default/capture-bundle/model.mlir",
+        "source_sha256": "15d874069f093ac848bc8f11f5ab76531373090cae0316ace83e5d881e487c58",
+        "inputs_sha256": "25b3bfa4a7351c11a78a949d15eca4901694dd135be83577ee064fed4eba5829",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 18,
+        "spike_cycles": 48,
+        "gemmini_instructions": 13,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 3
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "fde87dd2c7d726d82e7899fc4517f645f257433f1d3016e37815462c5afc4a25",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/kernel.o",
+          "object_sha256": "1a961dbd1e432b586e860bd21f3fcc198c872007f0fcaa600a3e7a8c6d9f6882",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "repeat",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__repeat__default/capture-bundle/model.mlir",
+        "source_sha256": "b025c2ac79af1b5340469c709b9fe31d5895ceaff9a60dc0cee73d3df8d4ec2d",
+        "inputs_sha256": "2370eb4cb36242aa3d0d8c8387b51d5fce645d367aaf3e97762654c39e1768d6",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 39,
+        "spike_cycles": 75,
+        "gemmini_instructions": 33,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 8
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "c7d36eca3589dc81c631e4ea03b2dfa8764e65557f26a172b204c251c7f5b22d",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/kernel.o",
+          "object_sha256": "425cf47f3c1e6ef10263be1e823b08c0b56645a1f8497f8f12e1abf6e00a7844",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "_to_copy",
+        "source": "out/taskD/fresh-captures/part0/shards/aten___to_copy__default/capture-bundle/model.mlir",
+        "source_sha256": "033ad6f2e8a7cc5d8d281132922dd067129eb8b07bdabdf5545510c2ecc82581",
+        "inputs_sha256": "75add3ff191e1ac5ea98f21c04b0d51a783cd4704a2ee14db886d86667e77457",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 13,
+        "spike_cycles": 37,
+        "gemmini_instructions": 9,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 2
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "19f83cbb328305b31a83fcea1039b3b585be05ccb9625926d926233ff4b34813",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/kernel.o",
+          "object_sha256": "e37af50317e942971719f3d2ebd8840224f3e4295cbc3499109d74eedade7fdf",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "full",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__full__default/capture-bundle/model.mlir",
+        "source_sha256": "c61c031e21432482a7bf397d17762aa92794db7248cd7c90060b9078d193ceaa",
+        "inputs_sha256": "2973b1ac136fa9f6100ecc90835f10545a3c37a03b9ecc02e505d3c3f63b41c2",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 8,
+        "spike_cycles": 31,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "37ab63227e937758e4e66903f81d496b293ab657bdbd5918ec2d35ac82472889",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/kernel.o",
+          "object_sha256": "4ab63b43ec8b008cc81c0f4551bfb2b3eb3ee5ddd4c5077b1ed6cabdbbcc715a",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "full_like",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__full_like__default/capture-bundle/model.mlir",
+        "source_sha256": "f66fdbd3b614e1d424a3cce5ea2f49b44b38810c9c4270d9a4f0815134fdb899",
+        "inputs_sha256": "da926802f46d2788990cfd999700a87c9d9435c8477b038365e6848608744cb7",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 8,
+        "spike_cycles": 31,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "35721116dbd800a1a68c99a489e3fb9103b2d1f55256920bd028df3e8a9f319c",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/kernel.o",
+          "object_sha256": "30daa0ff028500eaaa0e2118071ccafe5b2faa97cbf6a57372e458daf9215c75",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      },
+      {
+        "name": "fill",
+        "source": "out/taskD/fresh-captures/part0/shards/aten__fill__Scalar/capture-bundle/model.mlir",
+        "source_sha256": "5da5e3322e03df21f1073726d63bc51549f9484b054ba01cfeef5964ee7d016a",
+        "inputs_sha256": "c383d9f19b205ce8e1fd569ae9f6ce6c2898f1720daa2cf1242fc7912b1b403d",
+        "bindings": 1,
+        "storage_codes": true,
+        "stream_instructions": 8,
+        "spike_cycles": 31,
+        "gemmini_instructions": 5,
+        "mvout": {
+          "acc_full": 0,
+          "acc_narrow": 0,
+          "spad": 1
+        },
+        "design_rule": "OK_full_i32",
+        "bit_exact": true,
+        "elf_sha256": "9a3f8f178f3468e81dfaf905e6765ba269eee26c2bccbbb381fb392040bdc0fe",
+        "compilation": {
+          "object": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/kernel.o",
+          "object_sha256": "1180fd43dcd0ae425699e45ca46ed629d8ea6a52d6914d12e0889dcab7102d9b",
+          "argv": [
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/mlir-translate",
+              "--mlir-to-llvmir",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/kernel.llvm.mlir",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/kernel.ll"
+            ],
+            [
+              "/scratch/agustin/projects/oscar-merlin/third_party/llvm-install/bin/clang",
+              "--target=riscv64-unknown-elf",
+              "-march=rv64gc",
+              "-mabi=lp64d",
+              "-mcmodel=medany",
+              "-O2",
+              "-c",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/kernel.ll",
+              "-o",
+              "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/kernel.o"
+            ]
+          ],
+          "nofsm": "pass"
+        }
+      }
+    ],
+    "checks": 38,
+    "elfs": 19,
+    "all_bit_exact": true,
+    "all_design_rule_ok": true,
+    "all_acc_narrow_mvouts": 0,
+    "raw_movement_acc_full_mvouts": 0
+  },
+  "tests": {
+    "command": "PYTHONPATH=/scratch/loren/core-aten-ref/merlin/src MERLIN_RTL_FACTS=/scratch/loren/core-aten-ref/facts/gemmini-rocket/facts.json /scratch/loren/venvs/gca/bin/python -m pytest tests/core_aten --ignore=tests/core_aten/test_real_model2mlir.py -q",
+    "result": "375 passed, 12 skipped, 103 subtests passed in 170.67s",
+    "focused": "18 passed in 10.00s"
+  },
+  "remaining_merlin_contract": "docs/taskD3_constant_layout_contract.md: external parameter freezing before device_build.apply_region_offload callback; accept authenticated constant_folds when bindings are empty",
+  "notes": [
+    "The supplied saved diag_catalog_wtD.json predates f1311c2 (22:24 versus 22:40 PDT on October 18); 8ddbad9 already makes zero old movement constructor calls on the current real source.",
+    "RSS is essentially unchanged from 8ddbad9; its compact schedules already eliminated the reported per-element movement blow-up. This change folds literals and reuses duplicate audits, and additionally admits native float layouts inside quantized modules.",
+    "Actual source has no dense tensor constants. External weight arguments are not frozen from provenance or a nearby file. Their immutable ownership and stored bytes must be supplied by Merlin.",
+    "Timeout observations are censored lower bounds on completion time, not successful build measurements. Source matching, complete catalog emission and Spike cycle measurements have distinct scopes.",
+    "Complete audits of arithmetic schedules remain a whole-model build cost; no full ResNet device/model execution, Verilator or FireSim result is claimed."
+  ],
+  "saved_diagnostics": [
+    {
+      "identity": {
+        "path": "/scratch/loren/core-aten-snap/models-out/resnet50/diag_catalog.json",
+        "bytes": 158569,
+        "sha256": "c037236885dcac6d1d3a2d8c4c6c2ce5630045f830608986552d23d45aaea3e9"
+      },
+      "parse_s": 6.3,
+      "match_s": 201.9,
+      "movement_calls": 994,
+      "over_cap": 295
+    },
+    {
+      "identity": {
+        "path": "/scratch/loren/core-aten-snap/models-out/resnet50/diag_catalog_wtD.json",
+        "bytes": 159131,
+        "sha256": "a495efb3a62f3728e6d4cf1fdf6b2af8db38f9edfa3bb7ca69178e255c57cfc4"
+      },
+      "parse_s": 6.1,
+      "match_s": 240.7,
+      "movement_calls": 994,
+      "over_cap": 295
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/after-build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/after-build.time",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/after.json",
+      "bytes": 706,
+      "sha256": "aa163cd251b257cd16c7941a5939114a0c0660e298771bff71ff504fe11f7cd1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/after.log",
+      "bytes": 433,
+      "sha256": "f3e4c4f49e11c4963337a1d58d3835f5f26601f4af6a497ee44850730d44c4d7"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/after.time",
+      "bytes": 966,
+      "sha256": "fbadd6bcaddb87303cb20b0c68ddf4af03656f1d1c176503a7b1f2cf0be08bb1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/before-build.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/before-build.time",
+      "bytes": 959,
+      "sha256": "1daa46707c24481cdf550ccc862a35610c873a5a620c0b8a051a37613c55ee99"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/before.json",
+      "bytes": 706,
+      "sha256": "02edc4b7e965b4ead2f420b459792873f6165e9e3b844a2e3eb2ee72d3492567"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/before.log",
+      "bytes": 433,
+      "sha256": "33aa7a3efed914581c5677c651499c3370279ca692c900a76d7e31326bdd1f76"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/before.time",
+      "bytes": 972,
+      "sha256": "3f5c335d0dda5cbc137e44a0d381376ddcccdef7fa98372a362d95ce8c332d6a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/census.log",
+      "bytes": 788,
+      "sha256": "fcff517afb76d1d070959c80c2674fccedc248f428e3997265d6b4781f50f3ae"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/census.py",
+      "bytes": 1668,
+      "sha256": "c391ad91151d37d507bf116b71bba4db65171f1e2c44f443a0b1fbe012119e60"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/constant-final18.log",
+      "bytes": 100,
+      "sha256": "dcf3aa9aab33f8b26f0cbe7127c1026b68f1ab3d849ce59e4df55acd5920fe14"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/constant-tests-final.log",
+      "bytes": 5504,
+      "sha256": "5ef9197365a5ed485f1835fc4c65e6250df65bd9b3e6461b04fa443a754ecd24"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/constant-tests.log",
+      "bytes": 99,
+      "sha256": "c137e47aa730241065899c2c6506edb1bc71d5d99ecc4e3eece62ea1b715b2bb"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/constant-tests2.log",
+      "bytes": 99,
+      "sha256": "7c63b9137c07bc844ee8de4ea8a58bf907bc800b2be9762b51e208a60ad0a1b9"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/constant-tests3.log",
+      "bytes": 9059,
+      "sha256": "ea581c847610eeb952fa3292e946b7ad7e10c666131f4221f06b85aa908810eb"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/constant-tests4.log",
+      "bytes": 7264,
+      "sha256": "053a419ee2a35d2ae0c18c1bbac3440b142a1e10b126aafdbc48dd2921fa36a7"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/delivery-build.json",
+      "bytes": 177,
+      "sha256": "f7362d95ed4fb12e5c9e5a44631c0b496ac5c08f53e67b8b5c9a6aa9992ec779"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/delivery-build.log",
+      "bytes": 159,
+      "sha256": "376a1177097a8fe2a40ffbbd7e26d28f34afd07963e053dd3671168dd52c47ff"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/delivery-build.time",
+      "bytes": 920,
+      "sha256": "1a2a51ddd532b2b18c483cd5619e6505822686908e80e45ff64cd524575bca7a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/diag-final.json",
+      "bytes": 706,
+      "sha256": "704dd792e49157705e385a7baeeac0ef52d639cf615a285087a9ff69ca8978d2"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/diag-final.log",
+      "bytes": 433,
+      "sha256": "2698530e5c3ddc8a419766200b5c3b3e709c395c64d0ce060107c66c8be9b0e4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/diag-final.time",
+      "bytes": 971,
+      "sha256": "075a5c1204f42420156fd09b7da73233d901281043b5feb7b9ec8ae9b662df43"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/final-build.json",
+      "bytes": 178,
+      "sha256": "a37eb2083bd317d1cd6a19d5c5a3feb44d4f2bd7bd2b16297664144d8e8e01a9"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/final-build.log",
+      "bytes": 1559,
+      "sha256": "31d643b86c433896fbd7b98c4cff2d675673fbe2ee7b1ea7040b226bd885de01"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/final-build.time",
+      "bytes": 915,
+      "sha256": "a4a217ffe5748a62134439cc1026d68fd09ec00a500df87311f49968a7318624"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/first-failure.log",
+      "bytes": 846,
+      "sha256": "fd99b050c591a640d77b555d40f519c36a754c961808de4f880e46fd248afa86"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/first-test.log",
+      "bytes": 100,
+      "sha256": "66535277a468a360c44a4b28b335780de30ed9d94c17198d093c8b32909c1a5a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/fix-tests.log",
+      "bytes": 99,
+      "sha256": "de84ea14e68a8db88600b8ca6a5f3a571233d50c7867fd4b1290358547dc4285"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/fix-tests2.log",
+      "bytes": 4144,
+      "sha256": "be8f3667d790fecb67172db920b6ceaf205303561aa7873f585b669f4cdacc05"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/fix-tests3.log",
+      "bytes": 504,
+      "sha256": "6fd340c0da7fcd8b73c5bc6106343b99ffba91e6fdd9fea43e0763d16bed309d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/fixture-diag-final.json",
+      "bytes": 547,
+      "sha256": "993769d97d979d49f331cdf112d7e4a39a09fed69afaf9cb556f9c3517be784d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/fixture-rewritten.mlir",
+      "bytes": 1022,
+      "sha256": "31922298aca31f92c4998f93365ec2562805cf834d9cc6dc16b5aa920d68ebce"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/fixture_diag.py",
+      "bytes": 552,
+      "sha256": "5307db687d56e0b0af54a9a7d92ab58243379d95e46319b7115928f8069b9191"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/full-tests-delivery.log",
+      "bytes": 514,
+      "sha256": "5593f33652d6e744e13c82d6cf081c16bf8fa1a47fc8ef59ac6c26f74fadbd8b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/full-tests-final.log",
+      "bytes": 514,
+      "sha256": "70aff2630fa2090f0b35d254931ebdc9820e4429a49e71eb22f21264b38d8efe"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/full-tests.log",
+      "bytes": 24592,
+      "sha256": "f827fdc21577aae9039394ec86110dd8486b43881dbd6b83245b772cd991f235"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/internal-tests.log",
+      "bytes": 478,
+      "sha256": "838929409eba04369c4fc7390e1648c656fdba3c43de1672ca247c5aa7f6e686"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/internal-tests2.log",
+      "bytes": 100,
+      "sha256": "c589f29c5f2d4c169aa68ae91e6b86196a59841f73eacefd971b35a3b734cf9a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/make_receipt.py",
+      "bytes": 5263,
+      "sha256": "f30a356d9f4738eca56de6adfc93a184bc9ce30e7f327a327fa75a6e651fa961"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/measure_build.py",
+      "bytes": 755,
+      "sha256": "8d51893d43f083e867f4e79a233052545e8bb83109982feb91929f312a387ae5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/measure_delivery.py",
+      "bytes": 685,
+      "sha256": "ff09ec01baa35c3f381fc2aac3dcb576c9dc10542c2332b08bae63d9f329966e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/source-census.json",
+      "bytes": 2966,
+      "sha256": "f9705868a9e3976931a9c3a8cd91d5dff6bd556a3cbc356ee710ee272d68904c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/blobs.S",
+      "bytes": 1060,
+      "sha256": "66ef60d3c7a4e39724e0c4aa2a36e8fdf979aaa9217070845b427dd2488ef09d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/constant_layout.elf",
+      "bytes": 25944,
+      "sha256": "90e9c92967c7bfa9db380c580b51bf4f2df3778dcf9d423fc3e33582adff839b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/constant_layout.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "7b48e4504abd9ea85db9307c371add18ad030261699a7d940cba88924103a857"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/design_rule.json",
+      "bytes": 633,
+      "sha256": "83080251d2be3d0281e37e2fafff571e35be1af522be5646dc2ebb099e7527a6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/exp0.bin",
+      "bytes": 448,
+      "sha256": "c2abe0327132e37be38827ff5596330238091780af98da0bdbf9181815dab775"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/exp1.bin",
+      "bytes": 1728,
+      "sha256": "ec002c5dd661249c79881b3df30275b375696b60247d45263e66917725a2da32"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/f32.catalog.json",
+      "bytes": 3896,
+      "sha256": "4c84f4b75a828952731211da023f329da99e8d623066367a6e8403a10427bd73"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/f32.offloaded.mlir",
+      "bytes": 2278,
+      "sha256": "2059086aa6fb0aa313afe6fdf4624771da33e2da46590fc028a2edf810ec95c6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/f32.source.mlir",
+      "bytes": 2119,
+      "sha256": "e77af801a40612304cab037acbf43a8f334165d4a03a15fa1963d459ab701da0"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/f32_x0.bin",
+      "bytes": 896,
+      "sha256": "e4667c391ce6d01e523e74969f0fe40a482dcc2fe7e41a07c6b2df9076f55faa"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/f32_x1.bin",
+      "bytes": 896,
+      "sha256": "b30b0b3f74e971e260dcfd3a2c2344b8a28636692eeee08045859a96f70e4d69"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/f32_y.bin",
+      "bytes": 1728,
+      "sha256": "7636c9f8da9a82f9a9fcd804a25795a9c900e1c7e19f7442a7b113c8ccd64eb2"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/i8.catalog.json",
+      "bytes": 3887,
+      "sha256": "a4b5d583b219769e55c5e2fb7abbebcf3fdc717620b227ee418da4df7ac2eab8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/i8.offloaded.mlir",
+      "bytes": 1005,
+      "sha256": "b799eb9719e3833bfaba161ce606e510f6becee4837a0662ec26317dd1ddd89a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/i8.source.mlir",
+      "bytes": 849,
+      "sha256": "597c729f7e6f89b9164dde04806b94c45f5ee8fc25ef01c6368df16cda1f66f3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/i8_x0.bin",
+      "bytes": 256,
+      "sha256": "a95304c4289fb16c90dd7c7c8267ef87231a0d5c26cfdc9f15f76efb97e29c56"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/i8_x1.bin",
+      "bytes": 256,
+      "sha256": "15e23dd03e5dd3a450b2a034b47d3c10a0c1b53de259c4dcbb850f7756a4385d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/i8_y.bin",
+      "bytes": 448,
+      "sha256": "5c55c8f4db4010ba9203d83536d0609856af8c847ac039e37e7dde8fbd574b61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/kernel.ll",
+      "bytes": 6249,
+      "sha256": "95e63810ca4c761df32206dc291f2e10f896279ddacacf2b223b8869b9ed9d27"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/kernel.llvm.mlir",
+      "bytes": 7879,
+      "sha256": "9da2d8fbb71d55a6a25b52f0e4ac02029a01081ccd6bdf5a03120686545730fc"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/kernel.o",
+      "bytes": 1408,
+      "sha256": "b10787da266c95fce9f0fc50a8a086d786f4d90337ba28fa0f15c607e4bdd786"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/main.c",
+      "bytes": 850,
+      "sha256": "fd6f850badffb2c8d181ae66decda44091cb159348f475999b7c5f38f87d3a0d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/results.json",
+      "bytes": 805,
+      "sha256": "31cd42dd643da146e7afe8670b76ba3ea04df8db688d2152869f5e1ff5404472"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant/spike.log",
+      "bytes": 124,
+      "sha256": "4ab9b3434d27bb0df73b8c368441dc6b71c8c480f6b92daaeeeab4b466825b0a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/blobs.S",
+      "bytes": 1108,
+      "sha256": "c5adbb506e22c2192fb68bb763dfa6d28d50b29606abe538188dbb7fb3cba0e5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/constant_layout.elf",
+      "bytes": 25944,
+      "sha256": "d816b3371ad664efd1c2b12c8b6650887267cb2f2f3333201c0c2fa73fd0665b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/constant_layout.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "8b909e7d13c487cc735f12f7aadf4a0b578a6f6e8e1c5de507b16773e25017a1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/design_rule.json",
+      "bytes": 639,
+      "sha256": "de4c803c8fa7c440ded23d63d7779c5628a4f4fedb95017b83605fcb7f4198bb"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/exp0.bin",
+      "bytes": 448,
+      "sha256": "c2abe0327132e37be38827ff5596330238091780af98da0bdbf9181815dab775"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/exp1.bin",
+      "bytes": 1728,
+      "sha256": "ec002c5dd661249c79881b3df30275b375696b60247d45263e66917725a2da32"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/f32.catalog.json",
+      "bytes": 3896,
+      "sha256": "4c84f4b75a828952731211da023f329da99e8d623066367a6e8403a10427bd73"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/f32.offloaded.mlir",
+      "bytes": 2278,
+      "sha256": "2059086aa6fb0aa313afe6fdf4624771da33e2da46590fc028a2edf810ec95c6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/f32.source.mlir",
+      "bytes": 2119,
+      "sha256": "e77af801a40612304cab037acbf43a8f334165d4a03a15fa1963d459ab701da0"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/f32_x0.bin",
+      "bytes": 896,
+      "sha256": "e4667c391ce6d01e523e74969f0fe40a482dcc2fe7e41a07c6b2df9076f55faa"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/f32_x1.bin",
+      "bytes": 896,
+      "sha256": "b30b0b3f74e971e260dcfd3a2c2344b8a28636692eeee08045859a96f70e4d69"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/f32_y.bin",
+      "bytes": 1728,
+      "sha256": "7636c9f8da9a82f9a9fcd804a25795a9c900e1c7e19f7442a7b113c8ccd64eb2"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/i8.catalog.json",
+      "bytes": 3887,
+      "sha256": "a4b5d583b219769e55c5e2fb7abbebcf3fdc717620b227ee418da4df7ac2eab8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/i8.offloaded.mlir",
+      "bytes": 1005,
+      "sha256": "b799eb9719e3833bfaba161ce606e510f6becee4837a0662ec26317dd1ddd89a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/i8.source.mlir",
+      "bytes": 849,
+      "sha256": "597c729f7e6f89b9164dde04806b94c45f5ee8fc25ef01c6368df16cda1f66f3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/i8_x0.bin",
+      "bytes": 256,
+      "sha256": "a95304c4289fb16c90dd7c7c8267ef87231a0d5c26cfdc9f15f76efb97e29c56"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/i8_x1.bin",
+      "bytes": 256,
+      "sha256": "15e23dd03e5dd3a450b2a034b47d3c10a0c1b53de259c4dcbb850f7756a4385d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/i8_y.bin",
+      "bytes": 448,
+      "sha256": "5c55c8f4db4010ba9203d83536d0609856af8c847ac039e37e7dde8fbd574b61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/blobs.S",
+      "bytes": 2258,
+      "sha256": "95f49ef1b25db6e541ca438a39e9dceea1edd15a740667c529babcc51f2a5bc1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/constant_conv.elf",
+      "bytes": 23384,
+      "sha256": "355c245da6fa10ed8b6fb7ba349355e2ad7770ddcd2c88fbda35e976fb0eaf49"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/constant_conv.nofsm_audit.json",
+      "bytes": 360,
+      "sha256": "4bd5447f497d176a4a681465fffd92d2bcc846bc1b16e07322ce0da93a01a580"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/design_rule.json",
+      "bytes": 792,
+      "sha256": "50da76a6a4acb65738abd4068a8878ea8afbe97aa3f0800936012993d9ba3da3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/exp0.bin",
+      "bytes": 64,
+      "sha256": "36ffad975b2dc69471ae3dcef01ea1d5368b0bfb7e929861a333576a5c72d0f6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/exp1.bin",
+      "bytes": 64,
+      "sha256": "8f6f71b3f2a69368e62e89d60cb0e763833a884f16e0ee3418106d83df6ebfe0"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/exp2.bin",
+      "bytes": 64,
+      "sha256": "642fbf0ce0455e935fee6f10bf6f44b1848f9041c861a2b67fdab4755c05e5b6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/forward_ws_x.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/forward_ws_y.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/forward_x.bin",
+      "bytes": 64,
+      "sha256": "26b8cb6177b1208e5a4f4f96c2bc689938d81a4eebafede00013c965e11e5c59"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/forward_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/input_acc.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/input_g.bin",
+      "bytes": 64,
+      "sha256": "513b14b78765a5b64c901a34f1f7da91cd6d2ecbd9c1335af157051e97573d45"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/input_ws_g.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/input_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/kernel.ll",
+      "bytes": 38993,
+      "sha256": "926ce5fd296833263459c1220026b1f10be58f2c77ca6eac9e857a7567c44c6b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/kernel.llvm.mlir",
+      "bytes": 52431,
+      "sha256": "fcf97420f2835a3b5fb263d544ef31a41664bed8dd62fac2a63348311c071598"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/kernel.o",
+      "bytes": 6744,
+      "sha256": "05d67cfaa60a19f09f1eefb41b9b43ab5d10bb772e7c5817ea6a206eeb6c311f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/main.c",
+      "bytes": 1385,
+      "sha256": "b732403ba81646edd323577511967f77edad2b9628aaedb13c6262da3d8e37bf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/results.json",
+      "bytes": 2455,
+      "sha256": "68ad255eaad709c6a4c5596e91ef34ef6d0b7da9fd528cc4e254b2239fe16813"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/spike.log",
+      "bytes": 142,
+      "sha256": "6c3f704c7fddf830387b25786b0a939d1dac1e798c41292d207d292915aeb2ea"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/weight_acc.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/weight_g.bin",
+      "bytes": 64,
+      "sha256": "513b14b78765a5b64c901a34f1f7da91cd6d2ecbd9c1335af157051e97573d45"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/internal-conv/weight_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/kernel.ll",
+      "bytes": 6249,
+      "sha256": "95e63810ca4c761df32206dc291f2e10f896279ddacacf2b223b8869b9ed9d27"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/kernel.llvm.mlir",
+      "bytes": 7879,
+      "sha256": "9da2d8fbb71d55a6a25b52f0e4ac02029a01081ccd6bdf5a03120686545730fc"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/kernel.o",
+      "bytes": 1408,
+      "sha256": "b10787da266c95fce9f0fc50a8a086d786f4d90337ba28fa0f15c607e4bdd786"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/main.c",
+      "bytes": 850,
+      "sha256": "fd6f850badffb2c8d181ae66decda44091cb159348f475999b7c5f38f87d3a0d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/results.json",
+      "bytes": 811,
+      "sha256": "a40af07ed17895d21933299bfacf5c968394f8a3dd6bdab961c6893bedc087f7"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final/spike.log",
+      "bytes": 124,
+      "sha256": "4ab9b3434d27bb0df73b8c368441dc6b71c8c480f6b92daaeeeab4b466825b0a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant-final.log",
+      "bytes": 289,
+      "sha256": "c8a916e94eb36ed624a76771bdce5ce28f4f0ca2b5d346bf21f2c2ce7bf3b31c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-constant.log",
+      "bytes": 128,
+      "sha256": "2bbfc0ea4299f77e34ec52ec5b0c4f06c6c8ea1a49f086e65d53e7a8a91c6007"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/blobs.S",
+      "bytes": 6198,
+      "sha256": "55c01a994caf2677050eebf0b53b1dd827126e97c0f8ee7dc3d2cf583e78f93a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_f32_native.json",
+      "bytes": 3400,
+      "sha256": "cced4ba5f77cafd988aea4524bafe9953a8e371e53519648b0b463373372a816"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_f32_native.mlir",
+      "bytes": 267,
+      "sha256": "fa1b1c5103944019e8e97d2a44e71d780fa1005edb2b3aa4594e840cc3c56d3f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_f32_native_x0.bin",
+      "bytes": 576,
+      "sha256": "71cbb63c098c4b3f21ae8a041e56fa2d12102a103091354e8d4036848d1a83df"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_f32_native_x1.bin",
+      "bytes": 576,
+      "sha256": "ef2a02f1aebeb045ba972920303063cdcc3e5ce9a3ddc6cc4bf108c5dc85d75c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_f32_native_y.bin",
+      "bytes": 1088,
+      "sha256": "0e40a09dd6c3d8b503c0095444488c25f0fa19356ddd9b77a16219cb1cec69e6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_native.json",
+      "bytes": 3394,
+      "sha256": "65aaa74a95bb55ba0b3631797dbe3cbdeed3aeb7a2521e2c1d0cc0a7ae9d80d5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_native.mlir",
+      "bytes": 260,
+      "sha256": "5766c5a0a769421f2a62935476c51836e2ac843b1a76276c94e6dcb0cab2b206"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_native_x0.bin",
+      "bytes": 192,
+      "sha256": "56e1e35b3e92945d607c759813e453792687fcc68aa13a9e1e37ed7376e2da0a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_native_x1.bin",
+      "bytes": 192,
+      "sha256": "90e1fa3ef434321da88fd74ebce600f86156792e6d30b11e7b6eff42693e255f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_native_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_same.json",
+      "bytes": 5721,
+      "sha256": "7444a1de80fdd2bbf2f08131691efed3a0cfce95ec0d42f2c5721de85e8068eb"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_same.mlir",
+      "bytes": 998,
+      "sha256": "7a63efb2957ae5d45e4ed49ee4c60404a7ab05aa326f1bdfc715ac0f9914edc7"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_same_x0.bin",
+      "bytes": 192,
+      "sha256": "e615c9b9a169ea935bf445f0fcba1ab85c8c6b5f97e884fc8e13762739230847"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_same_x1.bin",
+      "bytes": 192,
+      "sha256": "2ea78ff1ea2a3b5c9a22619b33f969d8e08e8e4b0bd6b37c8a4ea2a372b02fce"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/cat_i8_same_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_f32_native.json",
+      "bytes": 3056,
+      "sha256": "ea2c068a519a174436d7b82c5901056063261733824ddeffc39874f520a4916d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_f32_native.mlir",
+      "bytes": 515,
+      "sha256": "ca8081007b4174602f5d29ffc43d45b8c6ec77122449222b91b5f151d7a98004"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_f32_native_x0.bin",
+      "bytes": 1088,
+      "sha256": "994f6cababacab03ec2dd5d0135833a5c0acf9d80de87751a14157c61e3814a4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_f32_native_y.bin",
+      "bytes": 1088,
+      "sha256": "0e40a09dd6c3d8b503c0095444488c25f0fa19356ddd9b77a16219cb1cec69e6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_i8_native.json",
+      "bytes": 3052,
+      "sha256": "6e7ae0370c54ef11b64166ac817e6959fa93aaacecbaa46f41a7fccdeebd4abe"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_i8_native.mlir",
+      "bytes": 505,
+      "sha256": "2c9dd3db3dd70209c209ce8a2c09af0e3d4d2bc7bbb8a93baa86d79858bdcc6e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_i8_native_x0.bin",
+      "bytes": 320,
+      "sha256": "d52879b38aa236aac72d395780a30b47d2ab5a2cd1193a28e418467b6f10bff5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_i8_native_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_i8_same.json",
+      "bytes": 4774,
+      "sha256": "d070c071224742a298130c04f932c8b7d23fb4321bbf1d493f1c88db735c31a6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_i8_same.mlir",
+      "bytes": 1050,
+      "sha256": "4d618c434a42049b01b4975983a6a48d17feb670049dca7e954ec50b6dc4d6da"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_i8_same_x0.bin",
+      "bytes": 320,
+      "sha256": "f864b8cf01fff3a2e8ae2967d85fa8decc800d0162caa592a2405d14d30bbcfa"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/copy_i8_same_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/design_rule.json",
+      "bytes": 636,
+      "sha256": "7646a5d34dbe10fda8a6faa61256a5f2c5582b74b20206ad4aa929b013b5bfc0"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp0.bin",
+      "bytes": 320,
+      "sha256": "8fcf260741facbd39a0b8ded1ecaf3e67da6cf5ea3aac01b3da98ad97e423f45"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp1.bin",
+      "bytes": 1088,
+      "sha256": "9e90ac13d9f5615421f0c59462a446b22158c82eb3060fb400bbd7a3ad35499f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp10.bin",
+      "bytes": 1088,
+      "sha256": "11d2d8385cb0e8c06190f20e299d3db1c0190f6ebf63b46692719b343632d0ed"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp11.bin",
+      "bytes": 320,
+      "sha256": "82ce5b6057e231c642dda003c68edf583c2d44399fdab5e1409a78d13f98d517"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp2.bin",
+      "bytes": 320,
+      "sha256": "4a9b0cc2a3f72e4401f87c58c095e2f7b94ec5674766584fb3adb36bc873a342"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp3.bin",
+      "bytes": 320,
+      "sha256": "3ea1c92adbb48879f61b7208047979884332bd7bdc1c8ed9f2a81f6d6d37e5eb"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp4.bin",
+      "bytes": 1088,
+      "sha256": "5121193627b5edb20bd56888a9ba89ced1e6040afe53f9e322d3e8a8b2b2be68"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp5.bin",
+      "bytes": 320,
+      "sha256": "3c7792a7643029d30075891ba227f4375a0952f7cca1e055f3398b26bd1ae9d9"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp6.bin",
+      "bytes": 320,
+      "sha256": "d52879b38aa236aac72d395780a30b47d2ab5a2cd1193a28e418467b6f10bff5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp7.bin",
+      "bytes": 1088,
+      "sha256": "994f6cababacab03ec2dd5d0135833a5c0acf9d80de87751a14157c61e3814a4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp8.bin",
+      "bytes": 320,
+      "sha256": "f864b8cf01fff3a2e8ae2967d85fa8decc800d0162caa592a2405d14d30bbcfa"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/exp9.bin",
+      "bytes": 320,
+      "sha256": "a1a09d66255a7f4499ce631dabe7379e58d9600181c3e1fa1bef03e0caf93b69"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/kernel.ll",
+      "bytes": 19783,
+      "sha256": "96dc66769ec7be8ba14742e80cbe50c433bafafcc5741b8953497fc11f6f106b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/kernel.llvm.mlir",
+      "bytes": 27144,
+      "sha256": "9aba6bffb4cb9ac1672145746430347a6715404c5756f5734ec3fc62d2971a5a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/kernel.o",
+      "bytes": 3056,
+      "sha256": "b95ae2cafba980d1d5af015416d5b49479fdab7d7b6e0dcb4fc1109e5de851a6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/layout_raw.elf",
+      "bytes": 44240,
+      "sha256": "879c14cc375d885392c5d708305d43cca3b1a9eef1aa0ba4c28538620c74015a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/layout_raw.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "64ddec697d2e6996e80c970009d1c9d93610ac3b7fe38803b4b1839be770b20c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/main.c",
+      "bytes": 4520,
+      "sha256": "30cdcd874f8b9c793f0d897593b7e896fe8d051a86d78ff4d90b5073a3aa14a8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_f32_native.json",
+      "bytes": 3060,
+      "sha256": "25d0c9139dd6d165d42e41a289446893ed5e514d60174488c0198e9a1a67bce1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_f32_native.mlir",
+      "bytes": 515,
+      "sha256": "c9ee5e179a9f2d7a6683eb80559f94b56bb2e881aa2446c7186054502527d63f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_f32_native_x0.bin",
+      "bytes": 1088,
+      "sha256": "14ae8c2bd79c6afe052bf147b4529e2f824ee6b95ea2e0e5d95bd6de0d396cbf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_f32_native_y.bin",
+      "bytes": 1088,
+      "sha256": "0e40a09dd6c3d8b503c0095444488c25f0fa19356ddd9b77a16219cb1cec69e6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_i8_native.json",
+      "bytes": 3056,
+      "sha256": "8417d8fc586a031c14c24c076fdb5c43e5a71ffb327c7da890098fcb0c41a8d2"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_i8_native.mlir",
+      "bytes": 505,
+      "sha256": "5ad4eb22038b3f4257cb470e9b2b507ddf821d284c1f10ccd4435596f149cc9e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_i8_native_x0.bin",
+      "bytes": 320,
+      "sha256": "6446142afa77e3c0c06d7d86442e9064bca14ac58972103c4571ade874148c49"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_i8_native_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_i8_same.json",
+      "bytes": 4778,
+      "sha256": "2cb027e56a8437937487668780675f3fd322a61db62c081594a893e81615e5a6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_i8_same.mlir",
+      "bytes": 1050,
+      "sha256": "402d48d55b407b64fd018cd0bec2e1266a40312d245df729b3a5c7c4e1be6f03"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_i8_same_x0.bin",
+      "bytes": 320,
+      "sha256": "f61d5ec6743719b90ca80aba39b4309f1bda7be5899275493417c2aa7c337568"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/permute_i8_same_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/spike.log",
+      "bytes": 361,
+      "sha256": "4e317ddffb8328f1a711b2fa10bf54efd68049416ece92f8f8c30da15e7fd047"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_f32_native.json",
+      "bytes": 3060,
+      "sha256": "51e8c02778caf3ea894e8db453d5bf447dfd56dfbadea43016eb3c9b0eb9bf17"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_f32_native.mlir",
+      "bytes": 296,
+      "sha256": "162829c434b39cdcf45da06dcd02f08d9b02b33d186a70e284e7f596359989bf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_f32_native_x0.bin",
+      "bytes": 1088,
+      "sha256": "0625ef797534e3b208f78a66684a4a26119b9662970b353c0a78a61b753ee45d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_f32_native_y.bin",
+      "bytes": 1088,
+      "sha256": "0e40a09dd6c3d8b503c0095444488c25f0fa19356ddd9b77a16219cb1cec69e6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_i8_native.json",
+      "bytes": 3056,
+      "sha256": "b92dc4ddee46c6ef2c33ede7f9c75178353aba4004d879c10c70b3bb7de1533a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_i8_native.mlir",
+      "bytes": 290,
+      "sha256": "6dcb428a03271c162eb80190e70f9da2a1bb73df14076621f8c8e1723d271718"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_i8_native_x0.bin",
+      "bytes": 320,
+      "sha256": "4fb02b6380f8be01f6fa2c9634477a7263b5b2e9f325b84c0095ee1fdd73dbea"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_i8_native_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_i8_same.json",
+      "bytes": 4778,
+      "sha256": "6c2269cd166acd331345f30ef6c9f6ed4608de6516dce3834365524dd1885d8a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_i8_same.mlir",
+      "bytes": 831,
+      "sha256": "51a7e7cc9b791c8474df587f69504544a6ff82f883e9e03cd87065ceee9d1b68"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_i8_same_x0.bin",
+      "bytes": 320,
+      "sha256": "f28814bd57a1a15bfc3abe567a7bb9d3a4a0e489c03d5dc510907b212e83fd00"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/raw/transpose_i8_same_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/blobs.S",
+      "bytes": 7552,
+      "sha256": "74bcc61f553bcc12878c7e50b40b6f9d93c5b35d06c423fa0401bd460f32336f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1.json",
+      "bytes": 7381,
+      "sha256": "e0cd6072c6e17058e5ffe212969f66d69e4359922ebdb56025608c2b69bc5137"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1.mlir",
+      "bytes": 1095,
+      "sha256": "ce249db8567e7bca47bb96b5a5d695a222e307ad268b949f7ad6c43690c77988"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1_converted_0.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1_converted_1.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1_raw_0.bin",
+      "bytes": 576,
+      "sha256": "1a0295f4bf5986c5f74eca9153a6a4cb10b073a01a76ba4a457fd862c78966a4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1_raw_1.bin",
+      "bytes": 576,
+      "sha256": "1a0295f4bf5986c5f74eca9153a6a4cb10b073a01a76ba4a457fd862c78966a4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1_x0.bin",
+      "bytes": 192,
+      "sha256": "49483d73f2933e79ad0b4c471e8e7d9419220d7758f05a3ac566a370dd90a1b2"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1_x1.bin",
+      "bytes": 192,
+      "sha256": "9b4af6fb6f8a2ffe4a84d95522748efc65b9d9a356b916d13344a3e19f169b9f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1_x1__signed.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric1_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3.json",
+      "bytes": 7385,
+      "sha256": "2136614cfb02ef194bbf6c58aa2ed587493470628dcb29eadf570629d4297605"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3.mlir",
+      "bytes": 1095,
+      "sha256": "68f3119303024debb8cebefefce463b4115a3769e844adf3709c27f5c67770a9"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3_converted_0.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3_converted_1.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3_raw_0.bin",
+      "bytes": 576,
+      "sha256": "1a0295f4bf5986c5f74eca9153a6a4cb10b073a01a76ba4a457fd862c78966a4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3_raw_1.bin",
+      "bytes": 576,
+      "sha256": "1a0295f4bf5986c5f74eca9153a6a4cb10b073a01a76ba4a457fd862c78966a4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3_x0.bin",
+      "bytes": 192,
+      "sha256": "905efea31d779a8233373292fe44a994a75e09ef4dbe0de5f0285b26d241414c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3_x1.bin",
+      "bytes": 192,
+      "sha256": "c98e03121dbd79bcab8e1343a4e709a23bcff7d7cdfcdb0923f5c5ad71d66d35"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3_x1__signed.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_asymmetric3_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant.json",
+      "bytes": 7177,
+      "sha256": "b1afeac2c602a1e530042c820eaafc8aa19b54b9a24902f37d39ee0b228e23e8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant.mlir",
+      "bytes": 999,
+      "sha256": "16ba567d2cf6aef41c26504560996cc7533bb38e16f067606832305c124dc49c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant_converted_0.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant_converted_1.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant_raw_0.bin",
+      "bytes": 576,
+      "sha256": "1a0295f4bf5986c5f74eca9153a6a4cb10b073a01a76ba4a457fd862c78966a4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant_raw_1.bin",
+      "bytes": 576,
+      "sha256": "1a0295f4bf5986c5f74eca9153a6a4cb10b073a01a76ba4a457fd862c78966a4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant_x0.bin",
+      "bytes": 192,
+      "sha256": "8f1267df464782c9c1afd2421815708fbe960819ce2ccf08fb3f0fe3d839c9d3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant_x1.bin",
+      "bytes": 192,
+      "sha256": "aac806117a53b752140951d24ea3502aab4271f1eca066b4a1682d1c949ff16a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/cat_i8_requant_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/copy_i8_requant.json",
+      "bytes": 5209,
+      "sha256": "ab1fbc72ae65a8d866028ae5751e91bd427fd9e02848e28a99beb39b155eb67d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/copy_i8_requant.mlir",
+      "bytes": 1051,
+      "sha256": "2323194207fd9b43bfacd25eb0b2b96b55d00bec625a444b7220a98fb196aefe"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/copy_i8_requant_converted_0.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/copy_i8_requant_raw_0.bin",
+      "bytes": 1088,
+      "sha256": "0e40a09dd6c3d8b503c0095444488c25f0fa19356ddd9b77a16219cb1cec69e6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/copy_i8_requant_x0.bin",
+      "bytes": 320,
+      "sha256": "ef97a0ffdebeaf3d48e9a603b6988838e7b27667ed4d310ff3b435ea045edeac"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/copy_i8_requant_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/design_rule.json",
+      "bytes": 643,
+      "sha256": "0c988f51ace53681c58b15b0a2d9151d725a7492fbb962b6e3c512280ff04800"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/exp0.bin",
+      "bytes": 320,
+      "sha256": "b55f0a6ebcf84b8f51b52137f88865c9ed0cf3a06f1af648d08d6cee95d319c6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/exp1.bin",
+      "bytes": 320,
+      "sha256": "5e03cc546c67abaa492626ee167ba070515f9eccf580050c29ee8740f94e8030"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/exp2.bin",
+      "bytes": 320,
+      "sha256": "9e6b6abbac7772f24059a571131f28bcdcfbe523bb4730990cf359a8e60e8eb4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/exp3.bin",
+      "bytes": 320,
+      "sha256": "98e0b2b349854b3663543a267fcb6e8e6fd2bddc92c526480eea1d5716edf0b6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/exp4.bin",
+      "bytes": 320,
+      "sha256": "f13623459cf9f84f88f2861e0ea77faf6d3f5ed7cc76a756017e55f994681bf4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/exp5.bin",
+      "bytes": 320,
+      "sha256": "9f970620d6b615c8f994844f3181d9e92f22d2cf0e9968940ef200c0def98d60"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/kernel.ll",
+      "bytes": 55652,
+      "sha256": "1eb9572af98d69e85fc726fe067b5dbaed6ff3bd119c0369f3b19f8b6ffa6068"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/kernel.llvm.mlir",
+      "bytes": 79828,
+      "sha256": "9257b857c62f5e860e6346f704688c07ce1f85ee79d5eaa8b0225d1d72113951"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/kernel.o",
+      "bytes": 12424,
+      "sha256": "f6349fb1168118516c2c6fad07261517019af59fb0347077a51ed9c1bf52cee1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/layout_requant.elf",
+      "bytes": 41200,
+      "sha256": "800e911c339f746de8018ca4da631156380d2baf7882d57a637ffd72287a349a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/layout_requant.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "09802aa2effe6a354f8677ab0b7acf503e79a2da35c9b8948255d13a7dd70766"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/main.c",
+      "bytes": 4319,
+      "sha256": "8d2749f43398d5498c01ce9fb79ef4720f5ee97240b737e3133b4ed189dd583e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/permute_i8_requant.json",
+      "bytes": 5214,
+      "sha256": "0fb757598292c959bd9ebad7d79ae04f709e06297b7cbe8b6403051bd5b11a6d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/permute_i8_requant.mlir",
+      "bytes": 1051,
+      "sha256": "fb97e682f28d0afbcd41d67a50fd94fe27559429ae2cea02fe6beb17accc8b2a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/permute_i8_requant_converted_0.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/permute_i8_requant_raw_0.bin",
+      "bytes": 1088,
+      "sha256": "0e40a09dd6c3d8b503c0095444488c25f0fa19356ddd9b77a16219cb1cec69e6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/permute_i8_requant_x0.bin",
+      "bytes": 320,
+      "sha256": "21b74f932f1d85832a7b7165b9b4dcee3c4768968f542bea2d54592aa6dbd1a9"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/permute_i8_requant_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/spike.log",
+      "bytes": 248,
+      "sha256": "9429714a6aeec0a0f2e1a5825df45359c32d36a72773ec7705b87487728f21bd"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/transpose_i8_requant.json",
+      "bytes": 5214,
+      "sha256": "15ab2b716c50be1b2315d09aee080c33e89b48f1bfed58aa673914d7330cd6f3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/transpose_i8_requant.mlir",
+      "bytes": 832,
+      "sha256": "c6e6e48631f54d3eec0a909882f42211de527df12d0e1b979ab6a501f0297fee"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/transpose_i8_requant_converted_0.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/transpose_i8_requant_raw_0.bin",
+      "bytes": 1088,
+      "sha256": "0e40a09dd6c3d8b503c0095444488c25f0fa19356ddd9b77a16219cb1cec69e6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/transpose_i8_requant_x0.bin",
+      "bytes": 320,
+      "sha256": "f2bea7131d4822ad76095e6623c9da44e95d0541439f10582482ae2af9678cff"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/requant/transpose_i8_requant_y.bin",
+      "bytes": 320,
+      "sha256": "7b6436b0c98f62380866d9432c2af0ee08ce16a171bda6951aecd95ee1307d61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout/results.json",
+      "bytes": 4063,
+      "sha256": "d8b0c7b1229bf710eb7261bccd44ebbd4f110b7ac47ac1c46b90a15be64240b1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-layout.log",
+      "bytes": 285,
+      "sha256": "99200685d8d8a4e76f773ce22e19e73a2f4ed30bc86c466597850b2176a6b426"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/_to_copy.elf",
+      "bytes": 18800,
+      "sha256": "19f83cbb328305b31a83fcea1039b3b585be05ccb9625926d926233ff4b34813"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/_to_copy.nofsm_audit.json",
+      "bytes": 292,
+      "sha256": "3800d8754fdd65c50649b680655989e3e6cc4116254399a7a1e5289e5f70dd46"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "b6a32c5709a2a2256908eacf9074c0c4024217331d32d3d83168939f3cc05fb8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/blobs.S",
+      "bytes": 417,
+      "sha256": "844547bef4f62328e2269bfa2ab527d91f411b5a3634e643c2011f165fddd73a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/catalog.json",
+      "bytes": 6985,
+      "sha256": "48f3ee6c185b9e0aa29b38fb1a57b154fb9266104684672636e7588eb17bc858"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/design_rule.json",
+      "bytes": 626,
+      "sha256": "d52314497af99defa788219a43993ae5482b77e1632a2226b008a58ae68c4f55"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/exp0.bin",
+      "bytes": 64,
+      "sha256": "b6a32c5709a2a2256908eacf9074c0c4024217331d32d3d83168939f3cc05fb8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/kernel.ll",
+      "bytes": 1510,
+      "sha256": "ee1d2c5c04dbfe54a98b751fb77e5b34d49076cc916d2f86eff496ff37cb7dad"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/kernel.llvm.mlir",
+      "bytes": 2013,
+      "sha256": "d53afeae0934ecc566c15cd60f05ad6e340a3df0228710437ab0fba9377e3445"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/kernel.o",
+      "bytes": 1072,
+      "sha256": "e37af50317e942971719f3d2ebd8840224f3e4295cbc3499109d74eedade7fdf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/main.c",
+      "bytes": 499,
+      "sha256": "724c498606a4a6c6a423425d40d4a40263b7af304eb4a7699a167b12bb267468"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/offloaded.mlir",
+      "bytes": 4246,
+      "sha256": "95859697ff2c5e8eb67aa600025741e74ccfb7ca8bb321b877ecceddbf766a40"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/shim.c",
+      "bytes": 990,
+      "sha256": "e13d3854ee8a83e6e59c4b75c4c69115f65b8653217b889c18a969a69fbeb43a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/source.mlir",
+      "bytes": 7876,
+      "sha256": "033ad6f2e8a7cc5d8d281132922dd067129eb8b07bdabdf5545510c2ecc82581"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/_to_copy/spike.log",
+      "bytes": 125,
+      "sha256": "54ff2f3d5c068be77c47e98cfe2965865612501925acde76bf61953e10686a0c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "6e8809cdc972e02c0b77470ef69b3c77a31a5a2d23ccf934ec1301037fba819f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/b0_x1.bin",
+      "bytes": 64,
+      "sha256": "f50b93e2d351955a589269b731fc5a7c362bd0fd27d2643f258585fb7d06e7af"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/blobs.S",
+      "bytes": 533,
+      "sha256": "2667d3739edf1d2d0e207c059a9e96f91e28fcc449ae9a65312db31110aebcdf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/cat.elf",
+      "bytes": 18896,
+      "sha256": "2382b446aa401ed8f38b2e099995344940335e987da0fd012711a3557f53dbf5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/cat.nofsm_audit.json",
+      "bytes": 292,
+      "sha256": "ff4c61787017bc808a488dc2576678711501b985db970ce196285612c367994b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/catalog.json",
+      "bytes": 9151,
+      "sha256": "96c8c01944fab2040dc38fb20ba147beb83e7c6456479fdaa82c0e9066966615"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/design_rule.json",
+      "bytes": 616,
+      "sha256": "1c1d7933445151c88ca507e35a654ffa9fe764d311f3f3e263480dd2f741f231"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/exp0.bin",
+      "bytes": 64,
+      "sha256": "19288da99d271a4f38b6502978ddb2670e058a45d559ab08905d9f5e1ceb1938"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/kernel.ll",
+      "bytes": 1576,
+      "sha256": "88ddb3186335f1fc59440474efe800845a019c7e673ee3f53292ea81781b50e8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/kernel.llvm.mlir",
+      "bytes": 2114,
+      "sha256": "5612a341faaa91c42ffe066eafa5c82d5a1aad696c2b71aacf4229a559404040"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/kernel.o",
+      "bytes": 1072,
+      "sha256": "b40b02e0546413778a7902247dcfb1405bb745911bebff75d134e58703f6efaf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/main.c",
+      "bytes": 533,
+      "sha256": "6318c72cac1604d498acbded94da818deb4f49fee27b9f04aa1e1a8f7f089cab"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/offloaded.mlir",
+      "bytes": 6044,
+      "sha256": "a8a629ec4f7d776a13950adc06ee1df7105d7d65a8b3a28b0f804122dcfa7b05"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/shim.c",
+      "bytes": 1116,
+      "sha256": "2106a73014c37e0ae48143b98636d1a17d4df219de412dfce07307258b3f4818"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/source.mlir",
+      "bytes": 10921,
+      "sha256": "34119281006f2018c57d5bace8cb8832fb460b0422a6b57984d4014419ec4a05"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/cat/spike.log",
+      "bytes": 115,
+      "sha256": "58e74ede566c9502ce57f5bc83f4f32212c334a8229ec0d95c1409a5079409df"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "d7f17ad7db38f92f6e254543795d831b8e823a876a30e0ff4c3c7d998ac632e3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/blobs.S",
+      "bytes": 408,
+      "sha256": "3a194a023be2a951fdcb4f7e75b7b688024d0efe005e645418580271f887ab31"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/catalog.json",
+      "bytes": 6943,
+      "sha256": "b144b64e8e2012391615c26453483dede29e4902a24d1f7a50ab43f0a884086e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/clone.elf",
+      "bytes": 18736,
+      "sha256": "e94d82986abad961ddbe21a433468cd0c6f5e7730c591fdac1b8ce3d7c36aa84"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/clone.nofsm_audit.json",
+      "bytes": 292,
+      "sha256": "e60fb77e47551d5856f2892f5de899a39830c5cbf20f7854f60b9af9c1ccc54f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/design_rule.json",
+      "bytes": 620,
+      "sha256": "ce320dde4c2cb7b7afab5d27e6d0b40a7e13ae428796ff42f65a6bd4957f1404"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/exp0.bin",
+      "bytes": 64,
+      "sha256": "d7f17ad7db38f92f6e254543795d831b8e823a876a30e0ff4c3c7d998ac632e3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/kernel.ll",
+      "bytes": 1510,
+      "sha256": "c90ef5f8e75d3245a11d0e44c9a73f227f755f30bc8118f4ed44c8e00fcc925f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/kernel.llvm.mlir",
+      "bytes": 1966,
+      "sha256": "e5f87f2ce06e39dd878aed19fce81385af2517c32fe7177a363cc8806db8c1e3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/kernel.o",
+      "bytes": 1072,
+      "sha256": "7d7e61f21ddf42b7ec3ef7b5edb5072e91f551b28f1c56a980f519b3c7e1f84e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/main.c",
+      "bytes": 493,
+      "sha256": "177291658ce77e0987eaacb2a646efc46bc09f95f79b6fe9525a0078b4bfb683"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/offloaded.mlir",
+      "bytes": 4202,
+      "sha256": "00b12f31729bf9ef1a116886b8af8f9069e6f4c8f89cd3de37ec7f601be583f6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/shim.c",
+      "bytes": 984,
+      "sha256": "227b24c98f613347374726b9c3d283d19c67e3bfea21d505d9de46c1bc80544e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/source.mlir",
+      "bytes": 7800,
+      "sha256": "9a47a28f29c1ae8ddbdd68f64e68d3282e335aebba8071573171bc7ef309fc8c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/clone/spike.log",
+      "bytes": 119,
+      "sha256": "e850f7dcde7c75464ce34425266cb71e45a387c19589cec48f4c25e6713224db"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/b0_layout_0.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "becbc400c610649d3b5463dfc8c52712598209851f84024e097f02489d80957d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/b0_y.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/blobs.S",
+      "bytes": 599,
+      "sha256": "15ee9cc7fab382e30e877d67836b756162adb182e3e9f796b0c0dd1788da1ab8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/catalog.json",
+      "bytes": 7268,
+      "sha256": "4ec2f7499dd4c9867a58bce40328ce260f85ee1a49eda32b547e1c45255bc55c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/constant_pad_nd.elf",
+      "bytes": 19312,
+      "sha256": "aa6cf15b49a7d676e0583ff9032b827292b4b2a63edd4f8356c6e14d6f083c4a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/constant_pad_nd.nofsm_audit.json",
+      "bytes": 293,
+      "sha256": "4c5a4718a95740a1224f5f7eb890cce26e8f7c58b1d7e610fc0e445af94c6e21"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/design_rule.json",
+      "bytes": 642,
+      "sha256": "053262576d4b3b796879d0e6137f13a2b563f5af5cda3dec8a6a693e926f893b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/exp0.bin",
+      "bytes": 128,
+      "sha256": "30af1d0f23dcfb2722ab79cfb42a9f5007835dbd0599cf2294ef303b9be7ff6f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/kernel.ll",
+      "bytes": 3353,
+      "sha256": "13e951dacdc830400051e1519dbb57d726ac96a0817b11edf795ce53c01d1884"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/kernel.llvm.mlir",
+      "bytes": 4548,
+      "sha256": "c6048d0b689f6ab97e566f30fa87069a8d0fc2a4247711d1e9e8d938a897ee90"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/kernel.o",
+      "bytes": 1616,
+      "sha256": "052d039fb1d64a96a0e8e36bb26bcf8f2ebd3b5850b79e3828c2941ec0f3f850"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/main.c",
+      "bytes": 569,
+      "sha256": "b0aa489a11f00c2429fe7e53d94e5a67e28d917734eb48620c09501ffdfe1340"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/offloaded.mlir",
+      "bytes": 4306,
+      "sha256": "0b23a97fbc2ba63a402d34132f8d18cd8853d3efaeeb5eecb2c8b96e55e6f92a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/shim.c",
+      "bytes": 1133,
+      "sha256": "9166732dfb04363c2e0b51aa60d4c5a21e74a0589672fe5d4e96b06bbb248f59"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/source.mlir",
+      "bytes": 8120,
+      "sha256": "056662db580526a7fa6320542ed72a735cc17f5df65efddc200748181858ab60"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/constant_pad_nd/spike.log",
+      "bytes": 139,
+      "sha256": "c353b54f066a861a748851e9486330bd6358d7b3a377c3365f1f02b787f541d7"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/blobs.S",
+      "bytes": 273,
+      "sha256": "d38ea2920694f1959844098f83bf18cd961fbbf45a5dcf43690451359673c311"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/catalog.json",
+      "bytes": 4836,
+      "sha256": "299dba219d40340223f8c3be214b24bd2f81b5c05fdfbc8b679bd49dcbd33792"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/design_rule.json",
+      "bytes": 618,
+      "sha256": "5bf310c6c9f0b658a852d916b8149fa2baf8fd4cb43b357f914178d3e5ddd935"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/exp0.bin",
+      "bytes": 64,
+      "sha256": "42bfb393cdf4a4827b268cc618f1a5ca7c2ea95621cc04527b1463a9ea3a103b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/fill.elf",
+      "bytes": 18792,
+      "sha256": "9a3f8f178f3468e81dfaf905e6765ba269eee26c2bccbbb381fb392040bdc0fe"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/fill.nofsm_audit.json",
+      "bytes": 292,
+      "sha256": "74e9d0880b65d921d82253620d6dffed2bbeaad362475e0b7425476b85400402"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/kernel.ll",
+      "bytes": 1133,
+      "sha256": "1ed310c462ac9f14528969a623f50a43db011232b6740e24d8b9bdbbe8cd1a55"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/kernel.llvm.mlir",
+      "bytes": 1599,
+      "sha256": "94d386ebab063ac5f88dcbc36d47557b0c5c1cd4c8fa62313225c239a9dce693"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/kernel.o",
+      "bytes": 1488,
+      "sha256": "1180fd43dcd0ae425699e45ca46ed629d8ea6a52d6914d12e0889dcab7102d9b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/main.c",
+      "bytes": 447,
+      "sha256": "2c0030951bb61747be38c00051aa99dc0df11a85fd2e958f5ddbfb3b788a56ba"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/offloaded.mlir",
+      "bytes": 2630,
+      "sha256": "99a97c8cac284419a187347629efbc6bb016dbaf01d27e600bd2497c5d701f53"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/shim.c",
+      "bytes": 869,
+      "sha256": "0cf40549e57a86a7b2806c28991ee978f741b8b8d65e5b92ffdf3a4393784e60"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/source.mlir",
+      "bytes": 4403,
+      "sha256": "5da5e3322e03df21f1073726d63bc51549f9484b054ba01cfeef5964ee7d016a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/fill/spike.log",
+      "bytes": 117,
+      "sha256": "40d02f84dad1b80e8921fca4d93911d0c691564a29096a069c6da3216e2fa112"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/blobs.S",
+      "bytes": 273,
+      "sha256": "209b69a970c5ffc89bea22c4210e689911a9db462dcfc6e8b65b5bb5dc2a20cf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/catalog.json",
+      "bytes": 4831,
+      "sha256": "458992cb38e7273beb17c60516866ad286dac8758dbae7e02750d9db7c8bba2b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/design_rule.json",
+      "bytes": 618,
+      "sha256": "8146ec878d7a153e6975729a9a71ac506b0509809abe1338f8be06cd451e5456"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/exp0.bin",
+      "bytes": 64,
+      "sha256": "c3766fbd8ffc0cf330d4b7473e85bd4fb0899e2e88b33e5a615756ed8b924722"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/full.elf",
+      "bytes": 18792,
+      "sha256": "37ab63227e937758e4e66903f81d496b293ab657bdbd5918ec2d35ac82472889"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/full.nofsm_audit.json",
+      "bytes": 292,
+      "sha256": "5db0b6e50748cc65220ba00236885b4ad9fec32e039dec544af7036d3cf6ebd7"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/kernel.ll",
+      "bytes": 1133,
+      "sha256": "e8d7b51639baf468bb513d2ed98bf2d0454af0c59f65c6a79878803f61358927"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/kernel.llvm.mlir",
+      "bytes": 1599,
+      "sha256": "4bf28b504ffcddbf24e03e0c7f45abfe5b46614724c36bde6405023b99313268"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/kernel.o",
+      "bytes": 1488,
+      "sha256": "4ab63b43ec8b008cc81c0f4551bfb2b3eb3ee5ddd4c5077b1ed6cabdbbcc715a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/main.c",
+      "bytes": 447,
+      "sha256": "70945e5d7e7ffeea086f2fed2ea7e0432af1fdc89dde3d1642268f9085030076"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/offloaded.mlir",
+      "bytes": 2627,
+      "sha256": "4e6c8813b54aa228aaa90c1db075f92ff36f3aca4ba42ce0c54e67995be8b440"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/shim.c",
+      "bytes": 869,
+      "sha256": "6c3e03be6435d2ee9a2583ea7b911136f70d094111d60fbb343b843d38d59cb4"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/source.mlir",
+      "bytes": 4308,
+      "sha256": "c61c031e21432482a7bf397d17762aa92794db7248cd7c90060b9078d193ceaa"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full/spike.log",
+      "bytes": 117,
+      "sha256": "5011385935eb51d044b0808d76c490abfd155849aca82a1a0d2417016b84792e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/blobs.S",
+      "bytes": 283,
+      "sha256": "884777733c5f366f694646978e36e09321219ee2d42572a71fb4ebad6f84118d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/catalog.json",
+      "bytes": 4846,
+      "sha256": "4dedfddb6a2758408a5cd3e74eb14e883890f7a0ccb0816d1f3516e143112a78"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/design_rule.json",
+      "bytes": 628,
+      "sha256": "7b35a8b2610d9bfd566757ef292303ee8621bf28e01b5bce0d39a1b04f025fbc"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/exp0.bin",
+      "bytes": 64,
+      "sha256": "e0f69b9a3567c94fd75a3d90fed6ad2f27cd8d6672d65e1f4b13bc4bcebe4929"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/full_like.elf",
+      "bytes": 18792,
+      "sha256": "35721116dbd800a1a68c99a489e3fb9103b2d1f55256920bd028df3e8a9f319c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/full_like.nofsm_audit.json",
+      "bytes": 292,
+      "sha256": "0b9a894f688eee97ed36819123ceb849567746041a410d2cb5f70c5224406422"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/kernel.ll",
+      "bytes": 1133,
+      "sha256": "b761459464f6e5b94972c99709c4a580ce3a700aea72059f5e57df44e5f473a5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/kernel.llvm.mlir",
+      "bytes": 1599,
+      "sha256": "fea704f7e603b2dee48783c74affea110746c282a8dc48f0b695d65708550cd6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/kernel.o",
+      "bytes": 1488,
+      "sha256": "30daa0ff028500eaaa0e2118071ccafe5b2faa97cbf6a57372e458daf9215c75"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/main.c",
+      "bytes": 457,
+      "sha256": "a34c0ee432be75fc1b01cc5416d19476818f612c23df88591f88dd7d00eb6e62"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/offloaded.mlir",
+      "bytes": 2631,
+      "sha256": "e7d5a4276399ca15487d37b5b7a3cf0921f4a1e8b0de6a3a18610f02cddf4d7e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/shim.c",
+      "bytes": 869,
+      "sha256": "7b66586243094137411a108887ef2ca7f7e3084ebd661094c378b04d4d19822c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/source.mlir",
+      "bytes": 4326,
+      "sha256": "f66fdbd3b614e1d424a3cce5ea2f49b44b38810c9c4270d9a4f0815134fdb899"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/full_like/spike.log",
+      "bytes": 127,
+      "sha256": "1cfd8d46393f34c41720583d2073c86cde49b84868a011e39d3db462a613f97e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/b0_layout_0.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/b0_layout_1.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/b0_layout_2.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "8bd35dc4872514d6ca2e3d8b54842874fc58d004906ab6024b0b2d3a8c2cd184"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/blobs.S",
+      "bytes": 927,
+      "sha256": "eb5180da2b9f675119eadf967c5aecf33e2ea1ebf8172c2f2236665bd72fa1f6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/catalog.json",
+      "bytes": 7618,
+      "sha256": "d1d0e4aae912d47fa09c5f0bec9c5c4274b4f34b7875a63a654d19e025e09492"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/design_rule.json",
+      "bytes": 647,
+      "sha256": "db7539abb317a16841739987263bdbfb13c341e3a80bcc79b06e5ba73c509062"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/exp0.bin",
+      "bytes": 64,
+      "sha256": "dc8f8855eb64820fe89349ff747b256c42c7bf9261dd81e468921691aaab31b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/kernel.ll",
+      "bytes": 7569,
+      "sha256": "d4a628d59e4d82aca24ed7d0a227bc1c74c45a7884e52352725e7c0dd6fae47c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/kernel.llvm.mlir",
+      "bytes": 7939,
+      "sha256": "790b6bbc4bd8a791e9c56c1f4a167af04b3b612cb22369d54f7c4172f4829960"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/kernel.o",
+      "bytes": 1376,
+      "sha256": "39a25acfe50e8e078911b4d94b1d42ba5ffba0dc3106d2f18b2c1e829256543a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/main.c",
+      "bytes": 683,
+      "sha256": "852b75d9da170753d5bee3e46d03df257cd9b4c6fc2ce5f6429740f5e2fe634a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/offloaded.mlir",
+      "bytes": 4270,
+      "sha256": "c47da878974f14587bb5138e44ac99bfeffacf8b2e0e3b909193d6a842c4f3f6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/reflection_pad1d.elf",
+      "bytes": 19424,
+      "sha256": "6caa985487216e07560514d8e81617bb5275850d0700147a28a790596e8f7937"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/reflection_pad1d.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "2f74c755f887328f0e169ba97d9247d760c4d83c7a11e4d68887bb4e12a902eb"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/shim.c",
+      "bytes": 1390,
+      "sha256": "3a817d4eb22bb6015144a14afd14599f6530ed29a82389cac5ecd1f5318b27d0"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/source.mlir",
+      "bytes": 8884,
+      "sha256": "f430267153bfae3fdd39bdb58d615a05db9e8ad6814938e4199ec0ec162c0857"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad1d/spike.log",
+      "bytes": 142,
+      "sha256": "2f85aa62e97df56588bb43a924a2f2b4e037f39da030e530b60add5235ade010"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/b0_layout_0.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/b0_layout_1.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/b0_layout_2.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/b0_layout_3.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/b0_layout_4.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "e9463e8f81b68591d8b4acdfc33b3d7e9390fffa63f291c816f0bead722ef921"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/b0_y.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/blobs.S",
+      "bytes": 1251,
+      "sha256": "7af57723318c2e1c9a16805234aa614f2cab68d0babadfe5b5f4ea55b7f24ac3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/catalog.json",
+      "bytes": 8119,
+      "sha256": "c41182267a6b13eae658cca64363ba324e5568f90606d2107054e752664eb7cd"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/design_rule.json",
+      "bytes": 647,
+      "sha256": "b7d45900f71d7f1e5332f2306ae8094b1a64940859bfd8a7d2696335bd60f09e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/exp0.bin",
+      "bytes": 128,
+      "sha256": "c68dc6277c50a42e831c3ed69122231902c13b9c402d637df9813b6988a262d6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/kernel.ll",
+      "bytes": 8662,
+      "sha256": "ddb913b628ebc90bc3c01c831edb251dafac83c3b71636f702b2d53fd0df626f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/kernel.llvm.mlir",
+      "bytes": 9948,
+      "sha256": "eb389a19b700704d2106989e446d0a13d7354204c95b89deb3a26ee5fe0c8b88"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/kernel.o",
+      "bytes": 1464,
+      "sha256": "aa9562f0050b7b15f1a31c5a9fabedfc31ffdb83fa0718f5f3bec651e1206410"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/main.c",
+      "bytes": 795,
+      "sha256": "1a994e5d2771c19ea4f23bee7e4baaee310183f73726cdeec15cf57f5fcf475a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/offloaded.mlir",
+      "bytes": 4314,
+      "sha256": "b383d5e2daa005b11784929a294f9b9c92e19069c5417de9c157618b4c6f6748"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/reflection_pad2d.elf",
+      "bytes": 19824,
+      "sha256": "07a22adc72975ce2a112481af9515562e8fc98fbb9c26aa03af52cb020a4bc8f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/reflection_pad2d.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "7e3fe6ca0330fdda5b0e9edd6d244d14283620678609ce896623197a95808137"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/shim.c",
+      "bytes": 1663,
+      "sha256": "c13844ef5b6c4583cc1e3bb68a8cf5dd27a7e2e840b1b43ae390dfc5cdfd1b9b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/source.mlir",
+      "bytes": 9731,
+      "sha256": "79a10db9f4ad7624e49c3a86951f474254696ff9ecec4b778f0ad57578b7bd9b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad2d/spike.log",
+      "bytes": 142,
+      "sha256": "fab583b60739bc5b69960bab44967c260c8df76e87c1ac8267032959dac3899c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_layout_0.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_layout_1.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_layout_2.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_layout_3.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_layout_4.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_layout_5.bin",
+      "bytes": 256,
+      "sha256": "5341e6b2646979a70e57653007a1f310169421ec9bdd9f1a5648f75ade005af1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_layout_6.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_layout_7.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_x0.bin",
+      "bytes": 128,
+      "sha256": "65ff47e49f5037007ed921f37e88d6101cd6c8f9f2a2674a29bce650300143d2"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/b0_y.bin",
+      "bytes": 448,
+      "sha256": "5c55c8f4db4010ba9203d83536d0609856af8c847ac039e37e7dde8fbd574b61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/blobs.S",
+      "bytes": 1737,
+      "sha256": "a56fc53a85564f55437a5ca1888da5a7e675f87267553e80eff638105e7578f8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/catalog.json",
+      "bytes": 8901,
+      "sha256": "dc18c28ffb6a57ae9ae5a6e12ca7818fa66c3d98c2c467ccc866c93825141368"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/design_rule.json",
+      "bytes": 648,
+      "sha256": "871e14652a4aa4e5f23159f24a5dfc0006e4b8c14051e32d6aa5b83f2da983c9"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/exp0.bin",
+      "bytes": 448,
+      "sha256": "847ec164fccf69c3d144f495e8e02d145ca518644020df855fd4b73d464b08af"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/kernel.ll",
+      "bytes": 20194,
+      "sha256": "e1f4c2b0d3b64c8106155335ed20db21431555432458b6476adfe8cc68255e26"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/kernel.llvm.mlir",
+      "bytes": 21162,
+      "sha256": "80a18c3c9d3ba683f248ebc8975fd7ada702a4583cd4299e1ca796ac36e134be"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/kernel.o",
+      "bytes": 2464,
+      "sha256": "2c4fc4b043dd158d0c2488dce3129af59d715032119be8e247e6ae3da351adc9"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/main.c",
+      "bytes": 965,
+      "sha256": "41a73da503141af763c7767fbfa878545625332f646f235ffabfea09a0692e0f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/offloaded.mlir",
+      "bytes": 4359,
+      "sha256": "0cda59ff413280683ba3c8c2bf54217d59a8e2742289305dabb4dee56eb19b40"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/reflection_pad3d.elf",
+      "bytes": 22376,
+      "sha256": "fc265d2d5b8de07b32a55baa1c1e2787d00ee17b7e9513222e7e018528a23ff5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/reflection_pad3d.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "9013510ecfa17ff963f380fad2a736e29c58821b6201880fac3cd2b1cfa70ceb"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/shim.c",
+      "bytes": 2072,
+      "sha256": "9b0cf940f7fcf546eb0a56e29ef2c900fa8172a16ca04c7afc5712918042503f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/source.mlir",
+      "bytes": 11111,
+      "sha256": "d15cf17523243e41fb037fab3135a233bbdaf9d1d66acf0e637797c60498bc4d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/reflection_pad3d/spike.log",
+      "bytes": 142,
+      "sha256": "634735aaadf4048d81cc3f582f2093b398a62d39259927193107dd3013e2549c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/b0_layout_0.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "ac082696bc6ee9d9c26869526bf545a5666b4362b0b7b035152d74f396c7467d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/blobs.S",
+      "bytes": 563,
+      "sha256": "caa04b2241593e91a706152d4a1a94e6e03195ee453f41e32646e7c90f642373"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/catalog.json",
+      "bytes": 7221,
+      "sha256": "b02f7b9417f1af04edec846fa1af3c0c6c2546bf68494feebc1b1dcd4df26339"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/design_rule.json",
+      "bytes": 624,
+      "sha256": "158ece6d91c8b03a6b233a8a4f0e4c35bba818835e0b59cae8df8d16f3b38d8e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/exp0.bin",
+      "bytes": 64,
+      "sha256": "33022b78b333434d6bc23a3c7e9175764be1e7a35b9e530f7dc6f1897100da38"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/kernel.ll",
+      "bytes": 2944,
+      "sha256": "c6793556c7630925c0642a4f234c6b31567f434041dba0af5da56d760bfc23c9"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/kernel.llvm.mlir",
+      "bytes": 3628,
+      "sha256": "a6d3d85dffcdc659d377720ddb65ec6f85acf4f2e0a3df4fe8d03d78ff8d3851"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/kernel.o",
+      "bytes": 1216,
+      "sha256": "425cf47f3c1e6ef10263be1e823b08c0b56645a1f8497f8f12e1abf6e00a7844"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/main.c",
+      "bytes": 551,
+      "sha256": "35cf12b3d8eb2ab3d67151b1cb1d7fa3d31bdc7e9fe12eea599102b385134511"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/offloaded.mlir",
+      "bytes": 4243,
+      "sha256": "64dcace3e421aeb844de4992703fffa1273e50b33376ecc009845bf6def87daf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/repeat.elf",
+      "bytes": 19024,
+      "sha256": "c7d36eca3589dc81c631e4ea03b2dfa8764e65557f26a172b204c251c7f5b22d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/repeat.nofsm_audit.json",
+      "bytes": 293,
+      "sha256": "983f3e56bedd3b7a2245035f4e49a92a315943a25254fddbf17f92bde2dec1fe"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/shim.c",
+      "bytes": 1122,
+      "sha256": "a5bcc9fa6cb1b4118c12fa0f7fe7ba3dbd31ae1d130b9d52fc1a48f08e4981c8"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/source.mlir",
+      "bytes": 8466,
+      "sha256": "b025c2ac79af1b5340469c709b9fe31d5895ceaff9a60dc0cee73d3df8d4ec2d"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/repeat/spike.log",
+      "bytes": 121,
+      "sha256": "e5683e84d3c252fe4b6acb12d94cf72f704196aa89159963ae08b4dc625a3ea5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/b0_layout_0.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/b0_layout_1.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/b0_layout_2.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/b0_layout_3.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/b0_layout_4.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "104f2efec69e0a81fa0c09b6ae6a3591b61bd33c384ec28e0aeac6dbe3045002"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/b0_y.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/blobs.S",
+      "bytes": 1259,
+      "sha256": "647ba8fbb33c72a59b00b8b8e35d48575ab3fa1cf9a2cfca631cdc835684cc83"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/catalog.json",
+      "bytes": 8104,
+      "sha256": "e71f43c1d6b793dee11295b051172c5800b7738bc6fd8cd22f28b1c477583dab"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/design_rule.json",
+      "bytes": 649,
+      "sha256": "20f5f48f57de1d572f9bfe5a9a4640248e78a025229408eaf2e40f8ffcd503c1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/exp0.bin",
+      "bytes": 128,
+      "sha256": "7eeb901a1d6aa9b8102c12a583024a77427bb7f4ead1985816b371ed7a6cc232"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/kernel.ll",
+      "bytes": 8617,
+      "sha256": "d8348911cc48188b5c97e8ff966a6548f2c5ff66ad742cdda2934e82a5cf8e82"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/kernel.llvm.mlir",
+      "bytes": 9969,
+      "sha256": "ef7558ac2205a101ec54457c3002ee5ff27a4ac6da495a1453c122ae4526a321"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/kernel.o",
+      "bytes": 1456,
+      "sha256": "288ef294aecd1bf9893a0ffe93efeab89e1955aab2d271e09c2d295abec2018c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/main.c",
+      "bytes": 797,
+      "sha256": "005fead2913f7ede699fa261fc8e50087ef7f29308c1ee9aa509362df1b84ea7"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/offloaded.mlir",
+      "bytes": 4310,
+      "sha256": "64e987cd6f057e468eefb34b00af05f31383371de9a631d4cdc13742b81d37d0"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/replication_pad2d.elf",
+      "bytes": 19824,
+      "sha256": "362babf6d8ad21d3f0382bb1240ec284ae014c46a129c8e6455a28e84fdb3d38"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/replication_pad2d.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "3629917a909ddd1036b08d0ab3140834588f695bdcf6c658b6f1eb1a29872dbf"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/shim.c",
+      "bytes": 1663,
+      "sha256": "d2156297bf9baeeccacaf48ee7162c2a52d25c12c1421d806123527ed9d73e6c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/source.mlir",
+      "bytes": 9721,
+      "sha256": "efaaf4ab2c21d5dc1ae0939281585a066aea11d8994cf2598cae3a146eacdf8e"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad2d/spike.log",
+      "bytes": 144,
+      "sha256": "43bd96e4768babefef47865f79cc817a1fec8dcb0aab21bac3a43334ae5da010"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_layout_0.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_layout_1.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_layout_2.bin",
+      "bytes": 192,
+      "sha256": "5d89f056865052bcb89c910d2d62872e029fb273c3db03f8968a52a41593c1b5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_layout_3.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_layout_4.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_layout_5.bin",
+      "bytes": 256,
+      "sha256": "5341e6b2646979a70e57653007a1f310169421ec9bdd9f1a5648f75ade005af1"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_layout_6.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_layout_7.bin",
+      "bytes": 128,
+      "sha256": "38723a2e5e8a17aa7950dc008209944e898f69a7bd10a23c839d341e935fd5ca"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_x0.bin",
+      "bytes": 128,
+      "sha256": "c806a855f045bda65fe816d1dbfe8632f447fdcd1525a7b4015ddcd4d589b0ef"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/b0_y.bin",
+      "bytes": 448,
+      "sha256": "5c55c8f4db4010ba9203d83536d0609856af8c847ac039e37e7dde8fbd574b61"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/blobs.S",
+      "bytes": 1748,
+      "sha256": "5121c53c17fe1d09d6e6c1fc23af2ac10368a32b1313d8f201dfaf72c755bd8f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/catalog.json",
+      "bytes": 8902,
+      "sha256": "5c304f8d2970d5ce938683e818b7277a049c773a4e843efb362a8516e7b0c981"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/design_rule.json",
+      "bytes": 650,
+      "sha256": "2cb106eeb0a927e5d5909b2d5247c1e060a8070d880827eaf99425f1c3317622"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/exp0.bin",
+      "bytes": 448,
+      "sha256": "708646e9243e3c6344517a8aade5585a236eb0754d8e500835669af6b79fe498"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/kernel.ll",
+      "bytes": 20119,
+      "sha256": "148d2553496246c1f8f01e8880496c88e69105f9212d9c3c17dfe15501535a72"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/kernel.llvm.mlir",
+      "bytes": 21008,
+      "sha256": "a63cdcaef29ff00e6d307f7f41de1b8cbb3302dbf5fb30c19a04e9194926f3df"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/kernel.o",
+      "bytes": 2424,
+      "sha256": "b449f0c6f88392c6797466835e861145b67e9d4b5b989893839fa0ee1ee6d124"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/main.c",
+      "bytes": 967,
+      "sha256": "9083d91b249e7e03798f01c0c277cdc3f1f84c0863e044320b7eb1f5cc18b525"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/offloaded.mlir",
+      "bytes": 4359,
+      "sha256": "060eb2033fdd4ee2f2d8cfe4ed6e135299a7651b72256327a5fe05fe0ba5a1d0"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/replication_pad3d.elf",
+      "bytes": 22312,
+      "sha256": "bf29763e65e617eb02651083222ba42d22273e132b8eb45d9b45b97e6ed298df"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/replication_pad3d.nofsm_audit.json",
+      "bytes": 295,
+      "sha256": "26b0264f85a02af8f4f4472ee9003a3eb43fb5ddd5d8af68a8f41dc9e0fa8b9a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/shim.c",
+      "bytes": 2072,
+      "sha256": "c6221c4acb9fa8c4bf38fb05461d85186e1bafd833eb62a35366345410e24aeb"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/source.mlir",
+      "bytes": 11108,
+      "sha256": "3a78fa72a2bfb4d71837c8b237c7c4de20b1ea466255543ccdae24abfc35dd16"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/replication_pad3d/spike.log",
+      "bytes": 144,
+      "sha256": "f8f185a2180fa1eb05bc0a701c08a1646fab199a65b268dc16b15157395cc1d6"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/results.json",
+      "bytes": 27157,
+      "sha256": "3ffc48e99f3b6d1b68143a65f6a01920fd1ec08808b66c7362a8c3e798d2f07b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "a13cb24fff0a07604a607e50cbdc570449dbb81cada191a17ec26137405acc11"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/b0_x1.bin",
+      "bytes": 64,
+      "sha256": "2884e268b796b54ee9391f73fbbdb246c770a4a0845cbb72c45403af44a63899"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/blobs.S",
+      "bytes": 577,
+      "sha256": "849af2a9a2e5e6f2a11535cb69b4bc92daf320b057ccb9d2167f01dbbecaf290"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/catalog.json",
+      "bytes": 9157,
+      "sha256": "5121b42ad5fab5ef0277c14aae3486f823218a1ca199f96dc85dd382578d0321"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/design_rule.json",
+      "bytes": 639,
+      "sha256": "67ecd0d4f83a4cebc0987f6395fbf2588f75c9ce6d8a3ba0a582245afbce4780"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/exp0.bin",
+      "bytes": 64,
+      "sha256": "4d9510bd0f9ff9b8a524b0ffa8cf949897c2937693fb9091d6064c38b40e5012"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/kernel.ll",
+      "bytes": 2066,
+      "sha256": "8360b1e0d903590d7082e32886246ad89be4fdf390de3fef1678686fdfceb31c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/kernel.llvm.mlir",
+      "bytes": 2863,
+      "sha256": "7be93e8c8cebb448bcf837196c129bc621b1eec71ff9c329e45f6f6dc6a98f81"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/kernel.o",
+      "bytes": 1104,
+      "sha256": "1a961dbd1e432b586e860bd21f3fcc198c872007f0fcaa600a3e7a8c6d9f6882"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/main.c",
+      "bytes": 555,
+      "sha256": "81395b978da592e691e0e5daca8fcd2e0ee75665762fd123cb604a736840c34f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/offloaded.mlir",
+      "bytes": 6024,
+      "sha256": "ab701e71fbfe9cd5abc5858a2b9a4a287eb10380fb40eb3b354b916aeb490e15"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/select_scatter.elf",
+      "bytes": 18896,
+      "sha256": "fde87dd2c7d726d82e7899fc4517f645f257433f1d3016e37815462c5afc4a25"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/select_scatter.nofsm_audit.json",
+      "bytes": 292,
+      "sha256": "0816699d5da65da7edbfb6fdbd0e98d4daf95be060692ce0bcc692c0d4f8536f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/shim.c",
+      "bytes": 1460,
+      "sha256": "fefc138ea22a4b0f117d3fe61bbcb32a2f969f41d06930e16fac3feee8c73397"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/source.mlir",
+      "bytes": 11723,
+      "sha256": "15d874069f093ac848bc8f11f5ab76531373090cae0316ace83e5d881e487c58"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/select_scatter/spike.log",
+      "bytes": 137,
+      "sha256": "2155dcdf325e2cf7234b18e2ab1d045aba54c13b4897930a85a7b4348429bcf3"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/b0_x0.bin",
+      "bytes": 64,
+      "sha256": "51956abfbfe68245596848126e03b64ebc1d25edc2e7674b7bf77995fb92f866"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/b0_x1.bin",
+      "bytes": 64,
+      "sha256": "886d52281a3cd5c8d07ff6a9058172b686075f6b767b69d61384447657b094a5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/b0_y.bin",
+      "bytes": 64,
+      "sha256": "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/blobs.S",
+      "bytes": 573,
+      "sha256": "cf9ba9776455894d63e18f2a2f083c4ccc01fbf4b9a8bb03aa65a74cb33a9021"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/ca_harness.h",
+      "bytes": 2459,
+      "sha256": "5e7010472e77db1c3facbc349364941792e3bb38b81303e718f9f8934b7c8482"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/catalog.json",
+      "bytes": 9092,
+      "sha256": "d251993c595b126f7e5e4bdbb3365c7203ab46d1f889a2cc73972bca51ae2ce0"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/design_rule.json",
+      "bytes": 636,
+      "sha256": "df20b2ea76b3daf719aa8daf50427c50500bb46041b7846f7554ad3ac6215b2a"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/exp0.bin",
+      "bytes": 64,
+      "sha256": "d746db5010f1ca0bb16f7a28a5ee87b4c3e6c20c6c33824466c6cc58706e024b"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/kernel.ll",
+      "bytes": 1553,
+      "sha256": "367b453f53702f8333c9ff5622696a3857d064fb39e201b58a55503aa6443e93"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/kernel.llvm.mlir",
+      "bytes": 2142,
+      "sha256": "be9d4f64e7b725f42572d03107529bae89a5a3af87c0c33d36148a0c82f5883c"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/kernel.o",
+      "bytes": 1080,
+      "sha256": "78cb41e2dd9fa0070d703218c638c2598235c916698a244cda0c42293c148144"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/main.c",
+      "bytes": 553,
+      "sha256": "62beb89e7a883c5c6e1d1786fd79dca19cee5c2d9699440bfaaaaba76f7c4734"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/offloaded.mlir",
+      "bytes": 5979,
+      "sha256": "5ed70fe1182577e292fc25a24b4c4243b61b15206c4b4a74890aaafd43cac5e5"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/shim.c",
+      "bytes": 1107,
+      "sha256": "b5714a1e2dac7fb7f569b660bc494f4dd4516f2582009c6e6c9bf9f498952d48"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/slice_scatter.elf",
+      "bytes": 18896,
+      "sha256": "73177a3f32158abefbc35d2f7bbe81e3bb0425a40cca216c407e6c113c38f1fa"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/slice_scatter.nofsm_audit.json",
+      "bytes": 292,
+      "sha256": "df418d7c7e27f809b1c431acede7af8c64f52a5566bbe0f507150e537f8baafc"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/source.mlir",
+      "bytes": 11047,
+      "sha256": "0ff0dc32f7a84a7b8154fb370a7862091cfda9730a9789d8112706376e3df656"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real/slice_scatter/spike.log",
+      "bytes": 135,
+      "sha256": "eed7d21ba058455560f45b5f2344f9be4f0a19e2d76656d176066ab6accdc57f"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/spike-real.log",
+      "bytes": 1363,
+      "sha256": "8327341ef2fbc9ffa49618b175c10270cbef03fa804188196b8b91101fb88290"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/synthetic-after.json",
+      "bytes": 158,
+      "sha256": "aff5c135ef710a52e654612241d20a32f9ec491f746ca6363e8790999fd9e1c7"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/synthetic-before.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/synthetic-before.time",
+      "bytes": 857,
+      "sha256": "f80052264ac0401c4dacde3d9fb4ff2ff1dd6275e93adbf94ea5c9e011807375"
+    },
+    {
+      "path": "/scratch/loren/core-aten-ref/gemmini-mlir-wtD/out/taskD3/synthetic-final.json",
+      "bytes": 157,
+      "sha256": "9f1ee8745c8dea2d9975fd39fc404a232a95a546e1c5934e4bedb5cf1113d2bb"
+    }
+  ]
+}
