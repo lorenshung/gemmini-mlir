@@ -108,4 +108,8 @@ global optimization, dispatch and runtime infrastructure live in Merlin. See [AG
 The backend must generalize: production passes select from input semantics, shapes, layouts,
 numeric contracts and hardware capabilities; workload-specific selections stay in experiments.
 
+For shared-pass adapter intake against explicitly selected hardware, see
+[selected shared scheduling](docs/selected_shared_scheduling.md). Its readiness
+report preserves missing contracts as refusals; it does not qualify the target.
+
 The `golden/nofsm-wholemodels` working branch adds an **uncertified candidate** beside the published capsule backend. See [docs/golden_progress.md](docs/golden_progress.md) for the exact Jack ZIP reference, reproducible commands, measured probes, upstream lowering results, and remaining model work. The [optimization log](docs/golden_optimization_log.md) records each measured schedule change and the compiler or infrastructure abstraction needed to automate it. The historical `manifest.yaml` grading above applies to the published parent, not this branch.
