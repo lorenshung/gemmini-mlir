@@ -80,6 +80,7 @@ class StagedDensePrototype:
             cleanup.record(),
             arithmetic.record(),
         )
+        self._cleanup_identity = cleanup.identity
         rule, geometry = arithmetic.source_rule(), self.selected.report()["geometry"]
         stores = {row["name"]: row for row in geometry["stores"]}
         dim = geometry["array_rows"]
@@ -120,16 +121,23 @@ class StagedDensePrototype:
             False,
         )
         self._contract = asdict(self.contract)
-        self._identity = _digest(
+        self._identity = self._selection_identity()
+        self.revalidate()
+
+    def _selection_identity(self):
+        # Each original re-admission retains its own invocation/receipt custody.
+        # The stable live cleanup identity already binds its selected sources,
+        # runtime, checked admission and SDK. A new receipt's output location
+        # must not silently select a different scheduling capability.
+        return _digest(
             [
                 self._sources,
-                self._cleanup_record,
+                self._cleanup_identity,
                 self._arithmetic_record,
                 self._completion,
                 self._contract,
             ]
         )
-        self.revalidate()
 
     @property
     def nm(self):
@@ -147,19 +155,11 @@ class StagedDensePrototype:
         _revalidate_sources(self._completion["sources"])
         if (
             self.cleanup_owner.record() != self._cleanup_record
+            or self.cleanup_owner.identity != self._cleanup_identity
             or self.arithmetic.record() != self._arithmetic_record
             or asdict(self.contract) != self._contract
             or self.completion.record() != self._completion
-            or _digest(
-                [
-                    self._sources,
-                    self._cleanup_record,
-                    self._arithmetic_record,
-                    self._completion,
-                    self._contract,
-                ]
-            )
-            != self._identity
+            or self._selection_identity() != self._identity
         ):
             raise ValueError(
                 "original staged source/effect/arithmetic selection changed"
