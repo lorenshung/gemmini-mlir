@@ -24,6 +24,24 @@ from gemmini_zero_initializer_effects import canonical_issue_stream
 from merlin.common.paths import module_source_path
 
 
+def original_source_capsule(arm, native):
+    """Select an explicitly pinned sealed publication of the same source.
+
+    Native diagnostic packaging may precede original publication. This does
+    not transfer its admission: the caller still derives the sealed proof and
+    the actual SourceExecutionOwner checks exact inputs, policies and outputs.
+    """
+    original = _leaf({"declaration": native["source"]["capsule_declaration"]}, "declaration")
+    if "source_capsule_declaration" not in arm:
+        return original.parent
+    selected = _leaf(arm, "source_capsule_declaration")
+    if selected.name != "capsule.yaml" or (selected.parent / "capsule.interface.mlir").read_bytes() != (
+        original.parent / "capsule.interface.mlir"
+    ).read_bytes():
+        raise ValueError("selected sealed publication differs from the actual original typed source")
+    return selected.parent
+
+
 def canonical_relocated_stream(stream, *, lhs, rhs, problem, dim, data_bits, shape_fields, baseline):
     """Name only independently proved RHS cells by their canonical private row.
 
@@ -177,7 +195,7 @@ class RhsPlacementRealizationChecker:
             nm=p.nm,
         )
         epoch = ClosedScratchEpochOwner(
-            source_owner, capsule_dir=Path(native["source"]["capsule_declaration"]["path"]).parent
+            source_owner, capsule_dir=original_source_capsule(before, native)
         )
         base = epoch.check_source_arm(before)
         candidate = epoch.check_source_arm(after)
