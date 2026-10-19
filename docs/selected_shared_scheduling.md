@@ -332,3 +332,47 @@ The opt-in `test_source_execution_owner.py` integration test takes
 `MERLIN_SOURCE_EXECUTION_TEST_FIXTURE` selecting the original source/runtime and
 completed artifacts; it reruns the checks without simulator execution and
 rejects locally mutated output, source, ELF, runtime and compute-state evidence.
+
+## Ordinary copied-compiler cleanup preparation
+
+`gemmini_compiler_passes.restore_registry` is an explicit original-host factory
+for Merlin's `OriginalPassFactory`/`CompilerPassSelection` transport. It reruns
+the unchanged independent cleanup admission in a fresh interpreter using the
+exact selected library. This avoids replacing the host evaluator's imported
+SDK namespaces. The returned `OriginalCleanupAdmission` has no saved-record
+constructor: its original invocation, outputs, source leaves, selected facts,
+software, runtime and library must revalidate. Release a parent compute lease
+before admission; the original checker child owns its own shared lease.
+
+The selected `configuration_cleanup` owner prepares separate baseline and
+candidate compiler directories **before** their source and edit authority are
+frozen. The preserved 21-file compiler remains unchanged. Both copies receive
+the same reviewed SDK, startup loader, checked cleanup algorithm and exact
+public source leaves. The only initial policy difference is the candidate-owned
+`cleanup_policy.py`: a Boolean enable and nonnegative MAC-count threshold chosen
+from current M/K/N. Future policy edits remain subject to the ordinary frozen
+edit authority and independent complete-program checks.
+
+The copied hook executes at the original direct emitter's actual statement
+return. Its public projection contains exact bounded leaves with relative
+paths, never a source directory or private qualification evidence. It reopens
+their bytes and the selected SDK at every invocation. The cleanup helper names
+the SDK's existing exact public IR leaves rather than requesting the broader
+`merlin.sched.ir` implementation facade. No SDK algorithm is changed.
+
+Fresh functional integration of the selected copies exercised the ordinary
+package integrity scanner and `emit_analysis_bundle` entrypoint. The resulting
+LLVM and command buffer exactly matched those linked by the unchanged native
+builder. Three signed public geometries (1x16x16, 17x16x16 and 12x48x48) retained
+all 864 output values and logical work; independent actual issue-register checks
+removed respectively 1, 2 and 9 redundant setters while preserving every other
+command, fence and logical DMA window. This is functional command evidence,
+not accelerator latency or physical-memory-guard qualification.
+
+Preparation and registry transport do not satisfy the final formal search
+gate by themselves. The generic final guard requires an original owner's
+`check_functional_guard` over the newly realized paired programs; this owner
+currently exposes only its explicit `check_actual_pair` consumer. Until that
+ordinary final consumer is connected, selecting it for a formal search refuses
+with the missing final emitted-program checker. Hardware, timing, broad dense,
+asynchronous overlap and attention capabilities remain disabled.
