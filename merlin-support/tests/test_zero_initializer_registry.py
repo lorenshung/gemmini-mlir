@@ -2,11 +2,12 @@
 
 import contextlib
 import sys
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import gemmini_zero_initializer_registry as registry
 import pytest
 from gemmini_source_execution_issuer_v3 import SourceExecutionIssuerV3
+from gemmini_zero_initializer_capability import QualifiedZeroInitializerOwner
 
 
 @pytest.fixture
@@ -43,6 +44,33 @@ def test_json_qualification_cannot_construct_live_registry_or_current_source_iss
         registry.from_live_owner({"status": "qualified"})
     with pytest.raises(ValueError, match="original live qualified"):
         SourceExecutionIssuerV3({"status": "qualified"})
+
+
+def test_source_issuer_pins_original_trace_function_and_code(monkeypatch):
+    # Deliberately neutral live-object fixture: this test does not execute a
+    # trace, issue a registry, or claim the synthetic qualification is real.
+    from gemmini_source_execution_issuer import SourceExecutionIssuer
+
+    owner = object.__new__(QualifiedZeroInitializerOwner)
+    owner._identity = "neutral-only"
+    original = SimpleNamespace(identity="neutral-prototype")
+    owner.prototype = SimpleNamespace(tile=SimpleNamespace(prototype=original))
+    monkeypatch.setattr(QualifiedZeroInitializerOwner, "revalidate", lambda _: None)
+    issuer = SourceExecutionIssuerV3(owner)
+    function = SourceExecutionIssuer.create_source_execution_owner
+
+    def changed(*args, **kwargs):
+        raise AssertionError("changed trace implementation must never execute")
+
+    monkeypatch.setattr(SourceExecutionIssuer, "create_source_execution_owner", changed)
+    with pytest.raises(ValueError, match="trace implementation changed"):
+        issuer.revalidate()
+    monkeypatch.setattr(SourceExecutionIssuer, "create_source_execution_owner", function)
+    with monkeypatch.context() as mutation:
+        mutation.setattr(function, "__code__", changed.__code__)
+        with pytest.raises(ValueError, match="trace implementation changed"):
+            issuer.revalidate()
+    issuer.revalidate()
 
 
 def test_normal_host_always_reissues_original_admission(context, monkeypatch, tmp_path):
