@@ -50,6 +50,16 @@ changes still receive the complete independent checks above. Neither JSON nor
 arbitrary wrappers can select this context. The output records this distinct
 compiler context; owner identity is versioned v2.
 
+Arithmetic software, observed instruction effects and caller transport are
+separate pinned roles. The caller checker requires the exact original
+`BoundRoCCBackend`, selected facts, RTL source, runtime and pointer ABI. It
+reopens the declared caller-source pins and rerenders with the original neutral
+renderer, original pointer order and actual signed inputs. The completed
+`harness.c` must match byte for byte; another renderer, input, pointer order,
+transport or selected source refuses. This rederivation supplies no new
+harness and does not equate an arithmetic-spec digest with a transport-contract
+digest. Actual linked-byte/product/output checks still follow it.
+
 Call after original ordinary grading releases its CPU lease. The checker owns
 its leaf trace leases; a parent must not hold another lease while waiting.
 Setup/byte-custody/verification wall costs remain separate from target cycles.

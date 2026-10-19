@@ -14,13 +14,10 @@ from pathlib import Path
 import numpy as np
 from gemmini_execute_state import ExecuteStateContract
 from gemmini_packet_contractions import check_packets
+from gemmini_primitive_caller import check_original_caller
 from gemmini_primitive_host_scope import check_host_output_writes
 from gemmini_source_packet_artifacts import _cpu_writes
-from gemmini_timing_resources import _pin
 from merlin.common import invocation_record
-from merlin.common.paths import module_source_path
-from merlin.runtime import harness_render
-from merlin.targetgen import target_registry
 from merlin.targetgen.elf_lanes import _section_headers
 
 
@@ -35,44 +32,10 @@ def check_primitive_packets(owner, arm, contraction, values):
             "primitive commit trace exceeds the original bounded trace budget"
         )
     selected, cb = owner.selected, arm["command_buffer"]
-    # This is the original loaded renderer, never a second harness. Its actual
-    # completed build must name these exact sources. Actual linked input bytes,
-    # CPU writes and every DMA/product/output below remain independent checks.
-    build_sources = arm["build_record"].get("source_pins", [])
-    renderer_pins = {
-        name: _pin(module_source_path(name))
-        for name in (
-            "merlin.runtime.harness_render",
-            "merlin.runtime.direct_kernel_harness",
-            "merlin.runtime.backends.chipyard_rocc_bound",
-        )
-    }
-    if any(pin not in build_sources for pin in renderer_pins.values()):
-        raise ValueError(
-            "primitive original completed build does not bind its loaded neutral pointer renderer"
-        )
-    contract_path = target_registry.resolve("gemmini").capability_contract_path
-    if (
-        _pin(contract_path)["sha256"]
-        != owner.arithmetic.record()["sources"]["software_spec"]["sha256"]
-    ):
-        raise ValueError(
-            "primitive actual caller selects another original software contract"
-        )
-    contract = target_registry.resolve("gemmini").load_contract()
-    harness_render.validate_contract(contract)
-    # The retained effective buffer is canonical sorted JSON. Its insertion
-    # order is not the original implicit pointer ABI. The independently pinned
-    # original third compiler entrypoint supplies that order; only this mapping
-    # view is reordered, never the retained buffer or any executable.
-    if set(arm["caller_order"]) != set(cb["tensors"]) or len(
-        arm["caller_order"]
-    ) != len(cb["tensors"]):
-        raise ValueError("primitive original caller pointer order is incomplete")
-    caller_cb = dict(
-        cb, tensors={name: cb["tensors"][name] for name in arm["caller_order"]}
-    )
-    normalized, _mutable = harness_render._roster(caller_cb)
+    # Reopen the original caller, keeping arithmetic and transport contracts as
+    # distinct roles. Canonical retained JSON does not determine pointer order.
+    caller = check_original_caller(selected, arm, values)
+    normalized, contract = caller["normalized"], caller["contract"]
     abi = {
         f"tensor_{i}": (row["tensor"], cb["tensors"][row["tensor"]])
         for i, row in enumerate(normalized["kernel_abi"]["args"])
@@ -256,12 +219,7 @@ def check_primitive_packets(owner, arm, contraction, values):
         preload_shape=lambda raw: shape("PreloadRs", raw),
         load_configuration=load,
     )
-    if (
-        harness_render._roster(caller_cb)[0] != normalized
-        or any(_pin(pin["path"]) != pin for pin in renderer_pins.values())
-        or _pin(contract_path)["sha256"]
-        != owner.arithmetic.record()["sources"]["software_spec"]["sha256"]
-    ):
+    if check_original_caller(selected, arm, values) != caller:
         raise ValueError(
             "primitive original caller storage/source changed during actual packet proof"
         )
@@ -271,4 +229,12 @@ def check_primitive_packets(owner, arm, contraction, values):
         raise ValueError(
             "primitive immutable RHS has ambiguous original linked ABI ownership"
         )
-    return {**checked, "original_kernel_host_output_scope": host_scope}, decoded, rhs[0]
+    return (
+        {
+            **checked,
+            "original_caller_binding": caller["binding"],
+            "original_kernel_host_output_scope": host_scope,
+        },
+        decoded,
+        rhs[0],
+    )
