@@ -7,10 +7,14 @@ neither physical capacity nor a serialized successful report issues an owner.
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import copy
 import json
 import tempfile
 import time
+import weakref
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -19,13 +23,128 @@ from gemmini_staged_rhs_relocation_effects import RhsPlacementRealizationChecker
 from gemmini_staged_rhs_window import ClosedScratchEpochOwner
 from gemmini_timing_resources import _pin, _revalidate_sources
 from gemmini_zero_initializer_capability import ZeroInitializerCompilerPrototype, _check_prepared_binding
-from merlin_experiments.phase0.sealed_generation import verified_capture_failure
+from merlin_experiments.phase0.capture_execution_attestation import require_verified_execution
 from merlin_experiments.phase2.contracts import exact_tree_record
 
 from merlin.common import invocation_record
 from merlin.common.paths import module_source_path
 from merlin.targetgen.compiler_emission_binding import check_compiler_emission, revalidate_compiler_emission
 from merlin.targetgen.native_model_execution import _pinned_native_file
+
+_METADATA = contextvars.ContextVar("original_rhs_metadata_construction", default=None)
+_METADATA_ISSUED = weakref.WeakSet()
+
+
+@dataclass(frozen=True, eq=False)
+class _MetadataOperation:
+    owner: object
+    prototype: object
+    identity: str
+    callback: object
+    code: object
+
+    def check(self):
+        owner = self.owner
+        if (
+            self not in _METADATA_ISSUED
+            or type(owner) is not QualifiedRhsResidencyOwner
+            or owner.prototype is not self.prototype
+            or owner.identity != self.identity
+            or type(owner).revalidate is not self.callback
+            or self.callback.__code__ is not self.code
+        ):
+            raise ValueError("original RHS metadata owner or implementation changed")
+
+
+def _metadata_verified(owner):
+    operation = _METADATA.get()
+    if operation is None:
+        return False
+    if type(operation) is not _MetadataOperation:
+        raise ValueError("RHS metadata scope is not its original live operation")
+    operation.check()
+    return operation.owner is owner
+
+
+@contextlib.contextmanager
+def scoped_original_rhs_metadata(owner):
+    """Full original custody checks around ONE trusted metadata construction.
+
+    Repeated getters still check source, structure and identities. The result
+    cannot leave this scope before its final full custody check. New source,
+    native execution and emitted-program proofs never use this scope.
+    """
+    if type(owner) is not QualifiedRhsResidencyOwner:
+        raise ValueError("RHS metadata construction requires the original live qualified owner")
+    current = _METADATA.get()
+    if current is not None and type(current) is not _MetadataOperation:
+        raise ValueError("RHS metadata scope is not its original live operation")
+    if current is not None and current.owner is owner:
+        current.check()
+        try:
+            yield
+        finally:
+            current.check()
+        return
+    disabled = _METADATA.set(None)
+    try:
+        owner.revalidate()
+        callback = type(owner).revalidate
+        operation = _MetadataOperation(owner, owner.prototype, owner.identity, callback, callback.__code__)
+        _METADATA_ISSUED.add(operation)
+        token = _METADATA.set(operation)
+        primary = None
+        try:
+            yield
+        except BaseException as error:
+            primary = error
+            raise
+        finally:
+            _METADATA.reset(token)
+            try:
+                operation.check()
+                owner.revalidate()
+            except BaseException as error:
+                if primary is None:
+                    raise
+                primary.add_note("Original RHS final metadata/custody check failed: " + str(error))
+            finally:
+                _METADATA_ISSUED.discard(operation)
+    finally:
+        _METADATA.reset(disabled)
+
+
+def _verify_original_capsules(originals):
+    """One full revalidation verifies each EXACT original attestation once.
+
+    Every capsule still reopens its entire tree and checks its own captured
+    source membership. There is no state or verification shared across calls.
+    """
+    verified = {}
+    for original in originals:
+        cap = Path(original["path"])
+        if exact_tree_record(cap) != original["files"]:
+            raise ValueError("RHS original sealed source/input/reference publication changed")
+        capsule = yaml.safe_load((cap / "capsule.yaml").read_bytes())
+        attestations = capsule.get("capture_execution_attestations") or []
+        if not attestations:
+            raise ValueError("RHS original sealed capture carries no original attestation")
+        models = set()
+        for attestation in attestations:
+            key = _digest(attestation)
+            if key not in verified:
+                require_verified_execution(attestation)
+                verified[key] = copy.deepcopy(attestation)
+            elif verified[key] != attestation:
+                raise ValueError("RHS original capture attestation digest collision")
+            capture = attestation.get("capture") or {}
+            if capture.get("kind") == "session":
+                models.update(row.get("model_sha256") for row in capture.get("programs", []))
+            else:
+                models.add(capture.get("model_sha256"))
+        raw = (capsule.get("frontend_trace") or {}).get("capture_mlir_sha256")
+        if raw is not None and raw not in models:
+            raise ValueError("RHS original captured source is not in its verified complete session")
 
 
 def qualification_coverage(checks, dim):
@@ -109,7 +228,7 @@ class RhsResidencyCompilerPrototype:
                 "merlin.compile.scheduling.staged_rhs_residency",
                 "merlin.targetgen.compiler_emission_binding",
                 "merlin.targetgen.native_model_execution",
-                "merlin_experiments.phase0.sealed_generation",
+                "merlin_experiments.phase0.capture_execution_attestation",
                 "merlin_experiments.phase2.contracts",
             )
         }
@@ -322,6 +441,8 @@ class QualifiedRhsResidencyOwner:
             or self._digest() != self._identity
         ):
             raise ValueError("original RHS qualification or current source custody changed")
+        if _metadata_verified(self):
+            return
         packages = set()
         for group in self._emissions:
             for emission in group:
@@ -338,15 +459,7 @@ class QualifiedRhsResidencyOwner:
                     for name in group:
                         _pinned_native_file(group, name)
                 _revalidate_sources({str(i): pin for i, pin in enumerate(native["host_build_sources"])})
-        for original in self._capsules:
-            cap = Path(original["path"])
-            if exact_tree_record(cap) != original["files"]:
-                raise ValueError("RHS original sealed source/input/reference publication changed")
-            reason = verified_capture_failure(
-                yaml.safe_load((cap / "capsule.yaml").read_bytes()), require_attestation=True
-            )
-            if reason is not None:
-                raise ValueError("RHS original sealed capture custody changed: " + reason)
+        _verify_original_capsules(self._capsules)
 
     def record(self):
         self.revalidate()

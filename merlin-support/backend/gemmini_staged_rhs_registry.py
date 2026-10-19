@@ -14,7 +14,11 @@ from pathlib import Path
 
 from gemmini_source_execution_issuer_v4 import SourceExecutionIssuerV4
 from gemmini_staged_dense_capability import _digest, _leaf
-from gemmini_staged_rhs_capability import QualifiedRhsResidencyOwner, RhsResidencyCompilerPrototype
+from gemmini_staged_rhs_capability import (
+    QualifiedRhsResidencyOwner,
+    RhsResidencyCompilerPrototype,
+    scoped_original_rhs_metadata,
+)
 from gemmini_staged_rhs_relocation_effects import original_source_capsule
 from gemmini_staged_rhs_window import ClosedScratchEpochOwner
 from gemmini_zero_initializer_capability import ZeroInitializerCompilerPrototype
@@ -50,14 +54,14 @@ def from_live_owner(owner):
     """The exact original constructor must already have issued this owner."""
     if type(owner) is not QualifiedRhsResidencyOwner:
         raise ValueError("RHS registry needs its original live qualified composite owner")
-    owner.revalidate()
-    binding = _binding(owner)
-    return ReviewedPassCapabilities(
-        (
-            ReviewedPassCapability(MECHANISM, binding, owner),
-            ReviewedPassCapability(DIAGNOSTIC, binding, SourceExecutionIssuerV4(owner)),
+    with scoped_original_rhs_metadata(owner):
+        binding = _binding(owner)
+        return ReviewedPassCapabilities(
+            (
+                ReviewedPassCapability(MECHANISM, binding, owner),
+                ReviewedPassCapability(DIAGNOSTIC, binding, SourceExecutionIssuerV4(owner)),
+            )
         )
-    )
 
 
 def _original_selection(registry):
