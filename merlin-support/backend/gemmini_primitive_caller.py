@@ -25,13 +25,7 @@ _METHODS = {
 }
 
 
-def check_original_caller(selected, arm, values):
-    """Reopen exact facts/transport and require the completed harness bytes.
-
-    This path deliberately supports only the original data-bound backend and
-    its ordinary cold, full-B64 primitive pointer caller. Other callers refuse.
-    """
-    selected.revalidate()
+def _original_backend():
     backend = base.get_backend("gemmini")
     if type(backend) is not BoundRoCCBackend or backend.target != "gemmini":
         raise ValueError("primitive caller requires its original data-bound backend")
@@ -43,6 +37,17 @@ def check_original_caller(selected, arm, values):
             or callback.__func__ is not original
         ):
             raise ValueError("primitive caller original backend method was replaced")
+    return backend
+
+
+def check_original_caller(selected, arm, values):
+    """Reopen exact facts/transport and require the completed harness bytes.
+
+    This path deliberately supports only the original data-bound backend and
+    its ordinary cold, full-B64 primitive pointer caller. Other callers refuse.
+    """
+    selected.revalidate()
+    backend = _original_backend()
     data = backend._data()
     info = target_registry.resolve("gemmini")
     path = info.capability_contract_path
@@ -91,7 +96,10 @@ def check_original_caller(selected, arm, values):
         or rendered.encode("utf-8") != harness.read_bytes()
         or _pin(path) != contract_pin
         or any(_pin(pin["path"]) != pin for pin in sources)
-        or base.get_backend("gemmini") is not backend
+        # The original registry deliberately returns a newly bound immutable
+        # data wrapper on each lookup. Its selected data/methods, not Python
+        # object identity, establish this correspondence.
+        or _original_backend()._selection_json != backend._selection_json
         or backend._data() != data
     ):
         raise ValueError("primitive actual completed caller bytes/selection changed")
