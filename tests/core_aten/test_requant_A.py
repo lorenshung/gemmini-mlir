@@ -127,3 +127,14 @@ def test_fractional_recorded_accumulator_bounds_are_refused():
     from mlir_oot.core_aten.requant import Readout
     with pytest.raises(TypeError):
         interval(Readout('y',[('x',F(1))]),[1,0],dict(accumulator_min=-128.5,accumulator_max=127))
+
+
+def test_malformed_boolean_or_constant_fields_are_refused():
+    p=plan(F(1,3))
+    bad=copy.deepcopy(p);bad['relu']='false'
+    with pytest.raises(ValueError):validate(bad)
+    bad=copy.deepcopy(p);bad['constants']['out_clamp']='false'
+    with pytest.raises(ValueError):validate(bad)
+    bad=copy.deepcopy(p);bad['constants']['S']=1.0
+    with pytest.raises(ValueError):validate(bad)
+    with pytest.raises(ValueError):plan(F(1),relu='false')

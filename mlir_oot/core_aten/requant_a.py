@@ -101,6 +101,8 @@ def _solve(f, segs, out_clamp):
 
 def validate(record):
     """Reject unproved/tampered constants; regenerate ALL exact boundaries."""
+    if type(record['relu']) is not bool or any(type(record[k]) is not int for k in ('zero_point','quant_min','quant_max')):
+        raise ValueError('invalid requant semantic field types')
     if record['rounding'] != 'half_to_even':
         raise ValueError('unsupported requant rounding')
     if record['schema'] != SCHEMA:
@@ -114,6 +116,9 @@ def validate(record):
     ts = transitions(f, c, zp, qmin, qmax, relu, lo, hi)
     k = record.get('constants')
     if record['algorithm'] == 'clamp_mul_add_shift':
+        if (type(k['out_clamp']) is not bool or any(type(k[key]) is not int for key in ('S','qlo','qhi'))
+                or any(type(k[key]) is not str for key in ('L','H','M','B'))):
+            raise ValueError('invalid requant constant field types')
         L, H, M, B, S = (int(k[key]) for key in ('L', 'H', 'M', 'B', 'S'))
         if not (I64_MIN <= L <= H <= I64_MAX and 0 <= M <= I64_MAX and
                 I64_MIN <= B <= I64_MAX and 0 <= S <= 62 and
@@ -160,6 +165,8 @@ def _plan(f, c, zp, qmin, qmax, relu, lo, hi):
 
 
 def plan(f, c=0, zp=0, qmin=-128, qmax=127, relu=False, lo=-(1 << 31), hi=(1 << 31)-1):
+    if type(relu) is not bool:
+        raise ValueError('requant ReLU must be boolean')
     if any(int(v) != v for v in (zp, qmin, qmax, lo, hi)):
         raise ValueError('noninteger requant parameter')
     # Return a fresh record: consumers may annotate channel/tile bindings.
