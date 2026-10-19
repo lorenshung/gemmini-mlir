@@ -41,6 +41,9 @@ class SourceExecutionIssuerV4:
 
     def revalidate(self):
         self._qualification.revalidate()
+        self._check_implementation()
+
+    def _check_implementation(self):
         _revalidate_sources(self._sources)
         if (
             type(self._qualification) is not QualifiedRhsResidencyOwner
@@ -58,7 +61,11 @@ class SourceExecutionIssuerV4:
         return self._prototype.arithmetic.source_rule()
 
     def create_source_execution_owner(self, *, native_result, command_buffer, lowered, work_root, remaining_s):
-        self.revalidate()
+        # Pin the actual callee before invoking it. That original algorithm
+        # performs full owner revalidation at entry and after the fresh trace;
+        # repeating the same full historical check immediately here adds no
+        # boundary. Current executable/artifact/source checks stay unchanged.
+        self._check_implementation()
         return self._trace(
             self,
             native_result=native_result,
