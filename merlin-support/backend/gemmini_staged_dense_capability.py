@@ -68,6 +68,7 @@ class StagedDensePrototype:
                 "gemmini_staged_dense_capability",
                 "gemmini_staged_dense_hook",
                 "gemmini_staged_dense_source",
+                "gemmini_staged_rhs_effects",
                 "gemmini_source_execution",
                 "gemmini_source_packet_artifacts",
                 "gemmini_packet_contractions",
@@ -305,67 +306,19 @@ class StagedDensePrototype:
             raise ValueError(
                 "staged pair changed original complete logical work/numerical contract"
             )
-        cursor, stride, cells, removed = 0, None, {}, 0
-        for event, command in baseline:
-            kind = event[0]
-            fields = {} if command is None else command["decoded"]
-            matching = cursor < len(candidate) and candidate[cursor][0] == event
-            if matching:
-                cursor += 1
-            elif (
-                kind == "MVIN"
-                and fields.get("is_acc_addr") is False
-                and event[1][0] == rhs
-            ):
-                if (
-                    stride is None
-                    or not 0 <= fields["addr"] < self.contract.operand_rows
-                ):
-                    raise ValueError(
-                        "staged omitted DMA has unknown private window/configuration"
-                    )
-                wanted = {
-                    (fields["addr"] + r, c): (rhs, event[1][1] + r * stride + c)
-                    for r in range(fields["rows"])
-                    for c in range(fields["cols"])
-                }
-                if not wanted or any(
-                    cells.get(cell) != value for cell, value in wanted.items()
-                ):
-                    raise ValueError(
-                        "actual omitted RHS transfer lacks live exact immutable source cells"
-                    )
-                removed += 1
-                continue
-            else:
-                raise ValueError(
-                    "staged final instructions changed beyond a proven immutable RHS reload"
-                )
-            if kind in {"FLUSH", "CONFIG_EX"}:
-                cells.clear()
-            elif kind == "CONFIG_LD":
-                stride = fields["stride"]
-            elif kind == "MVIN" and fields.get("is_acc_addr") is False:
-                if stride is None:
-                    raise ValueError("actual operand DMA lacks original load state")
-                cells.update(
-                    {
-                        (fields["addr"] + r, c): (
-                            event[1][0],
-                            event[1][1] + r * stride + c,
-                        )
-                        for r in range(fields["rows"])
-                        for c in range(fields["cols"])
-                    }
-                )
-        if cursor != len(candidate):
-            raise ValueError(
-                "staged candidate inserted or changed final commands, fences or settings"
-            )
+        from gemmini_staged_rhs_effects import check_rhs_omissions
+
+        actual = check_rhs_omissions(
+            baseline,
+            candidate,
+            rhs=rhs,
+            operand_rows=self.contract.operand_rows,
+            dim=self.contract.dim,
+        )
         self.revalidate()
         return {
             "status": "checked_actual_staged_rhs_pair",
-            "actual_rhs_loads_removed": removed,
+            "actual_rhs_loads_removed": actual["actual_rhs_loads_removed"],
             "original_source_execution": [baseline_source, candidate_source],
             "all_other_commands_fences_and_settings_unchanged": True,
             "rhs_immutability": "original complete source entry bytes and observed CPU writes rechecked",
