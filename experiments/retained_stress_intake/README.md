@@ -22,3 +22,15 @@ foreign compiler/source and Boolean bookkeeping controls. `audit.py` uses the
 retained task paths and original shared CPU 6/7 pool; an external process-tree
 supervisor supplies the 60 CPU-second bound. Reports are historical diagnostics,
 not new measurements, grades, promotion receipts or hidden evaluation evidence.
+
+Reproduction requires an explicit fresh canonical output inside the executing
+managed task; original P1 and retained-stress paths remain read-only inputs:
+
+```sh
+TASK_DIR=/absolute/path/to/current-task python experiments/retained_stress_intake/audit.py \
+  --output /absolute/path/to/current-task/out/retained-stress-audit
+```
+
+Run from that task. Importing the operator performs no audit, environment change,
+or output creation. Historical C-task delivery artifacts are unchanged; this
+corrected operator has not rerun their readback admission.
