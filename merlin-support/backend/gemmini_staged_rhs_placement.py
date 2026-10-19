@@ -24,7 +24,12 @@ from merlin.compile.scheduling.staged_dense import (
     StagedDenseProblem,
     rewrite_staged_dense,
 )
-from merlin.compile.scheduling.staged_dense_verification import verify_staged_dense
+
+
+def _verify(operations, *, problem, contract):
+    # Use the existing public checked entry point. Copying this renderer must
+    # not grant direct access to a private shared-library verifier module.
+    return rewrite_staged_dense(operations, problem=problem, contract=contract)[1]["checks"][0]
 
 
 def assigned_window(operations, *, problem, contract, original_owned_rows):
@@ -46,7 +51,7 @@ def assigned_window(operations, *, problem, contract, original_owned_rows):
         or contract.retained_weights
     ):
         raise ValueError("RHS placement lacks its original canonical private operand/accumulator epoch")
-    original = verify_staged_dense(operations, problem=problem, contract=contract)
+    original = _verify(operations, problem=problem, contract=contract)
     if not operations or type(operations[0]) is not CompletionFence or type(operations[-1]) is not CompletionFence:
         raise ValueError("RHS placement needs a complete original fenced program epoch")
     required = contract.dim + ((problem.k + contract.dim - 1) // contract.dim) * contract.dim
@@ -131,8 +136,8 @@ def relocated_effects(operations, *, problem, contract):
 def render_statements(effects, *, original_effects, positions, original_statements, **projection):
     """Render only canonical row relocation, complete tiles and live omissions."""
     problem, contract = projection["problem"], projection["contract"]
-    verify_staged_dense(original_effects, problem=problem, contract=contract)
-    verify_staged_dense(effects, problem=problem, contract=contract)
+    _verify(original_effects, problem=problem, contract=contract)
+    _verify(effects, problem=problem, contract=contract)
     if not any(
         (type(op) is OperandLoad and op.role == "rhs" and op.local_row > contract.dim)
         or (type(op) is DescriptorIssue and op.rhs_row is not None and op.rhs_row > contract.dim)
