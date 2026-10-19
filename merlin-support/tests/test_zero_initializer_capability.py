@@ -2,13 +2,14 @@
 
 import ast
 import inspect
-from types import SimpleNamespace
+import json
 
 import pytest
 import test_cleanup_final_guard as old_tests
 from gemmini_zero_initializer_capability import (
     QualifiedZeroInitializerOwner,
     ZeroInitializerCompilerPrototype,
+    _check_prepared_binding,
 )
 from gemmini_zero_initializer_final_guard import check_functional_guard
 
@@ -35,7 +36,7 @@ def test_malformed_policy_refuses_before_copy_or_original_compilation(tmp_path, 
 def test_new_component_symlinks_never_enter_exact_compiler_binding(tmp_path, linked_parent):
     prototype = object.__new__(ZeroInitializerCompilerPrototype)
     prototype.revalidate = lambda: None
-    prototype.tile = SimpleNamespace(check_compiler_binding=lambda _: {"synthetic_boundary_only": True})
+    prototype._binding = {}
     package = tmp_path / "package"
     package.mkdir()
     for name in ("mixed_codegen.py", "provenance.py", "zero_initializer_policy.py"):
@@ -52,6 +53,55 @@ def test_new_component_symlinks_never_enter_exact_compiler_binding(tmp_path, lin
         (package / "passes/zero_initializer_groups.py").symlink_to(private / "zero_initializer_groups.py")
     with pytest.raises(ValueError, match="exact regular"):
         prototype.check_compiler_binding(package)
+
+
+@pytest.mark.parametrize("damage", [None, "library", "sources", "dense", "tile", "large", "symlink"])
+def test_original_binding_leaf_check_preserves_all_contracts(tmp_path, damage):
+    # This tests only the bounded byte comparison, never grants target support.
+    package = tmp_path / "compiler"
+    package.mkdir()
+    expected = {
+        name: {"original": name}
+        for name in (
+            "selected-shared-library.json",
+            "shared-library-sources.json",
+            "staged-dense-public.json",
+            "staged-tile-public.json",
+        )
+    }
+    for name, value in expected.items():
+        (package / name).write_text(json.dumps(value))
+    (package / "passes").mkdir()
+    for name in (
+        "mixed_codegen.py",
+        "provenance.py",
+        "zero_initializer_policy.py",
+        "passes/__init__.py",
+        "passes/zero_initializer_groups.py",
+    ):
+        (package / name).write_text("# original ordinary leaf\n")
+    ledger = {
+        "library": "selected-shared-library.json",
+        "sources": "shared-library-sources.json",
+        "dense": "staged-dense-public.json",
+        "tile": "staged-tile-public.json",
+    }.get(damage)
+    if ledger:
+        (package / ledger).write_text(json.dumps({"forged": ledger}))
+    elif damage == "large":
+        (package / "mixed_codegen.py").write_text("#" * ((1 << 20) + 1))
+    elif damage == "symlink":
+        original = package / "staged-tile-public.json"
+        target = tmp_path / "foreign.json"
+        original.rename(target)
+        original.symlink_to(target)
+    if damage is None:
+        checked = _check_prepared_binding(package, expected)
+        assert set(checked["source_ledgers"]) == set(expected)
+        assert len(checked["candidate_owned_initializer_components"]) == 5
+    else:
+        with pytest.raises(ValueError, match="original|exact regular"):
+            _check_prepared_binding(package, expected)
 
 
 def test_new_guard_keeps_every_original_complete_grade_roster_and_tree_gate():

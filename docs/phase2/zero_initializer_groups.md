@@ -54,3 +54,29 @@ source-bound diagnostic is retained at
 The realization checker is not a compiler capability issuer. Original clean
 functional grade/certification, selected compiler/library binding, pre-freeze
 composite preparation and ordinary capability transport remain separate gates.
+
+The explicit original `gemmini_zero_initializer_registry.restore_registry`
+factory performs cleanup admission followed by seven independently checked
+initializer/composed-tile source pairs. Its live registry exposes
+`zero_initializer_groups_raw_i32` separately from the current-artifact
+`source_execution_diagnostic` issuer. Neither a saved success record nor an
+import constructs either qualification. The original host must select the
+exact factory inputs, SDK release and preparation policies before freezing
+candidate source. Candidate policy and transformation sources remain editable;
+the original complete source/native/effect/final-grade checks stay outside that
+authority.
+
+The opt-in sealed-parent protocol can inherit only the original live historical
+qualification after kernel descriptor, callback, source, SDK and input custody
+checks. It reopens every original compiler/native/trace pin and records inherited
+qualification explicitly. Each newly emitted candidate still requires its own
+native execution, bounded actual issue trace and independent complete source
+proof. Missing original protocols, source pairs, exact ledger bindings or live
+parent authority refuse selection. Shared source/grouped/attention contracts,
+asynchronous overlap and unsupported readouts remain disabled. Current evidence
+does not establish hardware certification, timing or a promoted incumbent.
+
+Binding comparisons reopen all bounded ordinary ledger/component leaves between
+fresh original-owner checks. Repeated getters within that comparison are not
+additional independent evidence. The selected-library verifier still hashes
+every current member; only immutable byte-identical syntax facts may be reused.

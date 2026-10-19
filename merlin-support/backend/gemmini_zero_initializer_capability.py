@@ -27,15 +27,62 @@ from merlin.targetgen.compiler_emission_binding import (
 from merlin.targetgen.native_model_execution import _pinned_native_file
 
 
+def _check_prepared_binding(package, expected):
+    """Compare exact original ledgers; the live caller checks owners at both ends.
+
+    This helper grants nothing: ``expected`` is captured by the original live
+    prototype, never read from a candidate. Avoiding recursive owner getters in
+    this leaf comparison does not skip current package or library verification.
+    """
+    from merlin.targetgen.compiler_pass_selection import _pin as ordinary_leaf_pin
+
+    package = Path(package)
+    if not package.is_absolute() or package.resolve() != package or package.is_symlink() or not package.is_dir():
+        raise ValueError("initializer binding requires its original canonical compiler directory")
+    ledgers = {}
+    for name, original in expected.items():
+        path = package / name
+        ledgers[name] = ordinary_leaf_pin(path)
+        if path.stat().st_size > 1 << 20 or json.loads(path.read_bytes()) != original:
+            raise ValueError("initializer compiler changed its original bounded source/effect/library ledger")
+    leaves = {}
+    for name in (
+        "mixed_codegen.py",
+        "provenance.py",
+        "zero_initializer_policy.py",
+        "passes/__init__.py",
+        "passes/zero_initializer_groups.py",
+    ):
+        path = package / name
+        leaves[name] = ordinary_leaf_pin(path)
+        if path.stat().st_size > 1 << 20:
+            raise ValueError("initializer compiler component exceeds its original source bound")
+    return {
+        "status": "verified_exact_compiler_library_binding",
+        "compiler_package": str(package),
+        "source_ledgers": ledgers,
+        "candidate_owned_initializer_components": leaves,
+    }
+
+
 class ZeroInitializerCompilerPrototype:
     """One original composite creates both policies before retained-source freeze."""
 
     def __init__(self, tile):
         if type(tile) is not StagedTilePrototype:
             raise ValueError("initializer preparation needs original live staged source/effect owners")
-        tile.revalidate()
         self.tile = tile
         self._tile = tile.record()
+        self._binding = {
+            "selected-shared-library.json": copy.deepcopy(self._tile["prototype"]["library"]),
+            "shared-library-sources.json": copy.deepcopy(tile.cleanup.revalidate()["shared_library_sources"]),
+            "staged-dense-public.json": {
+                "schema": "gemmini.staged_dense_public.v1",
+                "contract": copy.deepcopy(tile.prototype._contract),
+                "library_contract_sha256": tile.library.contract.sha256,
+            },
+            "staged-tile-public.json": copy.deepcopy(tile._public()),
+        }
         self._sources = {
             name: _pin(module_source_path(name))
             for name in (
@@ -50,7 +97,7 @@ class ZeroInitializerCompilerPrototype:
             selected=tile.selected, arithmetic=tile.arithmetic, nm=tile.nm, allow_tile_rewrites=True
         )
         self._checker = self.checker.record()
-        self._identity = _digest([self._tile, self._sources, self._checker])
+        self._identity = _digest([self._tile, self._sources, self._checker, self._binding])
         self.revalidate()
 
     @property
@@ -70,13 +117,13 @@ class ZeroInitializerCompilerPrototype:
         return self.tile.nm
 
     def revalidate(self):
-        self.tile.revalidate()
-        self.checker.revalidate()
+        # record() already performs the full original owner's revalidation.
+        # Calling revalidate() immediately before it repeated the same work.
         _revalidate_sources(self._sources)
         if (
             self.tile.record() != self._tile
             or self.checker.record() != self._checker
-            or _digest([self._tile, self._sources, self._checker]) != self._identity
+            or _digest([self._tile, self._sources, self._checker, self._binding]) != self._identity
         ):
             raise ValueError("original initializer preparation/effect selection changed")
 
@@ -121,24 +168,9 @@ class ZeroInitializerCompilerPrototype:
 
     def check_compiler_binding(self, package):
         self.revalidate()
-        record = self.tile.check_compiler_binding(package)
-        from merlin.targetgen.compiler_pass_selection import _pin as ordinary_leaf_pin
-
-        leaves = {}
-        for name in (
-            "mixed_codegen.py",
-            "provenance.py",
-            "zero_initializer_policy.py",
-            "passes/__init__.py",
-            "passes/zero_initializer_groups.py",
-        ):
-            path = Path(package) / name
-            pin = ordinary_leaf_pin(path)
-            if path.stat().st_size > 1 << 20:
-                raise ValueError("initializer compiler component exceeds its original source bound")
-            leaves[name] = pin
+        record = _check_prepared_binding(package, self._binding)
         self.revalidate()
-        return {**record, "candidate_owned_initializer_components": leaves}
+        return {**record, "compiler_library_contract_sha256": self.library.contract.sha256}
 
     def check_pair_artifacts(self, before, after, *, execution_domain):
         self.revalidate()
@@ -260,7 +292,6 @@ class QualifiedZeroInitializerOwner:
         return self.prototype.nm
 
     def revalidate(self):
-        self.prototype.revalidate()
         if (
             _pin(__file__) != self._source
             or self.prototype.record() != self._prototype

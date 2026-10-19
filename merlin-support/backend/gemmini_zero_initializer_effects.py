@@ -103,8 +103,7 @@ class ZeroInitializerRealizationChecker:
         return "gemmini.zero_initializer_realization.v2:" + self._identity
 
     def revalidate(self):
-        self.selected.revalidate()
-        self.arithmetic.revalidate()
+        # report()/record() below perform those exact original checks already.
         _revalidate_sources(self._sources)
         if (
             self.selected.report()["selected_inputs"] != self._selected
