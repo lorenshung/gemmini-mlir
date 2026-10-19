@@ -13,10 +13,8 @@ from merlin.compile.scheduling.staged_dense import (
     StagedDenseProblem,
     StagedDenseRewrite,
     eliminate_redundant_rhs_loads,
-    rewrite_staged_dense,
-)
-from merlin.compile.scheduling.staged_dense_transforms import (
     order_output_tiles_n_before_m,
+    rewrite_staged_dense,
 )
 
 
