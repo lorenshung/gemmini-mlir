@@ -68,3 +68,38 @@ Reproduction drivers, guards and exact artifact pins are retained in
 shared CPU 6/7 pool and the Phase 1 runtime read-only, with the task's own TMPDIR.
 Per-stage costs remain separate; parallel walltimes are not summed. Author,
 operator and helper token usage is unavailable and is not estimated.
+
+The additional private operator helpers `gemmini_dma_service.py`,
+`gemmini_execute_cutpoints.py` and `gemmini_source_resources.py` connect the
+original live source execution owner to the exact selected RTL source. They do
+not alter either copied compiler arm, the SDK release or the timing evaluator.
+`SourceResourceEffects.derive(capsule_dir)` first reopens the original sealed
+source and signed inputs, checks every native output and actual accelerator
+product, and verifies the original linked ELF and commit-trace invocation. It
+then follows actual configuration lifetimes and observes load/store request
+cones, including zero-stride broadcast and Scratchpad full-width byte conversion.
+The selected packet selector is checked for all 8,192 direction/offset/length
+cases. Its aligned requests, payload bytes and full data beats are source-derived
+no-retry client envelopes; they are not observed RTL transactions or DRAM traffic.
+
+`actual-source-resources-v2/{34,166}.json` retains fresh source/execution checks.
+The first source has 3,689 products and 217 raw i32 outputs; the second has 16,384
+products and 1,024 raw i32 outputs. Under their unchanged required accelerator
+offload/raw-i32 contract, maximum useful arithmetic/readout service yields partial
+floors of 55 and 256 cycles. The maximum combines those necessary resource terms;
+there is no serial sum or asserted overlap. Candidate packet waste is excluded
+from this workload floor. The request inventories separately expose payload vs
+client packet bytes: read 889/2,160 and write 868/1,152 for the tailed source; read
+2,304/2,304 and write 4,096/4,096 for the aligned source.
+
+Actual COMPUTE operands map to conditional single-MUL row services of four times
+7 and four times 16 rows. The controller waiting state, queue validity and
+configuration visibility are explicit cutpoint premises. Neither source order
+nor a fence proves those states were reached, and a lone PRELOAD is never treated
+as retired by a fence. These row counts are excluded from actual invocation
+floors. The original source owner checks complete functional execution, not RTL
+reachability or hardware timing. No counter-window scope is available for these
+functional traces: the ordinary feedback inventory keeps `scope_sha256: null`
+and therefore refuses a measured join. Attainment remains null. Bank service,
+complete readout/retirement, host/packing, translation/cache/DRAM behavior and
+overlap remain unknown, preventing convergence.
