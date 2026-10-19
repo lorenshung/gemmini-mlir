@@ -228,3 +228,22 @@ def test_emitted_host_waste_cannot_increase_frozen_workload_floor():
 def test_saved_success_cannot_construct_source_owner():
     with pytest.raises(TypeError, match="original selected and native source owners"):
         S.RetirementServiceContract({"status": "PASS"}, {"qualified": True})
+
+
+def test_owner_metadata_returns_defensive_copies_without_issuing_a_source_owner(
+    monkeypatch,
+):
+    # Exercise only metadata copying; bypassing construction here establishes no
+    # live source or execution authority and is never a production constructor.
+    owner = object.__new__(S.RetirementServiceContract)
+    owner._record = {"pins": {"original": {"sha256": "a" * 64}}}
+    owner._binding = {"hardware": "b" * 64}
+    owner._identity = "c" * 64
+    monkeypatch.setattr(owner, "revalidate", lambda: None)
+    first = owner.record()
+    first["pins"]["original"]["sha256"] = "changed"
+    binding = owner.selected_binding()
+    binding["hardware"] = "changed"
+    assert owner.record()["pins"]["original"]["sha256"] == "a" * 64
+    assert owner.selected_binding()["hardware"] == "b" * 64
+    assert owner.identity == S.SCHEMA + ":" + "c" * 64
