@@ -174,6 +174,10 @@ class QualifiedStagedDenseOwner:
         self.revalidate()
         return self.prototype.prepare_compiler(source, destination, policy=policy)
 
+    def check_compiler_binding(self, package):
+        self.revalidate()
+        return self.prototype.check_compiler_binding(package)
+
     def check_pair_artifacts(self, before, after, *, execution_domain):
         self.revalidate()
         return self.prototype.check_pair_artifacts(
