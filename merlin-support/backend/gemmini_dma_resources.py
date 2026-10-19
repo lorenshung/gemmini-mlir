@@ -101,7 +101,7 @@ class DmaTransferContract:
             "unresolved": {
                 "downstream_sharing": "client ports do not prove independent interconnect/cache/DRAM service",
                 "translation_retries": "no-retry packet projection excludes replay/translation stalls",
-                "storage_completion": "reader source-ID release does not establish final local row consumption; store acknowledgement is not a global fence",
+                "storage_completion": "reader source-ID release precedes merged local row consumption; store acknowledgement is not a global fence",
                 "bank_service": "no per-bank arbitration/port throughput or physical address trace is derived",
                 "complete_call": "host/packing/dispatch/compute/readout dependencies are not complete",
             },
