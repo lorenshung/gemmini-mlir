@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from pathlib import Path
 
 from gemmini_selected_scheduling import SelectedSchedulingTarget
 from gemmini_timing_resources import _field, _pin, _revalidate_sources, _value
 from merlin.common.paths import module_source_path
 from merlin.targetgen.rtl import firrtl_struct as F
+from merlin.targetgen.rtl.firrtl_bit_transport import BitValue, observe_bit_transport
 
 SCHEMA = "gemmini.selected_integer_arithmetic_scope.v1"
 
@@ -112,54 +112,7 @@ def prove_local_arithmetic(mac, pe, accumulator):
     }
 
 
-def _mesh_sources(module, reference, active=()):
-    """Follow actual value wires/registers; preserve both guarded alternatives.
-
-    A hold edge contributes no new value. No arithmetic except bit transport is
-    admitted between physical MACs. Aggregate aliases retain their full index.
-    """
-    if len(active) > 128:
-        raise ValueError("selected mesh value transport is oversized")
-    if type(reference) is F.Prim:
-        if reference.op not in {"asUInt", "asSInt", "pad", "cat", "bits"}:
-            raise ValueError("selected mesh adds an unaccounted arithmetic operation")
-        return set().union(
-            *(_mesh_sources(module, arg, active) for arg in reference.args)
-        )
-    if type(reference) in (F.IntArg, F.Lit):
-        return set()
-    if type(reference) is not F.Ref:
-        raise ValueError("selected mesh contains an unsupported value expression")
-    if reference in active:
-        return set()
-    text = reference.text()
-    if re.fullmatch(r"mesh_[0-9]+_[0-9]+\.io\.out_b\[0\]", text) or text.startswith(
-        "io.in_b["
-    ):
-        return {text}
-    if not reference.segments and reference.root in module.nodes:
-        return _mesh_sources(
-            module, module.nodes[reference.root][0], (*active, reference)
-        )
-    drivers = []
-    for row in module.connects:
-        prefix = row.lhs.text()
-        if text == prefix:
-            drivers.append(row.rhs)
-        elif text.startswith((prefix + "[", prefix + ".")):
-            if type(row.rhs) is not F.Ref:
-                raise ValueError(
-                    "selected mesh aggregate transport is not an exact alias"
-                )
-            drivers.append(F.parse_expr(row.rhs.text() + text[len(prefix) :]))
-    if not drivers:
-        raise ValueError("selected mesh value lacks an original producer: " + text)
-    return set().union(
-        *(_mesh_sources(module, rhs, (*active, reference)) for rhs in drivers)
-    )
-
-
-def prove_mesh_scope(mesh, rows, cols):
+def prove_mesh_scope(mesh, rows, cols, tiles):
     instances = {name: row[1] for name, row in mesh.decls.items() if row[0] == "inst"}
     expected = {f"mesh_{r}_{c}" for r in range(rows) for c in range(cols)}
     if set(instances) != expected:
@@ -168,17 +121,45 @@ def prove_mesh_scope(mesh, rows, cols):
     for row in range(rows):
         for column in range(cols):
             destination = f"mesh_{row}_{column}.io.in_b[0]"
-            sources = _mesh_sources(mesh, F.parse_expr(destination))
-            allowed = (
-                {f"mesh_{row - 1}_{column}.io.out_b[0]"}
+            source = (
+                f"mesh_{row - 1}_{column}.io.out_b[0]"
                 if row
-                else {f"io.in_b[{column}][0]"}
+                else f"io.in_b[{column}][0]"
             )
-            if sources != allowed:
+            source_type = (
+                _field(tiles[instances[f"mesh_{row - 1}_{column}"]], "out_b", 0)
+                if row
+                else _field(mesh, "in_b", column, 0)
+            )
+            destination_type = _field(
+                tiles[instances[f"mesh_{row}_{column}"]], "in_b", 0
+            )
+            if (
+                source_type[0] != "sint"
+                or destination_type[0] != "sint"
+                or source_type[1] > destination_type[1]
+            ):
                 raise ValueError(
-                    "selected WS partial sum does not traverse one spatial MAC per row"
+                    "selected spatial partial-sum transport changes its signed format"
                 )
-            witnesses.append({"destination": destination, "sources": sorted(sources)})
+            bits = tuple((source, bit) for bit in range(source_type[1]))
+            expected_value = BitValue(
+                True, bits + (bits[-1],) * (destination_type[1] - source_type[1])
+            )
+            values = observe_bit_transport(
+                mesh, destination, sources=(source,), modules=tiles
+            )
+            if values != {expected_value}:
+                raise ValueError(
+                    "selected WS partial sum does not preserve every signed bit between spatial MACs"
+                )
+            witnesses.append(
+                {
+                    "destination": destination,
+                    "sources": [source],
+                    "all_signed_bits_preserved": True,
+                }
+            )
     return witnesses
 
 
@@ -242,7 +223,7 @@ class IntegerArithmeticOwner:
         rule = rules[0]
         geometry = selected.report()["geometry"]
         witnesses = prove_mesh_scope(
-            modules["Mesh"], geometry["array_rows"], geometry["array_cols"]
+            modules["Mesh"], geometry["array_rows"], geometry["array_cols"], tiles
         )
         rule["max_primitive_k"] = geometry["array_rows"]
         rule["accumulation"] = "exact_i32_before_readout"
@@ -301,6 +282,9 @@ class IntegerArithmeticOwner:
             "runtime_deployment": _pin(runtime / "deployment.json"),
             "implementation": _pin(__file__),
             "firrtl_parser": _pin(module_source_path(F.__name__)),
+            "bit_transport_checker": _pin(
+                module_source_path("merlin.targetgen.rtl.firrtl_bit_transport")
+            ),
             **receiver,
         }
         for name in (

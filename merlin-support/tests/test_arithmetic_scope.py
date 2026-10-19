@@ -101,8 +101,20 @@ def mesh(adapter, *, previous="mesh_0_0.io.out_b[0]", extra=""):
 
 
 def test_actual_mesh_chain_retains_only_one_partial_sum_per_row(adapter):
-    proof = adapter.prove_mesh_scope(mesh(adapter), 2, 1)
+    proof = adapter.prove_mesh_scope(mesh(adapter), 2, 1, tile_types(adapter))
     assert proof[-1]["sources"] == ["mesh_0_0.io.out_b[0]"]
+    assert proof[-1]["all_signed_bits_preserved"]
+
+
+def tile_types(adapter):
+    tile = parsed(
+        adapter,
+        "Tile",
+        """module Tile :
+  output io : { flip in_b : SInt<20>[1], out_b : SInt<20>[1] }
+""",
+    )
+    return {"Tile": tile, "Tile1": tile}
 
 
 @pytest.mark.parametrize(
@@ -110,12 +122,24 @@ def test_actual_mesh_chain_retains_only_one_partial_sum_per_row(adapter):
     ["mesh_1_0.io.out_b[0]", "io.in_b[0][0]", "add(mesh_0_0.io.out_b[0], SInt<20>(1))"],
 )
 def test_feedback_bypass_or_extra_arithmetic_refuses(adapter, previous):
-    with pytest.raises(ValueError, match="partial sum|unaccounted arithmetic"):
-        adapter.prove_mesh_scope(mesh(adapter, previous=previous), 2, 1)
+    with pytest.raises(ValueError):
+        adapter.prove_mesh_scope(
+            mesh(adapter, previous=previous), 2, 1, tile_types(adapter)
+        )
+
+
+def test_same_source_with_lost_bits_does_not_establish_transport(adapter):
+    with pytest.raises(ValueError, match="every signed bit"):
+        adapter.prove_mesh_scope(
+            mesh(adapter, previous="bits(mesh_0_0.io.out_b[0],0,0)"),
+            2,
+            1,
+            tile_types(adapter),
+        )
 
 
 def test_unaccounted_physical_mac_instance_refuses(adapter):
     with pytest.raises(ValueError, match="physical MAC tile membership"):
         adapter.prove_mesh_scope(
-            mesh(adapter, extra="inst foreign_tile of Tile2"), 2, 1
+            mesh(adapter, extra="inst foreign_tile of Tile2"), 2, 1, tile_types(adapter)
         )
