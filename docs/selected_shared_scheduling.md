@@ -68,6 +68,19 @@ identity and cannot be used to turn a saved declaration into execution evidence.
 The preserved compiler's existing instruction emission remains its original
 route; these shared hooks are not inserted into that immutable compiler.
 
+There is also an important realization boundary. Shared
+`compile_schedule.ScheduleEncoding` currently handles finite straight-line
+programs with one schedule call per decoded instruction and actual operands
+reconstructed from final bytes alone. A RISC-V RoCC instruction contains scalar
+register indices; the values are computed by surrounding host instructions and
+loops. An issue-register observation supplies those values during execution,
+but is not a bytes-alone final machine decoder. Serializing requested commands
+as an invented packet stream does not check the emitted ELF. The existing
+compact dense/source route has a separate C emission and source-conformance
+boundary; a real integration must connect that route to its independent target
+checker or implement a checked realized-machine bridge. A reviewed software
+extension alone cannot erase this distinction.
+
 ## Smallest useful next enabling work
 
 Configuration cleanup is a narrow first adapter, but raw register equality is
