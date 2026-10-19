@@ -332,3 +332,127 @@ The opt-in `test_source_execution_owner.py` integration test takes
 `MERLIN_SOURCE_EXECUTION_TEST_FIXTURE` selecting the original source/runtime and
 completed artifacts; it reruns the checks without simulator execution and
 rejects locally mutated output, source, ELF, runtime and compute-state evidence.
+
+## Ordinary copied-compiler cleanup preparation
+
+`gemmini_compiler_passes.restore_registry` is an explicit original-host factory
+for Merlin's `OriginalPassFactory`/`CompilerPassSelection` transport. It reruns
+the unchanged independent cleanup admission in a fresh interpreter using the
+exact selected library. This avoids replacing the host evaluator's imported
+SDK namespaces. The returned `OriginalCleanupAdmission` has no saved-record
+constructor: its original invocation, outputs, source leaves, selected facts,
+software, runtime and library must revalidate. Release a parent compute lease
+before admission; the original checker child owns its own shared lease.
+
+The selected `configuration_cleanup` owner prepares separate baseline and
+candidate compiler directories **before** their source and edit authority are
+frozen. The preserved 21-file compiler remains unchanged. Both copies receive
+the same reviewed SDK, startup loader, checked cleanup algorithm and exact
+public source leaves. The only initial policy difference is the candidate-owned
+`cleanup_policy.py`: a Boolean enable and nonnegative MAC-count threshold chosen
+from current M/K/N. Future policy edits remain subject to the ordinary frozen
+edit authority and independent complete-program checks.
+
+The copied hook executes at the original direct emitter's actual statement
+return. Its public projection contains exact bounded leaves with relative
+paths, never a source directory or private qualification evidence. It reopens
+their bytes and the selected SDK at every invocation. The cleanup helper names
+the SDK's existing exact public IR leaves rather than requesting the broader
+`merlin.sched.ir` implementation facade. No SDK algorithm is changed.
+
+Fresh functional integration of the selected copies exercised the ordinary
+package integrity scanner and `emit_analysis_bundle` entrypoint. The resulting
+LLVM and command buffer exactly matched those linked by the unchanged native
+builder. Three signed public geometries (1x16x16, 17x16x16 and 12x48x48) retained
+all 864 output values and logical work; independent actual issue-register checks
+removed respectively 1, 2 and 9 redundant setters while preserving every other
+command, fence and logical DMA window. This is functional command evidence,
+not accelerator latency or physical-memory-guard qualification.
+
+Preparation and registry transport do not satisfy the final formal search
+gate by themselves. The owner's `check_functional_guard` consumes the original
+complete functional regrades, exact frozen compiler copies, complete roster,
+clean integrity and certification results. It joins each original source-model
+grade to its durable native receipt and emitted LLVM/command buffer. The
+`gemmini_cleanup_final_guard` consumer reopens original build/source pins,
+checks the exact selected runtime and runs a new bounded issue trace of that
+same final ELF. It requires every complete output to reproduce the original
+independently graded native values, unchanged source/input/golden identities,
+unchanged logical work and only legal redundant-setter omissions. Traces retain
+the independent 64MiB ceiling and shared leaf compute admission.
+
+An actual ordinary-copy native pair for freshly sealed source34 passed this
+final issue/output consumer (217 complete values per arm). Its zero removals
+are an independent geometry control, not an improvement. This diagnostic did
+not fabricate a successful formal grade: the original Phase1 certification
+prerequisite remains pending. Missing original grades and non-model capsule
+families without this exact native receipt route refuse; neither a saved
+success nor a preparation record can bypass that requirement. Hardware,
+timing, broad dense, asynchronous overlap and attention capabilities remain
+disabled.
+
+The opt-in `test_selected_cleanup_child.py` takes
+`MERLIN_SELECTED_CLEANUP_TEST_INPUTS` pointing to the explicit original factory
+inputs. It reruns original cleanup admission in both parent and fresh sealed
+child, restores the exact selected SDK/pass identities, verifies the final
+consumer is present and checks the parent's child receipt. Its parent compiler
+profile is a neutral transport fixture; passing this test does not certify the
+original Phase1 experiment or authorize another capability. Do not hold a
+parent CPU lease while waiting for the original checker child.
+
+## Finite staged raw-i32 source route
+
+The explicit SDK v4 release adds the separate generic staged descriptor/consume
+API; earlier SDKs and synchronous dense-v1 retain their original meanings.
+`gemmini_staged_dense_source.py` projects the preserved direct emitter's actual
+finite C statements: complete logical pointer expressions, immutable zero row,
+identity load state, pending PRELOAD, following compute and raw-i32 readout.
+Unknown loops, calls, flags, scaling, bias or layouts refuse the projection.
+Its first physical renderer may omit only independently proved redundant RHS
+loads. It preserves every original configuration, compute, store and fence,
+including final persistent settings. New placements, added instructions and
+broader logical rewrites need separately qualified physical rendering.
+
+`gemmini_staged_dense_admission.prepare_original_prototype` reruns the original
+selected cleanup admission, derives arithmetic from the exact selected RTL and
+receiver and reruns the selected RTL completion proof. It prepares separate
+compiler copies using the same SDK and checked mechanisms. The candidate-owned
+`staged_dense_policy.py` chooses from current M/K/N and selected primitive size;
+no model or layer identity selects reuse. Both treatments keep configuration
+cleanup disabled to isolate the RHS mechanism. Unsupported members retain
+their original program and expose a compiler refusal reason.
+
+Prototype preparation grants no executable capability. The original
+`restore_registry` requires real sealed-source paired realizations and reruns
+the original complete source, packet-product, independent output and CPU-write
+checks. Initial scope is one contraction with original immutable external RHS.
+Independent actual issued-cell induction must prove every omitted load already
+has the exact source bytes in its private cells; all other commands, fences and
+settings must match. Qualification requires distinct M-boundary positives and
+independent K/N no-gain controls. New executions still repeat the complete final
+check. Saved success records cannot issue this owner.
+
+The newly requested positive/control source seal is currently blocked before
+capture by original sandbox readiness; its legacy diagnostics remain explicitly
+unsealed. The staged registry therefore remains disabled. No source admission,
+hardware timing, double buffering, asynchronous overlap, cross-operation leases,
+mixed attention or KV capability follows from the source API or prototype.
+
+The same explicit SDK-v4 ordinary compiler copies have now exercised all five
+engineering guards. For M=17,31,32 with K=N=16, each candidate removed one actual
+RHS transfer (22 to 21 issued commands). Independent K=17 and N=17 controls
+retained 34 and 42 commands. All 1,841 complete signed output values per arm
+matched; fresh traces reconstructed every required source product, accumulator
+continuation and readout and reopened linked immutable input bytes and CPU-write
+effects. Five baseline native artifacts were reused only after their command
+buffers and LLVM matched the ordinary SDK-v4 baseline emission byte for byte;
+all five candidate native executions and all ten traces were fresh. These are
+unsealed functional diagnostics, not paired latency measurements or capability
+qualification. The original sealed-source checker still refuses each case.
+
+Fresh original admission retains a separate invocation and receipt for each
+process. Staged selection identity binds the original stable cleanup owner,
+selected sources, arithmetic, completion and contract; it does not bind the new
+receipt's output location as a scheduling choice. Each live owner still reopens
+its own exact original receipt. This permits original child re-admission without
+accepting a saved-success factory or allowing receipt replacement.
