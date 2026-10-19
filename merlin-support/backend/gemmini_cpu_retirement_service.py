@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from types import MethodType
 
 from gemmini_native_timing_semantics import FEATURE_ENGINE, NativeTimingSemanticsOwner
 from gemmini_selected_scheduling import SelectedSchedulingTarget
@@ -213,28 +214,62 @@ class RetirementServiceContract:
         self._runtime = runtime
         self._counter_asm = timing["counter_asm"]
         self._binding = binding
+        self._record = json.loads(
+            json.dumps(
+                {
+                    "schema": SCHEMA,
+                    "selected_binding": self._binding,
+                    "pins": self._pins,
+                    "proof": self._proof,
+                    "original_counter_runtime_sha256": runtime.sha256,
+                    "authority": "necessary emitted-schedule service only; no statistical qualification",
+                    "objective_floor_eligible": False,
+                    "convergence_eligible": False,
+                }
+            )
+        )
+        self._identity = hashlib.sha256(
+            json.dumps(self._record, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        self._callback = type(self).evidence
+        self._callback_code = self._callback.__code__
         self.revalidate()
+
+    @property
+    def identity(self):
+        return SCHEMA + ":" + self._identity
 
     def revalidate(self):
         self._selected.revalidate()
         self._native.revalidate()
         self._runtime.verify()
         _revalidate_sources(self._pins)
-        if self._native.selected_binding() != self._binding:
+        callback = self.evidence
+        if (
+            self._native.selected_binding() != self._binding
+            or self._pins != self._record["pins"]
+            or self._binding != self._record["selected_binding"]
+            or self._runtime.sha256 != self._record["original_counter_runtime_sha256"]
+            or self._proof != self._record["proof"]
+            or hashlib.sha256(
+                json.dumps(self._record, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            != self._identity
+            or type(callback) is not MethodType
+            or callback.__self__ is not self
+            or callback.__func__ is not self._callback
+            or callback.__func__.__code__ is not self._callback_code
+            or type(self).evidence is not self._callback
+        ):
             raise ValueError("retirement service native source binding changed")
+
+    def selected_binding(self):
+        self.revalidate()
+        return dict(self._binding)
 
     def record(self):
         self.revalidate()
-        return {
-            "schema": SCHEMA,
-            "selected_binding": dict(self._binding),
-            "pins": dict(self._pins),
-            "proof": dict(self._proof),
-            "original_counter_runtime_sha256": self._runtime.sha256,
-            "authority": "necessary emitted-schedule service only; no statistical qualification",
-            "objective_floor_eligible": False,
-            "convergence_eligible": False,
-        }
+        return json.loads(json.dumps(self._record))
 
     def evidence(
         self, report_path, invocation_path, counter_review_path, *, source_sha256
