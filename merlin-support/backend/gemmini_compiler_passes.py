@@ -52,6 +52,9 @@ class CompilerCleanupOwner:
             "startup": _pin(
                 module_source_path("merlin.targetgen.selected_library_imports")
             ),
+            "preparation_copy": _pin(
+                module_source_path("merlin.targetgen.compiler_pass_selection")
+            ),
             "final_guard": _pin(
                 Path(__file__).with_name("gemmini_cleanup_final_guard.py")
             ),
@@ -191,7 +194,9 @@ class CompilerCleanupOwner:
             raise ValueError(
                 "compiler preparation did not receive its original qualified Phase 1 compiler"
             )
-        shutil.copytree(source, destination)
+        from merlin.targetgen.compiler_pass_selection import copy_compiler_source
+
+        copy_compiler_source(source, destination)
         contract = json.loads(Path(qualified["effect_contract"]["path"]).read_bytes())
         resources = destination / "cleanup-public-leaves"
         resources.mkdir()
