@@ -58,9 +58,16 @@ class Source:
     def __init__(self):
         self._prototype = Prototype()
         self.identity = "neutral-original-source"
+        self.checks = 0
+        self.valid = True
+        self.on_check = None
 
     def revalidate(self):
-        pass
+        self.checks += 1
+        if self.on_check is not None:
+            self.on_check(self)
+        if not self.valid:
+            raise ValueError("original source became invalid")
 
 
 class Count:
@@ -196,3 +203,114 @@ def test_issuance_does_not_keep_a_dropped_owner_alive(owners):
     del separate
     gc.collect()
     assert ref() is None
+
+
+def test_metadata_getters_coalesce_only_inside_each_original_operation(owners):
+    owner, _, _, source, _ = owners
+    before = source.checks
+    owner.record()
+    assert source.checks == before + 2
+    owner.selected_binding()
+    assert source.checks == before + 4  # no cross-call qualification cache
+
+
+def test_postcheck_refuses_mutation_during_getter(owners, monkeypatch):
+    owner, _, _, source, _ = owners
+    selected = source._prototype.selected
+    original = selected.report
+
+    def changed():
+        result = original()
+        source.valid = False
+        return result
+
+    monkeypatch.setattr(selected, "report", changed)
+    with pytest.raises(ValueError, match="became invalid"):
+        owner.record()
+    assert M._METADATA._ACTIVE.get() is None
+
+
+def test_exception_still_checks_original_owner_and_revokes_scope(owners, monkeypatch):
+    owner, _, _, source, _ = owners
+    before = source.checks
+
+    def failure():
+        raise RuntimeError("current independent proof refused")
+
+    monkeypatch.setattr(source._prototype.selected, "report", failure)
+    with pytest.raises(RuntimeError, match="independent proof"):
+        owner.record()
+    assert source.checks == before + 2
+    assert M._METADATA._ACTIVE.get() is None
+
+
+def test_own_callback_mutation_during_operation_refuses(owners, monkeypatch):
+    owner, _, _, source, _ = owners
+    selected = source._prototype.selected
+    original = selected.report
+
+    def changed():
+        result = original()
+        owner.verify_compiler_binding = lambda *a, **kw: None
+        return result
+
+    monkeypatch.setattr(selected, "report", changed)
+    with pytest.raises(ValueError, match="bound callback"):
+        owner.record()
+
+
+def test_registry_roster_mutation_refuses(owners):
+    owner, *_ = owners
+    registry = M._ISSUED[owner][12]
+    registry._capabilities = registry._capabilities[::-1]
+    with pytest.raises(ValueError):
+        owner.revalidate()
+
+
+def test_metadata_callback_replacement_refuses(owners, monkeypatch):
+    owner, *_ = owners
+    import contextlib
+
+    @contextlib.contextmanager
+    def unverified(_):
+        yield
+
+    monkeypatch.setattr(
+        M._METADATA, "scoped_registry_metadata_verification", unverified
+    )
+    with pytest.raises(ValueError, match="metadata callback changed"):
+        owner.revalidate()
+
+
+def test_failed_final_check_cannot_issue_owner(owners, monkeypatch):
+    _, source_cap, count_cap, source, _ = owners
+    original = source.revalidate.__func__
+    calls = 0
+
+    def failing(self):
+        nonlocal calls
+        original(self)
+        calls += 1
+        if calls == 2:
+            self.valid = False
+            raise ValueError("postcheck refused issuance")
+
+    # Original reviewed capability rejects the changed callback even before issue.
+    monkeypatch.setattr(type(source), "revalidate", failing)
+    size = len(M._ISSUED)
+    with pytest.raises(ValueError):
+        M.SourceNativeCorrespondenceOwner.bind(source_cap, count_cap)
+    assert len(M._ISSUED) == size
+
+
+def test_own_custody_reopens_after_original_final_owner_check(owners):
+    owner, _, _, source, _ = owners
+    final = source.checks + 2
+
+    def mutate_on_final(current):
+        if current.checks == final:
+            owner.verify_compiler_binding = lambda *a, **kw: None
+
+    source.on_check = mutate_on_final
+    with pytest.raises(ValueError, match="bound callback"):
+        owner.record()
