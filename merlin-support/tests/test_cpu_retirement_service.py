@@ -58,7 +58,11 @@ def report(instructions=6):
         "functional_status": "PASS",
         "raw_functional_exit_code": 0,
         "instructions": instructions + 10,
-        "feature_counts": {"cpu.integer": instructions},
+        "feature_counts": {
+            "cpu.integer": instructions - 1,
+            "cpu.csr": 1,
+            "cpu.system": 0,
+        },
         "feature_observation": {
             "schema": S.O.COUNT_SCHEMA,
             "complete": True,
@@ -66,7 +70,7 @@ def report(instructions=6):
             "counted_cpu_instructions": instructions,
             "scope_kind": "counter_pc_pair",
             "window_index": 0,
-            "primary_cpu_features": ["cpu.integer"],
+            "primary_cpu_features": ["cpu.integer", "cpu.csr", "cpu.system"],
             "unresolved": [],
             "qualification": "not_established",
         },
@@ -155,7 +159,7 @@ def test_unproved_or_decorative_retirement_effects_refuse(mutation):
         S.derive_retirement(rocket, csr)
 
 
-@pytest.mark.parametrize("count,expected", [(0, 0), (1, 0), (2, 1), (1773, 1772)])
+@pytest.mark.parametrize("count,expected", [(1, 0), (2, 1), (1773, 1772)])
 def test_strict_interior_demand_no_prices_or_whole_trace_resource_sum(count, expected):
     observed = report(count)
     assert S._scope_count(observed) == expected
@@ -171,6 +175,8 @@ def test_strict_interior_demand_no_prices_or_whole_trace_resource_sum(count, exp
         "whole_trace",
         "window",
         "count_disagreement",
+        "counter_reconfiguration",
+        "system_control",
     ],
 )
 def test_missing_foreign_or_inconsistent_scope_never_gets_a_floor(mutation):
@@ -185,8 +191,12 @@ def test_missing_foreign_or_inconsistent_scope_never_gets_a_floor(mutation):
         observed["feature_observation"]["scope_kind"] = "whole_program"
     elif mutation == "window":
         observed["counter_windows"][0]["begin_pc"] += 4
-    else:
+    elif mutation == "count_disagreement":
         observed["feature_counts"]["cpu.integer"] += 1
+    else:
+        feature = "cpu.csr" if mutation == "counter_reconfiguration" else "cpu.system"
+        observed["feature_counts"][feature] += 1
+        observed["feature_counts"]["cpu.integer"] -= 1
     with pytest.raises(ValueError):
         S._scope_count(observed)
 

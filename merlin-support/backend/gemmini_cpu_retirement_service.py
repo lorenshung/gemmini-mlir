@@ -130,6 +130,14 @@ def _scope_count(report):
         raise ValueError(
             "retirement demand needs a complete source-bound counter-PC report"
         )
+    if (
+        report["feature_counts"].get("cpu.csr") != 1
+        or report["feature_counts"].get("cpu.system") != 0
+        or report["feature_observation"]["scope_instructions"] < 1
+    ):
+        raise ValueError(
+            "retirement bound excludes CSR/system control beyond the closing counter read"
+        )
     binding = report.get("scope_binding", {})
     if (
         binding.get("schema") != "merlin.spike_scope_binding.v1"
