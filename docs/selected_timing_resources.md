@@ -126,3 +126,51 @@ It supplies no prices and does not implement or qualify the native engine.
 Standalone PRELOAD synchronous completion is unavailable, so the current
 `merlin.dense_schedule.v1` adapter remains disabled. A future checked composite
 must describe the complete preload/compute/completion effects explicitly.
+
+## Original count-model correspondence
+
+`gemmini_count_hardware.py` checks the original count model against the selected
+facts and retained functional receiver sources. Its separate sidecar binds array
+dimensions, signed element and accumulator widths, store rows and row widths,
+local address width, custom opcode and mask, selected full-width readout and
+pixel-repeater structures, and the store controller's declared reset value.
+The functional runtime's deployment record binds its receiver sources to the
+unchanged `libgemmini.so`; model library selection and CPU ISA must match that
+record. Every model hardware field must equal the derived selection.
+
+```sh
+python merlin-support/backend/gemmini_count_hardware.py \
+  --facts "$SELECTED_FACTS" \
+  --observed-contract "$SELECTED_TARGET_CONTRACT" \
+  --model "$ORIGINAL_COUNT_MODEL" \
+  --runtime "$SELECTED_FUNCTIONAL_RUNTIME" \
+  --receiver "$RETAINED_FUNCTIONAL_RECEIVER_SOURCE" \
+  --functional-spike-source "$RETAINED_FUNCTIONAL_SPIKE_SOURCE" \
+  --output "$FRESH_COUNT_CORRESPONDENCE"
+```
+
+Operator admission uses `CountHardwareCorrespondenceOwner.bind(...)` with that
+sidecar and the original model, facts, observed-contract and functional-extension
+paths. The factory reconstructs the source proof and rejects a saved sidecar
+that differs. The immutable owner supplies `identity`, `revalidate()`,
+`selected_binding()` and `record()` for transport through the reviewed-pass
+registry. Revalidation reopens its original pinned inputs; a changed model,
+source, target selection or runtime refuses admission. A saved success record
+alone is insufficient. Candidate code must not construct or replace this owner.
+
+The five registry bindings identify facts as hardware, the observed contract as
+software, the count feature schema as numerical policy, the exact count model as
+runtime, and the canonical model library list as library. Here numerical policy
+identifies the count projection only; the compiler's original numerical-policy
+gate remains separately required. These fields transport exact identities and
+do not grant numerical, hardware or timing qualification.
+
+This correspondence establishes the count-feature hardware association and the
+original functional build association. It does not qualify physical aliasing,
+DMA beat accounting, reservation ownership, completion, event scheduling or
+timing. In particular, the functional receiver does not establish initialization
+of its `acc_act` field; the sidecar binds the selected RTL store reset separately
+and makes no full reset-equivalence claim. Hardware execution qualification
+remains `not_established`, and native event timing remains unqualified. Empirical
+screen qualification is a separate gate with its own source-group splits,
+feature domain and original measured labels.
