@@ -313,3 +313,22 @@ checks before a live capsule owner can use it. Batched, mixed attention and
 nonidentity readout contracts remain disabled unless separately checked.
 This staged state induction changes neither the old synchronous dense-v1
 contract nor any timing evaluator.
+
+`gemmini_source_execution.SourceExecutionOwner` connects these checks to the
+original `checked_native_integer_v1` writer callback. It requires original live
+arithmetic/target owners and explicitly selected compiler, native-build and
+commit-invocation artifacts. It rechecks the complete source/LLVM/task CFG,
+source-entry bytes against the linked ELF, observed writes, independent complete
+goldens and both native/trace output streams before checking actual products.
+The expected trace command is reconstructed from the exact original native
+engine citation and pinned deployment; an ambient Phase0 backend selection
+cannot replace it. No JSON reader reconstructs this live owner.
+
+Use the original host `scoped_realization_owner(owner)` API for this specific
+source, input and numerical contract. Its successful source correspondence
+does not enable a general dense adapter, hardware timing, mixed attention or
+arbitrary future input/shape support. Each new realization must pass again.
+The opt-in `test_source_execution_owner.py` integration test takes
+`MERLIN_SOURCE_EXECUTION_TEST_FIXTURE` selecting the original source/runtime and
+completed artifacts; it reruns the checks without simulator execution and
+rejects locally mutated output, source, ELF, runtime and compute-state evidence.
