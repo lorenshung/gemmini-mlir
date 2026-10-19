@@ -24,11 +24,18 @@ def inputs():
         parent_delegation_protocol=registry.PROTOCOL,
         metadata_verification_protocol=registry.METADATA,
         rhs_residency_qualification_pairs=[dict(before="actual", after="actual")] * 6,
+        rhs_allocation_epoch_source={},
     )
 
 
 @pytest.mark.parametrize(
-    "field", ["parent_delegation_protocol", "metadata_verification_protocol", "rhs_residency_qualification_pairs"]
+    "field",
+    [
+        "parent_delegation_protocol",
+        "metadata_verification_protocol",
+        "rhs_residency_qualification_pairs",
+        "rhs_allocation_epoch_source",
+    ],
 )
 def test_missing_original_selection_cannot_start_expensive_admission(tmp_path, field):
     selected = inputs()
@@ -71,7 +78,7 @@ def test_source_issuer_pins_original_actual_trace_function_and_code(monkeypatch)
     issuer.revalidate()
 
 
-def test_active_child_dispatch_uses_original_factory_and_decoder(context, tmp_path):
+def test_active_child_dispatch_uses_original_factory_and_decoder(context, monkeypatch, tmp_path):
     calls = []
 
     class Token:
@@ -81,8 +88,19 @@ def test_active_child_dispatch_uses_original_factory_and_decoder(context, tmp_pa
 
     context.token = Token()
     selected = inputs()
-    assert registry.restore_registry(selected, work_root=tmp_path) == "dispatch-only"
+    # Neutral dispatch test; actual native custody is independently tested by
+    # the real factory and the fixed artifact-pin boundary.
+    monkeypatch.setattr(registry, "_leaf", lambda *args: None)
+    result = registry.restore_registry(selected, work_root=tmp_path)
+    assert result == "dispatch-only"
     assert calls == [(registry.restore_registry, selected, registry.redeem_qualification, tmp_path)]
+
+
+def test_unpinned_allocation_cannot_reach_child_or_inherit_a_capacity_claim(context, tmp_path):
+    selected = inputs()
+    with pytest.raises(ValueError, match="original artifact"):
+        registry.restore_registry(selected, work_root=tmp_path / "absent")
+    assert not (tmp_path / "absent").exists()
 
 
 def test_json_and_duck_token_cannot_restore_historical_epoch_or_owner(context, tmp_path):
