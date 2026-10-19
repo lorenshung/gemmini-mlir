@@ -7,11 +7,9 @@ import copy
 
 import numpy as np
 import pytest
-from gemmini_primitive_diagnostic import (
-    PrimitiveDiagnosticOwner,
-    _diagnostic_grade,
-    _original_methods,
-)
+from gemmini_primitive_context import _original_methods
+from gemmini_primitive_diagnostic import PrimitiveDiagnosticOwner
+from gemmini_primitive_grade import _diagnostic_grade
 from gemmini_primitive_source import bind_primitive, check_integer_values
 from gemmini_zero_initializer_capability import QualifiedZeroInitializerOwner
 from merlin.targetgen.contract.interface_emit import emit_interface_mlir
