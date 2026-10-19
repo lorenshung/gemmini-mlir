@@ -78,6 +78,8 @@ def check_original_footprint(stream, *, lhs, rhs, dim, data_bits, physical_rows)
         raise ValueError("scratch epoch is not a complete original initialized/fenced contraction program")
     return dict(
         scope="one_complete_observed_hart0_functional_program",
+        lhs_abi_owner=lhs,
+        rhs_abi_owner=rhs,
         original_operand_windows=[[0, dim], [dim, 2 * dim]],
         original_accumulator_window=[0, dim],
         maximum_private_physical_rows=physical_rows,
@@ -101,11 +103,13 @@ class ClosedScratchEpochOwner:
         self._capsule = exact_tree_record(self.cap)
         source = self.cap / "capsule.interface.mlir"
         proof = source_proof(yaml.safe_load((self.cap / "capsule.yaml").read_bytes()), self.cap)
+        self._proof = copy.deepcopy(proof)
         self._checked = source_owner.verify_source_execution(source, proof, self.cap)
         self._rule = source_owner.source_rule()
         import json
 
         cb = json.loads(source_owner._paths["command_buffer"].read_bytes())
+        self._source_rows = json.loads(source_owner._paths["result"].read_bytes())["source"]
         contractions = bind_rank_two_contractions(source, cb, proof)
         if (
             len(contractions) != 1
@@ -173,6 +177,8 @@ class ClosedScratchEpochOwner:
                 self._stream,
                 self._sources,
                 self._rule,
+                self._source_rows,
+                self._proof,
             ]
         )
 
@@ -223,3 +229,29 @@ class ClosedScratchEpochOwner:
         )
         self.revalidate()
         return assigned, {**proof, "original_complete_program_owner": self.identity}
+
+    def check_source_arm(self, arm):
+        """One fresh source proof inside this original pair, never across jobs."""
+        import json
+        from types import SimpleNamespace
+
+        from gemmini_staged_dense_capability import _leaf
+        from gemmini_staged_source_pair import _arm
+
+        self.revalidate()
+        if json.loads(_leaf(arm, "native_result").read_bytes())["source"] != self._source_rows:
+            raise ValueError(
+                "private epoch source-proof reuse requires the exact same original source/input/reference leaves"
+            )
+        checked = _arm(
+            SimpleNamespace(
+                arithmetic=self.source_owner._arithmetic,
+                selected=self.source_owner._selected,
+                nm=self.source_owner._paths["nm"],
+            ),
+            arm,
+            self._proof,
+            self.cap,
+        )
+        self.revalidate()
+        return checked

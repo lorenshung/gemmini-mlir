@@ -1,9 +1,11 @@
 """Actual-footprint boundary controls; neutral event fixtures grant no device."""
 
 import copy
+import json
 
 import pytest
 from gemmini_staged_rhs_window import ClosedScratchEpochOwner, check_original_footprint
+from gemmini_timing_resources import _pin
 
 
 def command(kind, first=0, second=0, **fields):
@@ -86,3 +88,13 @@ def test_selected_address_geometry_and_live_source_owner_are_mandatory():
         check_original_footprint(example(), lhs="lhs", rhs="rhs", dim=2, data_bits=3, physical_rows=16)
     with pytest.raises(ValueError, match="original live current-source"):
         ClosedScratchEpochOwner({"status": "qualified", "all_rows_free": True}, capsule_dir="/")
+
+
+def test_within_pair_source_proof_reuse_refuses_changed_capture_reference_leaves(tmp_path):
+    owner = object.__new__(ClosedScratchEpochOwner)
+    owner.revalidate = lambda: None
+    owner._source_rows = {"original_capture": {"path": "original", "sha256": "selected"}}
+    result = tmp_path / "native.json"
+    result.write_text(json.dumps({"source": {"original_capture": {"path": "copied-success", "sha256": "selected"}}}))
+    with pytest.raises(ValueError, match="exact same original source/input/reference leaves"):
+        owner.check_source_arm({"native_result": _pin(result)})
