@@ -456,3 +456,44 @@ selected sources, arithmetic, completion and contract; it does not bind the new
 receipt's output location as a scheduling choice. Each live owner still reopens
 its own exact original receipt. This permits original child re-admission without
 accepting a saved-success factory or allowing receipt replacement.
+
+## Current source execution in the ordinary diagnostic route
+
+`gemmini_source_execution_registry.restore_registry` is a new explicit original
+factory around the SDK-v5 whole-tile route. It first reruns the original cleanup
+admission and all required independent sealed-source pairs. Only then can it
+add the live `source_execution_diagnostic` capability with the exact same
+hardware, software, numerical, runtime and library binding. This extra owner is
+not a compiler preparation mechanism and does not expand editable authority.
+The factory must be selected by the original host, with its exact public source
+leaves available to the existing sealed child. A JSON record cannot select or
+construct a successful owner.
+
+`SourceExecutionIssuer.create_source_execution_owner` takes the current native
+result, command buffer, lowered program, a fresh work directory and remaining
+wall budget. It reopens the current complete native result and original runtime
+identity, then runs that exact ELF with the original Spike commit observer. The
+leaf process owns its shared CPU lease, has at most sixty seconds and the
+unchanged 64 MiB trace ceiling. The caller must release any preceding native
+execution lease first. Every call produces a fresh observed invocation; the
+issuer has no saved-success or cross-execution trace cache.
+
+The returned value is the existing original `SourceExecutionOwner`. It is not
+an admitted capsule or successful numerical certificate. The ordinary source
+qualifier still has to derive the fresh sealed source proof and call its live
+verifier, checking actual complete products, accumulator state, source inputs,
+settings and every output. The diagnostic selector leaves hardware/L3, timing,
+formal cohort/privacy and unsupported arithmetic gates unchanged. Missing
+original qualification or current artifact correspondence refuses this route.
+
+The SDK-v5 functional run independently checked six source pairs: two-axis
+M/N boundaries with K=16 and a K=17 no-gain control. Five pairs issued 42 to 40
+commands; the deep-K control retained 66. Both rewrite orders on the M=N=32
+case were executable and exact, but residency-before-traversal retained 42
+commands. All 3,651 values per baseline/candidate arm and the additional 1,024
+reverse-order values matched. These are command/effect and complete-output
+checks, not latency evidence. Initial final issuance correctly refused an
+original-source versus runtime-copy path mismatch. The corrected custody check
+requires the actual original capsule interface as the compiler input and
+independently reopens the exact-byte native copy; all original artifacts remain
+unchanged. Fresh original factory issuance is still required after that fix.
