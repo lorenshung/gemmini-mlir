@@ -1,0 +1,1828 @@
+{
+  "additional_kernel_cases": {
+    "cases": 21,
+    "spike": {
+      "exit": 0,
+      "failed": [],
+      "info": [],
+      "passed": 65,
+      "perf": {
+        "requant_A": 677360
+      },
+      "seconds": 0.0,
+      "status": "PASS",
+      "tail": null
+    }
+  },
+  "artifact_sha256": {
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/all-tests.log": "287c63212dbf9a8e23165ea7af4d326bad00018a87213b308236693a26575b00",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/final-certificate-tests.log": "9f165a8baccf619163ed8f2c97207012469b08db81c70b88ec7bc58b4d9711db",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/final-proof-spike.log": "b4c5f2eb5637ee0cb8687e37dd351ea170b3dbb4a39073feb0879db1d2c2cf87",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/iface-final-tests.log": "08bafc018a78c5d7d289c58681f2e284ad97beb79dd7987e0f89945d8c92b441",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/summary.json": "f6fd834ec3ab8144ccd2b52b3001e4e3c6fb25ffd0256e6b8c38ccb3ba08664e",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/pipeline-spike/design-rule.json": "83dc9d4323c3b60b4cec5b3cdfd68da5d93d7cfa702121b7f9446c5035ba9914",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/real-captures.log": "38c44d9e655267de8cad3fdf9e2aa30fce8cb2fba54cdb9647650ea2b14dadf7",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-after/host-epilogue-instructions.json": "c27ab66d96f73029261fe61389de4c962c87ebe01c249c163c248ffa7a6764ec",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-after/run.json": "125b2756239874b9ada8ae9775f2f6b4b7894e2a21b5727b117d0d599beaec7f",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-after/spike-build/model.elf": "2e5c60576f72d1392c40453cbb925828f4f91b66aae1e0485b3846735b70d6c3",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-after/spike-build/region_offload/core_aten.llvm.mlir": "3b6a0ce74abef89c27b639527560c7baf1dc2ab9e9a96cb5436cb578c79dcf15",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-after/spike-build/region_offload/core_aten.o": "ed5c36c561d5dd570713e5a0872cf18c14db795a328cc71fdd6e31fe0257fc07",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-after/spike-console.txt": "e1e7f4d02f3cb5661cdb48cccffe5bfc20d5261b43a2b91d2fee3d36f40846db",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-before/host-epilogue-instructions.json": "3affd82415cf5390f6f231066f18d46a84bd9651cdf8e064a2e1906c40261b2f",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-before/run.json": "aabd032fb302a332ea5c56db9c46cdf96ca252dde60cb09c3b84fdc3c7465433",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-before/spike-build/model.elf": "eb442d6fb07a066907621321e40469ad038790bef8357d48d3f62cc0a365fc39",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-before/spike-build/region_offload/core_aten.llvm.mlir": "c482cf1ffadbd67a0948ca847849cb86b47069e07817c715a539ced0daba099a",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-before/spike-build/region_offload/core_aten.o": "bc345552349013bc6a93f05e3a2b23edce92c9ac94aef2cff0b750cdfcddc3b8",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/resnet-before/spike-console.txt": "ef9186f9b514706b568f9d22e75f42db04110634aef0ce3872bb0f3f69a3da2e",
+    "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/support38-audits.json": "f30cf7aeaad72b2d5eeec6ff4e330745ae33cf26e3d5b70af4d4b0491ae0e3dd"
+  },
+  "baseline": "2565fab",
+  "decision": "requant-A",
+  "implementation_commits": [
+    "4fbd999",
+    "a28705e"
+  ],
+  "interface_cases": {
+    "checks": 36,
+    "log": "out/taskE2/iface-spike.log",
+    "representative_shapes": true,
+    "spike": "PASS"
+  },
+  "limitations": [
+    "No Verilator was run. Spike validates exact execution and ordering, not a hardware overlap speedup.",
+    "Instruction windows are experiment-only instrumentation; pure constant setup can move outside CSR windows. Both builds use the same instrumentation.",
+    "The measured change includes requant-A and tile pipelining; whole-model/FireSim cycles are not claimed.",
+    "Retained-source host readouts owned by Merlin remain at their existing ABI boundary; the parallel Merlin implementation uses the documented contract.",
+    "Dependency/layout/refusal cases retain serial execution; an invalid fast constant certificate is rejected and an unproved affine candidate uses the exact threshold table."
+  ],
+  "negative_evidence": [
+    "The older phase_a_device helper assumes capture-bundle assets for every case; the frozen _to_copy shard has no such directory. The complete 193-case rebuild and all 38 support cases were instead graded through their original prepared bundle/reference records.",
+    "The independent checker omits unprivileged counter extensions; the bare-metal test harness now reads machine-mode mcycle, allowing the full overlap ELF audit to complete.",
+    "Historical requantization receipts remain unchanged; the previous reciprocal/remainder implementation is removed from the production compiler."
+  ],
+  "overlap_stress": {
+    "axis_variants": [
+      "last",
+      "NCHW"
+    ],
+    "design_rule": {
+      "config": {
+        "ex_acc_scales": [
+          1.0
+        ],
+        "ex_shifts": [
+          0
+        ],
+        "ld_scales": [
+          1.0
+        ],
+        "st_acc_scales": [
+          1.0
+        ],
+        "st_acts": [
+          0
+        ]
+      },
+      "counts": {
+        "COMPUTE_ACCUMULATE": 108,
+        "COMPUTE_PRELOADED": 54,
+        "CONFIG": 5,
+        "FLUSH": 1,
+        "MVIN": 18,
+        "MVIN2": 18,
+        "MVOUT": 81,
+        "PRELOAD": 162
+      },
+      "design_rule": "OK_full_i32",
+      "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/pipeline-spike/requant_A_pipeline/requant_A_pipeline.elf",
+      "full_i32_readout": true,
+      "gemmini_instructions": 447,
+      "mvout": {
+        "acc_full": 81,
+        "acc_narrow": 0,
+        "spad": 0
+      },
+      "narrow_examples": [],
+      "narrow_readouts": 0,
+      "spike_rc": 0,
+      "stdout_tail": "",
+      "violations": []
+    },
+    "frozen_bias": true,
+    "log": "out/taskE2/final-proof-spike.log",
+    "per_channel": true,
+    "runtime_bias_term": true,
+    "spatial_and_channel_tails": true,
+    "status": "PASS"
+  },
+  "phase0": {
+    "cases": [
+      {
+        "build_hash": "f853bc4d57b7",
+        "case": "aten._adaptive_avg_pool2d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___adaptive_avg_pool2d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "54a1031228f0",
+        "case": "aten._log_softmax.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___log_softmax__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d3b0ec9cdd5b",
+        "case": "aten.acos.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__acos__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "1b45d1741630",
+        "case": "aten.amin.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__amin__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "9b248ecf0d29",
+        "case": "aten.asin.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__asin__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "8745348ed01f",
+        "case": "aten.avg_pool2d_backward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__avg_pool2d_backward__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "6904cbbcf555",
+        "case": "aten.bitwise_xor.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__bitwise_xor__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "2137cd986861",
+        "case": "aten.constant_pad_nd.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__constant_pad_nd__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "05d510d9c92b",
+        "case": "aten.div.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__div__Scalar/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "873e14ecfed8",
+        "case": "aten.empty_strided.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__empty_strided__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "34fa5b138af4",
+        "case": "aten.flip.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__flip__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "ccc6dcd9a539",
+        "case": "aten.ge.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__ge__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "a080162c8eee",
+        "case": "aten.index_select.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__index_select__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "6a2f9bed4975",
+        "case": "aten.log1p.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__log1p__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f8af5459a3c1",
+        "case": "aten.masked_scatter.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__masked_scatter__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "4cfa63213fe0",
+        "case": "aten.min.dim",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__min__dim/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d928fda71f45",
+        "case": "aten.native_layer_norm.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__native_layer_norm__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "3f65c0dd6514",
+        "case": "aten.pow.Tensor_Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__pow__Tensor_Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d55f8b6a6349",
+        "case": "aten.reflection_pad1d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__reflection_pad1d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "e27b32647bc8",
+        "case": "aten.replication_pad3d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__replication_pad3d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "b0ea78f85746",
+        "case": "aten.scatter_reduce.two",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__scatter_reduce__two/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "96bbfa895b13",
+        "case": "aten.slice_scatter.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__slice_scatter__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "104a36e89c1f",
+        "case": "aten.sum.dim_IntList",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sum__dim_IntList/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "bd74fd97d7cd",
+        "case": "aten.topk.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__topk__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "414caf3a1f77",
+        "case": "aten.where.self",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__where__self/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "8745348ed01f",
+        "case": "aten._adaptive_avg_pool2d_backward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___adaptive_avg_pool2d_backward__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "36ee4d0ba52e",
+        "case": "aten._native_batch_norm_legit.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___native_batch_norm_legit__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "42401665f285",
+        "case": "aten.acosh.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__acosh__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "74e72c1defe4",
+        "case": "aten.any.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__any__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "21af6870f2f3",
+        "case": "aten.asinh.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__asinh__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "c0668c3b83d2",
+        "case": "aten.avg_pool3d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__avg_pool3d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "acaf24a31353",
+        "case": "aten.bmm.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__bmm__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "0f22d9cf074e",
+        "case": "aten.convolution.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__convolution__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "42d9884cf2d0",
+        "case": "aten.div.Scalar_mode",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__div__Scalar_mode/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "70a7e1877a40",
+        "case": "aten.eq.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__eq__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "7669a724270b",
+        "case": "aten.floor.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__floor__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "4c84550c2beb",
+        "case": "aten.gelu.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__gelu__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "cbdb455bbafb",
+        "case": "aten.isinf.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__isinf__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "ed5c5e171765",
+        "case": "aten.log2.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__log2__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "bd42329599bb",
+        "case": "aten.max.dim",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__max__dim/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "4b7e3c2d3288",
+        "case": "aten.minimum.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__minimum__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "9f710be520a0",
+        "case": "aten.native_layer_norm_backward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__native_layer_norm_backward__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "2571fb3fafb0",
+        "case": "aten.pow.Tensor_Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__pow__Tensor_Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "7b52c561a7bf",
+        "case": "aten.reflection_pad2d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__reflection_pad2d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "379dd71b0f36",
+        "case": "aten.resize_.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__resize___default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "75704cc83625",
+        "case": "aten.select.int",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__select__int/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "c25e1769da7e",
+        "case": "aten.sort.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sort__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "bf939cb3f8af",
+        "case": "aten.sym_is_contiguous.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sym_is_contiguous__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "7ad28f631bfc",
+        "case": "aten.trunc.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__trunc__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "c0668c3b83d2",
+        "case": "aten._adaptive_avg_pool3d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___adaptive_avg_pool3d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "617411f0ef06",
+        "case": "aten._native_batch_norm_legit.no_stats",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___native_batch_norm_legit__no_stats/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "22adb50e6fd1",
+        "case": "aten.adaptive_avg_pool1d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__adaptive_avg_pool1d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f4195f7662cc",
+        "case": "aten.any.dim",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__any__dim/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "da38d62658c3",
+        "case": "aten.atan.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__atan__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "45c4b0fbfc2c",
+        "case": "aten.bitwise_and.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__bitwise_and__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "1cf012056108",
+        "case": "aten.cat.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__cat__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "e236b74f2c9a",
+        "case": "aten.convolution_backward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__convolution_backward__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "229bed256c0e",
+        "case": "aten.div.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__div__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f64803ca766a",
+        "case": "aten.eq.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__eq__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "abc9b11e143c",
+        "case": "aten.fmod.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__fmod__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d5e89db54c46",
+        "case": "aten.grid_sampler_2d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__grid_sampler_2d__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f289ad786e3f",
+        "case": "aten.isnan.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__isnan__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "e27993a34eff",
+        "case": "aten.logical_and.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__logical_and__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "101ee8de5554",
+        "case": "aten.max_pool2d_with_indices.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__max_pool2d_with_indices__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "00e565c62c98",
+        "case": "aten.mm.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__mm__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "cec4d06d104d",
+        "case": "aten.ne.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__ne__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "afc1ac46354f",
+        "case": "aten.prod.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__prod__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "e506b1902308",
+        "case": "aten.reflection_pad3d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__reflection_pad3d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f1551a0d496b",
+        "case": "aten.round.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__round__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "1200a6981215",
+        "case": "aten.select_scatter.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__select_scatter__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "652c24097f99",
+        "case": "aten.split_with_sizes.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__split_with_sizes__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "9b69607c9137",
+        "case": "aten.sym_numel.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sym_numel__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "456a676940be",
+        "case": "aten.unsqueeze.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__unsqueeze__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "4385f183647f",
+        "case": "aten._cdist_forward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___cdist_forward__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "b3ab54284dde",
+        "case": "aten._native_batch_norm_legit_no_training.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___native_batch_norm_legit_no_training__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "294496bddc7b",
+        "case": "aten.add.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__add__Scalar/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "74e72c1defe4",
+        "case": "aten.any.dims",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__any__dims/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "90bf2374262d",
+        "case": "aten.atan2.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__atan2__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "63692e501895",
+        "case": "aten.bitwise_and.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__bitwise_and__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "a95c2d23a25a",
+        "case": "aten.ceil.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__ceil__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "b59c074ed96b",
+        "case": "aten.copy.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__copy__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "304afec69ecb",
+        "case": "aten.div.Tensor_mode",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__div__Tensor_mode/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "e3db2da1d336",
+        "case": "aten.erf.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__erf__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d7fcc7b038b1",
+        "case": "aten.fmod.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__fmod__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "736453ead33e",
+        "case": "aten.gt.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__gt__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "c49eb8106d77",
+        "case": "aten.le.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__le__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "bac7811f6e20",
+        "case": "aten.logical_not.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__logical_not__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "c71ba8d8f502",
+        "case": "aten.max_pool2d_with_indices_backward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__max_pool2d_with_indices_backward__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "1d5753cc091b",
+        "case": "aten.mul.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__mul__Scalar/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "2d1235c0fb93",
+        "case": "aten.ne.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__ne__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "fb4cc915d433",
+        "case": "aten.prod.dim_int",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__prod__dim_int/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "657780e49212",
+        "case": "aten.relu.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__relu__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "87c9ab12b69e",
+        "case": "aten.rsqrt.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__rsqrt__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "214175c1f18f",
+        "case": "aten.sigmoid.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sigmoid__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "bfcbe76b41f9",
+        "case": "aten.sqrt.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sqrt__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "084f20279670",
+        "case": "aten.sym_size.int",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sym_size__int/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "69b346669e64",
+        "case": "aten.upsample_bilinear2d.vec",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__upsample_bilinear2d__vec/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "b66dfabe81c6",
+        "case": "aten._embedding_bag.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___embedding_bag__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "1e0a077a1524",
+        "case": "aten._pdist_forward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___pdist_forward__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "831bc116f6b9",
+        "case": "aten.add.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__add__Tensor/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "1ce271a3c353",
+        "case": "aten.arange.start_step",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__arange__start_step/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f45fffe10e58",
+        "case": "aten.atan2.out",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__atan2__out/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "3a293e06f7d8",
+        "case": "aten.bitwise_not.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__bitwise_not__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "3277efc1cb2a",
+        "case": "aten.clamp.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__clamp__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "50a55353424a",
+        "case": "aten.cos.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__cos__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "74d9b080afc3",
+        "case": "aten.elu.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__elu__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "17910a5c7951",
+        "case": "aten.exp.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__exp__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "47d15e3210e8",
+        "case": "aten.full.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__full__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "5b6a801672a2",
+        "case": "aten.gt.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__gt__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d21c109c70e6",
+        "case": "aten.le.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__le__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "8e5637ee2109",
+        "case": "aten.logical_or.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__logical_or__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "0d12b8663231",
+        "case": "aten.max_pool3d_with_indices.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__max_pool3d_with_indices__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "83e3de62e523",
+        "case": "aten.mul.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__mul__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "89e2e10bd51e",
+        "case": "aten.neg.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__neg__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "e182f1bc13f7",
+        "case": "aten.rand.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__rand__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "5dcb7532f800",
+        "case": "aten.remainder.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__remainder__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "c05ddbb8bd12",
+        "case": "aten.scalar_tensor.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__scalar_tensor__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "fa0beb9405c0",
+        "case": "aten.sign.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sign__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f0b48f31b92c",
+        "case": "aten.squeeze.dim",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__squeeze__dim/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "0a3f2d2f5c67",
+        "case": "aten.sym_storage_offset.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sym_storage_offset__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "80fa36fc3c0c",
+        "case": "aten.upsample_nearest2d.vec",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__upsample_nearest2d__vec/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "848240a0ceac",
+        "case": "aten._fft_c2r.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___fft_c2r__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "a9f53ab93240",
+        "case": "aten._softmax.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___softmax__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "fdba69e1fb4c",
+        "case": "aten.addmm.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__addmm__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "9e0aa32a5666",
+        "case": "aten.argmax.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__argmax__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "442c2a95784d",
+        "case": "aten.atanh.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__atanh__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "4eb3a5b9f0ac",
+        "case": "aten.bitwise_or.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__bitwise_or__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "184601997601",
+        "case": "aten.clamp.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__clamp__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "e0e738126abd",
+        "case": "aten.cosh.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__cosh__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "08b2d114c256",
+        "case": "aten.embedding.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__embedding__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "ef3ed610c194",
+        "case": "aten.expand.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__expand__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "3ed249c3ed74",
+        "case": "aten.full_like.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__full_like__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "cd5285b64058",
+        "case": "aten.hardtanh.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__hardtanh__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d10db3f94179",
+        "case": "aten.leaky_relu.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__leaky_relu__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "0ff738cd0769",
+        "case": "aten.logical_xor.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__logical_xor__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "03ead37365eb",
+        "case": "aten.maximum.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__maximum__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "a446b6dfef62",
+        "case": "aten.native_dropout.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__native_dropout__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "ab03fcece910",
+        "case": "aten.nonzero.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__nonzero__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "e8039446a927",
+        "case": "aten.randn.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__randn__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "6d6118192a22",
+        "case": "aten.remainder.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__remainder__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "5ea74371754b",
+        "case": "aten.scatter.src",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__scatter__src/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "6d47e2a88647",
+        "case": "aten.sin.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sin__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "3554bcf684ca",
+        "case": "aten.squeeze.dims",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__squeeze__dims/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "084f20279670",
+        "case": "aten.sym_stride.int",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sym_stride__int/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d584d8fb32fc",
+        "case": "aten.var.correction",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__var__correction/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "26ba582d6638",
+        "case": "aten._fft_r2c.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___fft_r2c__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d671859457b8",
+        "case": "aten._to_copy.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___to_copy__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "7052ab6f3f57",
+        "case": "aten.alias.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__alias__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f257861fc702",
+        "case": "aten.argmin.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__argmin__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "44025f885ec3",
+        "case": "aten.avg_pool1d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__avg_pool1d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "dfef6706c745",
+        "case": "aten.bitwise_or.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__bitwise_or__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "6ff6d75c2e34",
+        "case": "aten.clone.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__clone__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "aae82ead77f3",
+        "case": "aten.cumsum.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__cumsum__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "00b3909017d1",
+        "case": "aten.embedding_dense_backward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__embedding_dense_backward__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "2c729e4efb16",
+        "case": "aten.expm1.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__expm1__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "2e10330d24e8",
+        "case": "aten.gather.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__gather__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "a080162c8eee",
+        "case": "aten.index.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__index__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "0f9a556824fe",
+        "case": "aten.log.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__log__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d4339deeba4e",
+        "case": "aten.lt.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__lt__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "2ce6550a9a2b",
+        "case": "aten.mean.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__mean__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "3ec01b5630c2",
+        "case": "aten.native_group_norm.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__native_group_norm__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "13a495072f1e",
+        "case": "aten.permute.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__permute__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "ad1cb049e6ab",
+        "case": "aten.randperm.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__randperm__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f5c8c8dfd1d3",
+        "case": "aten.repeat.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__repeat__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "746a4e846ccd",
+        "case": "aten.scatter.value",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__scatter__value/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "b91e809e336a",
+        "case": "aten.sinh.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sinh__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "070718854a5e",
+        "case": "aten.sub.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sub__Scalar/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "cfed13faaa2a",
+        "case": "aten.tan.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__tan__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f397d00c0e42",
+        "case": "aten.var.dim",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__var__dim/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "4f7d75624a7d",
+        "case": "aten._local_scalar_dense.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten___local_scalar_dense__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d8833b019047",
+        "case": "aten.abs.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__abs__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "8ffd00cf1c3f",
+        "case": "aten.amax.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__amax__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "151a85502680",
+        "case": "aten.as_strided.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__as_strided__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "2744ae5dfc9f",
+        "case": "aten.avg_pool2d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__avg_pool2d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "154327cad9ce",
+        "case": "aten.bitwise_xor.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__bitwise_xor__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "cccb7db4c284",
+        "case": "aten.col2im.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__col2im__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d671c1358039",
+        "case": "aten.diagonal.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__diagonal__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "873e14ecfed8",
+        "case": "aten.empty.memory_format",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__empty__memory_format/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "f3c9983df77e",
+        "case": "aten.fill.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__fill__Scalar/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "ec70ebd97ef6",
+        "case": "aten.ge.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__ge__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "59e6e8c59de8",
+        "case": "aten.index_put.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__index_put__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "fb90cbd93687",
+        "case": "aten.log10.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__log10__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "9e0665a8c382",
+        "case": "aten.lt.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__lt__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "4e381291270d",
+        "case": "aten.mean.dim",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__mean__dim/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "6674cb36bef2",
+        "case": "aten.native_group_norm_backward.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__native_group_norm_backward__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "d8238ddffed0",
+        "case": "aten.pow.Scalar",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__pow__Scalar/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "5939dce3bf4e",
+        "case": "aten.reciprocal.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__reciprocal__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "7f4a08f160ae",
+        "case": "aten.replication_pad2d.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__replication_pad2d__default/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "b0ea78f85746",
+        "case": "aten.scatter_add.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__scatter_add__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "5d718c905869",
+        "case": "aten.slice.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__slice__Tensor/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "fc8deb598ae4",
+        "case": "aten.sub.Tensor",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__sub__Tensor/spike-build/model.elf",
+        "lane": "device",
+        "status": "pass"
+      },
+      {
+        "build_hash": "23a8ebb2a548",
+        "case": "aten.tanh.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__tanh__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      },
+      {
+        "build_hash": "7b5a82ce2532",
+        "case": "aten.view.default",
+        "elf": "/scratch/loren/core-aten-ref/gemmini-mlir-wtE/out/taskE2/phase0/aten__view__default/spike-build/model.elf",
+        "lane": "host",
+        "status": "pass"
+      }
+    ],
+    "exact_byte_comparison": true,
+    "lanes": {
+      "device": 50,
+      "host": 143
+    },
+    "passed": 193,
+    "source": "frozen run7 prepared Phase 0 shards; original references and numeric placement retained",
+    "total": 193
+  },
+  "reference_solver_sha256": "24d801fd611fe90c73717b808178c40334568d35ee8982d862253d357d57266e",
+  "resnet50": {
+    "after_instructions": 128376115,
+    "algorithm_counts": {
+      "clamp_mul_add_shift": 2206
+    },
+    "audits": {
+      "after": {
+        "result": {
+          "custom_funct_counts": {
+            "0": 562,
+            "1": 1175,
+            "14": 2265,
+            "2": 21434,
+            "3": 3920,
+            "4": 2019,
+            "5": 4324,
+            "6": 6343,
+            "7": 61
+          },
+          "elf_sha256": "2e5c60576f72d1392c40453cbb925828f4f91b66aae1e0485b3846735b70d6c3",
+          "executable_sections": 1,
+          "forbidden": [],
+          "schema": "gemmini_nofsm_elf_audit_v1",
+          "status": "pass",
+          "unknown": []
+        },
+        "sha256": "2e5c60576f72d1392c40453cbb925828f4f91b66aae1e0485b3846735b70d6c3"
+      },
+      "before": {
+        "result": {
+          "custom_funct_counts": {
+            "0": 469,
+            "1": 1175,
+            "14": 3444,
+            "2": 9125,
+            "3": 5129,
+            "4": 2139,
+            "5": 4324,
+            "6": 6463,
+            "7": 61
+          },
+          "elf_sha256": "eb442d6fb07a066907621321e40469ad038790bef8357d48d3f62cc0a365fc39",
+          "executable_sections": 1,
+          "forbidden": [],
+          "schema": "gemmini_nofsm_elf_audit_v1",
+          "status": "pass",
+          "unknown": []
+        },
+        "sha256": "eb442d6fb07a066907621321e40469ad038790bef8357d48d3f62cc0a365fc39"
+      },
+      "emitted_kernel_object_no_floating_point": true,
+      "revalidated_certificates": 2206
+    },
+    "before_instructions": 197126718,
+    "capture_golden_sha256": "948005319b8be9797506ec0bdee6182e512896572a66f20ef27d10e19fd0f5bf",
+    "device_bindings_after": 418,
+    "device_bindings_before": 418,
+    "domain": "Spike minstret host-epilogue instruction windows",
+    "double_buffered_kernels": 34,
+    "instructions_saved": 68750603,
+    "kernels": 61,
+    "metadata_bytes_after": 28283909,
+    "metadata_bytes_before": 277994410,
+    "movement_cap": 65536,
+    "profiles": {
+      "after": {
+        "calls": {
+          "gemmini_ca_053b9a6f805a16fd": 60,
+          "gemmini_ca_05567e61df8ddb18": 1,
+          "gemmini_ca_07ec3f71922c3a74": 1,
+          "gemmini_ca_0e436fb9c5f698b5": 49,
+          "gemmini_ca_10f03efbf7995b9a": 49,
+          "gemmini_ca_177bb4e9ee9b8f87": 5,
+          "gemmini_ca_19cbf5c3c01bfbec": 11,
+          "gemmini_ca_1d55de6168d82513": 2,
+          "gemmini_ca_2cf50b568d7c9dbd": 1,
+          "gemmini_ca_3293f9cfc8fd74c6": 2,
+          "gemmini_ca_45db599a83fedc38": 1,
+          "gemmini_ca_5822bf459cc53a2a": 1,
+          "gemmini_ca_5916120c3fee8acb": 3,
+          "gemmini_ca_5ca3f166db5546b4": 4,
+          "gemmini_ca_65fb7627e7026955": 3,
+          "gemmini_ca_7a09a5b116f8607d": 1,
+          "gemmini_ca_7b19da6c9bb89e94": 27,
+          "gemmini_ca_7eeea568ef1f4e34": 5,
+          "gemmini_ca_96c3592490736071": 4,
+          "gemmini_ca_97546476bca2f8dd": 2,
+          "gemmini_ca_9beac8f850b398b3": 30,
+          "gemmini_ca_9d3608f0d1f0b7bb": 3,
+          "gemmini_ca_a1736b393488ed8d": 4,
+          "gemmini_ca_aabfa44f0a3cd3f0": 54,
+          "gemmini_ca_ac4839b8fecdae5e": 1,
+          "gemmini_ca_afeacad1543ba744": 11,
+          "gemmini_ca_b1d8b1fadf1fad6e": 3,
+          "gemmini_ca_b2eff15a37314266": 1,
+          "gemmini_ca_bcfe9ed307ae3e0a": 1,
+          "gemmini_ca_bffdbbcf9a493294": 1,
+          "gemmini_ca_cce3d84b25fc8514": 3,
+          "gemmini_ca_d422789c0790c30d": 1,
+          "gemmini_ca_e3e104df0c913c7c": 4,
+          "gemmini_ca_ea50a617dee58c4c": 5
+        },
+        "domain": "Spike minstret host-epilogue windows",
+        "instructions": 128376115,
+        "per_kernel": {
+          "gemmini_ca_053b9a6f805a16fd": 27138722,
+          "gemmini_ca_05567e61df8ddb18": 84785,
+          "gemmini_ca_07ec3f71922c3a74": 18450,
+          "gemmini_ca_0e436fb9c5f698b5": 16572572,
+          "gemmini_ca_10f03efbf7995b9a": 16622846,
+          "gemmini_ca_177bb4e9ee9b8f87": 1130561,
+          "gemmini_ca_19cbf5c3c01bfbec": 4976943,
+          "gemmini_ca_1d55de6168d82513": 295320,
+          "gemmini_ca_2cf50b568d7c9dbd": 36902,
+          "gemmini_ca_3293f9cfc8fd74c6": 295320,
+          "gemmini_ca_45db599a83fedc38": 84785,
+          "gemmini_ca_5822bf459cc53a2a": 451226,
+          "gemmini_ca_5916120c3fee8acb": 996787,
+          "gemmini_ca_5ca3f166db5546b4": 590638,
+          "gemmini_ca_65fb7627e7026955": 996835,
+          "gemmini_ca_7a09a5b116f8607d": 294336,
+          "gemmini_ca_7b19da6c9bb89e94": 6105025,
+          "gemmini_ca_7eeea568ef1f4e34": 1130696,
+          "gemmini_ca_96c3592490736071": 590666,
+          "gemmini_ca_97546476bca2f8dd": 747606,
+          "gemmini_ca_9beac8f850b398b3": 6783364,
+          "gemmini_ca_9d3608f0d1f0b7bb": 1772247,
+          "gemmini_ca_a1736b393488ed8d": 2358752,
+          "gemmini_ca_aabfa44f0a3cd3f0": 24366264,
+          "gemmini_ca_ac4839b8fecdae5e": 84785,
+          "gemmini_ca_afeacad1543ba744": 4963490,
+          "gemmini_ca_b1d8b1fadf1fad6e": 996772,
+          "gemmini_ca_b2eff15a37314266": 295354,
+          "gemmini_ca_bcfe9ed307ae3e0a": 452249,
+          "gemmini_ca_bffdbbcf9a493294": 36902,
+          "gemmini_ca_cce3d84b25fc8514": 1769067,
+          "gemmini_ca_d422789c0790c30d": 24595,
+          "gemmini_ca_e3e104df0c913c7c": 2362836,
+          "gemmini_ca_ea50a617dee58c4c": 2948417
+        },
+        "qualification": "instrumented build; excludes whole-model performance claims; compiler may move pure constant setup outside windows",
+        "window_correction": "subtract one start-CSR instruction per window"
+      },
+      "before": {
+        "calls": {
+          "gemmini_ca_09948c0884ff3d0b": 1,
+          "gemmini_ca_0a37b38a1266f96b": 49,
+          "gemmini_ca_0a5d097b72d7cb3e": 1,
+          "gemmini_ca_0b3a6270c9ac3df2": 5,
+          "gemmini_ca_0c6ea15930af58d1": 2,
+          "gemmini_ca_0cb29a7f64dfdc74": 11,
+          "gemmini_ca_0f7598eeb5d2b551": 2,
+          "gemmini_ca_1a180ef3a64a25a5": 1,
+          "gemmini_ca_1aa5c0aefdbacbd5": 1,
+          "gemmini_ca_1e930a9429f7b622": 49,
+          "gemmini_ca_3a3823ebab962289": 27,
+          "gemmini_ca_48c1a6e2d7f765ad": 4,
+          "gemmini_ca_4d700faa674d6e97": 3,
+          "gemmini_ca_534881324ff1cf1a": 30,
+          "gemmini_ca_54bd09409be990d4": 1,
+          "gemmini_ca_62e86e96a8cd5533": 3,
+          "gemmini_ca_65be585553df1c4f": 3,
+          "gemmini_ca_6daafccdb03ffedf": 1,
+          "gemmini_ca_7837aee794b8aa6d": 11,
+          "gemmini_ca_7b154798005af660": 4,
+          "gemmini_ca_8570925d6e35e62e": 1,
+          "gemmini_ca_98350676dbb53ff4": 54,
+          "gemmini_ca_991cfb41ff7b436e": 1,
+          "gemmini_ca_9ab98887b0865359": 5,
+          "gemmini_ca_9e58331893b0304e": 3,
+          "gemmini_ca_a4c38e117fdcd2f4": 4,
+          "gemmini_ca_ae34942422304afc": 1,
+          "gemmini_ca_c145b2b99868e5ce": 5,
+          "gemmini_ca_c821e122fd57020d": 3,
+          "gemmini_ca_ccaca63b8ce21a91": 60,
+          "gemmini_ca_cfe26a4f270602bc": 2,
+          "gemmini_ca_ecc01f48c587d8ed": 1,
+          "gemmini_ca_f3c16a153464e9d5": 4,
+          "gemmini_ca_fbc5dca6f9c723b6": 1
+        },
+        "domain": "Spike minstret host-epilogue windows",
+        "instructions": 197126718,
+        "per_kernel": {
+          "gemmini_ca_09948c0884ff3d0b": 702469,
+          "gemmini_ca_0a37b38a1266f96b": 24921589,
+          "gemmini_ca_0a5d097b72d7cb3e": 442435,
+          "gemmini_ca_0b3a6270c9ac3df2": 1756191,
+          "gemmini_ca_0c6ea15930af58d1": 1161228,
+          "gemmini_ca_0cb29a7f64dfdc74": 7727163,
+          "gemmini_ca_0f7598eeb5d2b551": 445525,
+          "gemmini_ca_1a180ef3a64a25a5": 702469,
+          "gemmini_ca_1aa5c0aefdbacbd5": 36873,
+          "gemmini_ca_1e930a9429f7b622": 24921589,
+          "gemmini_ca_3a3823ebab962289": 9483427,
+          "gemmini_ca_48c1a6e2d7f765ad": 3561941,
+          "gemmini_ca_4d700faa674d6e97": 2660238,
+          "gemmini_ca_534881324ff1cf1a": 10537144,
+          "gemmini_ca_54bd09409be990d4": 55554,
+          "gemmini_ca_62e86e96a8cd5533": 1499318,
+          "gemmini_ca_65be585553df1c4f": 2660238,
+          "gemmini_ca_6daafccdb03ffedf": 28676,
+          "gemmini_ca_7837aee794b8aa6d": 7727185,
+          "gemmini_ca_7b154798005af660": 3561941,
+          "gemmini_ca_8570925d6e35e62e": 127833,
+          "gemmini_ca_98350676dbb53ff4": 37933386,
+          "gemmini_ca_991cfb41ff7b436e": 127832,
+          "gemmini_ca_9ab98887b0865359": 1756191,
+          "gemmini_ca_9e58331893b0304e": 1499318,
+          "gemmini_ca_a4c38e117fdcd2f4": 891244,
+          "gemmini_ca_ae34942422304afc": 442435,
+          "gemmini_ca_c145b2b99868e5ce": 4587547,
+          "gemmini_ca_c821e122fd57020d": 1499318,
+          "gemmini_ca_ccaca63b8ce21a91": 42148262,
+          "gemmini_ca_cfe26a4f270602bc": 445525,
+          "gemmini_ca_ecc01f48c587d8ed": 55554,
+          "gemmini_ca_f3c16a153464e9d5": 891248,
+          "gemmini_ca_fbc5dca6f9c723b6": 127832
+        },
+        "qualification": "instrumented build; excludes whole-model performance claims; compiler may move pure constant setup outside windows",
+        "window_correction": "subtract one start-CSR instruction per window"
+      }
+    },
+    "reduction_percent": 34.876349435290656,
+    "requant_records": 2206,
+    "run_grading": {
+      "after": {
+        "bit_exact_vs_golden": true,
+        "device_top1": 850,
+        "golden_top1": 850,
+        "label": 850,
+        "max_abs_diff_vs_golden": 0.0,
+        "metrics": {
+          "build_hash": "7354ed1a2a66",
+          "cycles": 11212040055,
+          "memref_rank_mismatch": 0,
+          "prof_marks": 2882,
+          "prof_total_ticks": 11206541358
+        },
+        "n_outputs": 1,
+        "spike_wall_s": 121.0
+      },
+      "before": {
+        "bit_exact_vs_golden": true,
+        "device_top1": 850,
+        "golden_top1": 850,
+        "label": 850,
+        "max_abs_diff_vs_golden": 0.0,
+        "metrics": {
+          "build_hash": "c700a00644c1",
+          "cycles": 11279705503,
+          "memref_rank_mismatch": 0,
+          "prof_marks": 2882,
+          "prof_total_ticks": 11274206355
+        },
+        "n_outputs": 1,
+        "spike_wall_s": 123.8
+      }
+    },
+    "snapshot": {
+      "merlin": "9acfa92d3c968b62d7213ed8bd8d30236b20c45f",
+      "model2mlir": "e05e614790ad80f24790255d2303b0365c3881a5"
+    },
+    "tile_windows": 2206,
+    "unique_kernel_double_buffer_scratch_bytes": 139264,
+    "unique_kernel_original_scratch_bytes": 4512000
+  },
+  "schema": "gemmini_requant_A_qualification_v1",
+  "shared_contract": "docs/requant_A_contract.md",
+  "support_ops": {
+    "cases": [
+      "aten._adaptive_avg_pool2d.default",
+      "aten._adaptive_avg_pool2d_backward.default",
+      "aten._adaptive_avg_pool3d.default",
+      "aten._to_copy.default",
+      "aten.adaptive_avg_pool1d.default",
+      "aten.add.Scalar",
+      "aten.add.Tensor",
+      "aten.addmm.default",
+      "aten.avg_pool1d.default",
+      "aten.avg_pool2d.default",
+      "aten.avg_pool2d_backward.default",
+      "aten.avg_pool3d.default",
+      "aten.bmm.default",
+      "aten.cat.default",
+      "aten.clone.default",
+      "aten.col2im.default",
+      "aten.constant_pad_nd.default",
+      "aten.convolution.default",
+      "aten.convolution_backward.default",
+      "aten.div.Scalar",
+      "aten.fill.Scalar",
+      "aten.full.default",
+      "aten.full_like.default",
+      "aten.mean.dim",
+      "aten.mm.default",
+      "aten.mul.Scalar",
+      "aten.neg.default",
+      "aten.reflection_pad1d.default",
+      "aten.reflection_pad2d.default",
+      "aten.reflection_pad3d.default",
+      "aten.relu.default",
+      "aten.repeat.default",
+      "aten.replication_pad2d.default",
+      "aten.replication_pad3d.default",
+      "aten.select_scatter.default",
+      "aten.slice_scatter.default",
+      "aten.sub.Scalar",
+      "aten.sub.Tensor"
+    ],
+    "device_lane": 38,
+    "final_ELF_design_rule_audits": 38,
+    "passed": 38,
+    "total": 38
+  },
+  "tests": [
+    {
+      "log": "out/taskE2/all-tests.log",
+      "passed": 309,
+      "skipped": 11,
+      "subtests_passed": 103,
+      "suite": "core_aten excluding real captures"
+    },
+    {
+      "log": "out/taskE2/real-captures.log",
+      "passed": 127,
+      "revision": "cb1a3da5800026389444b994fd3779b0ffd28121",
+      "skipped": 5,
+      "suite": "pinned real model2MLIR captures"
+    },
+    {
+      "log": "out/taskE2/final-proof-spike.log",
+      "passed": 13,
+      "suite": "final requant-A proof/native plus Spike overlap stress"
+    },
+    {
+      "log": "out/taskE2/final-certificate-tests.log",
+      "passed": 13,
+      "suite": "final certificate type validation"
+    },
+    {
+      "log": "out/taskE2/iface-final-tests.log",
+      "passed": 50,
+      "skipped": 1,
+      "suite": "interface and scalar island regressions after interface overlap integration"
+    }
+  ]
+}

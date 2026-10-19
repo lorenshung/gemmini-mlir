@@ -126,3 +126,63 @@ partial index list; otherwise they broadcast to the logical output shape.
 last dimension. Compact parameter slices prevent duplicating full tensor
 metadata once per pipeline tile. These fields are execution/binding metadata;
 the `requant-A-v1` semantic certificate is unchanged.
+
+## Qualification, 2026-10-19
+
+The incremental implementation is based on `2565fab`. It replaces the previous
+reciprocal/remainder path; the production epilogue has only the affine band form
+or exact threshold lookup. The solver prefers the smallest certified shift,
+including `M=1,B=0,S=0` for unit ratios. Constant choice may differ from the paper
+prototype's search order; the exact certificate and validation format above is
+common to both consumers.
+
+Spike qualification:
+
+- All 193 frozen Phase 0 cases rebuilt and passed their original grading plus
+  exact byte comparison with the frozen outputs. All 38 support ops retained
+  the device lane; their new ELFs passed the independent design-rule audit.
+- An additional 21 kernel cases passed 65 exact checks; representative interface
+  cases passed 36 exact checks. The per-channel multi-term/frozen-bias overlap
+  stress passed, including tails, with 81 full-int32 stores and zero narrowed
+  stores in its independent final-ELF audit.
+- Core-aten: 309 tests plus 103 subtests passed (11 skipped). Pinned real captures:
+  127 passed (five skipped). Final proof/native/Spike overlap tests and final
+  certificate-type tests each passed 13 tests. Subsequent interface/scalar
+  regressions passed 50 tests (one skipped).
+
+The full ResNet-50 frozen capture was rebuilt before and after against the same
+Merlin `9acfa92d` and model2MLIR `e05e614` snapshot, unchanged golden and inputs,
+and the existing paper driver movement cap of 65,536. Both builds retain 418
+source-bound device bindings and 61 kernels. Both full-model outputs are
+bit-identical to the immutable golden output (top-1 850).
+
+| Measurement | Before (`2565fab`) | requant-A + overlap |
+|---|---:|---:|
+| Host epilogue Spike instructions | 197,126,718 | 128,376,115 |
+| Eligible kernels using two readout slots | 0 | 34 |
+| Private readout bytes, sum over those unique kernels | 4,512,000 | 139,264 |
+| Catalog metadata bytes | 277,994,410 | 28,283,909 |
+
+The host-epilogue reduction is **68,750,603 instructions (34.876%)**. Instrumentation
+uses machine-mode `minstret` around emitted host epilogues, accumulates counters
+per kernel, and sums each kernel's final counter. One start-CSR instruction is
+subtracted per window. Both builds use the same instrumentation; pure constant
+setup can move outside the windows. These are host instruction measurements,
+not whole-model cycles, RTL cycles, FireSim cycles or a hardware overlap speedup.
+No Verilator was run.
+
+The new ResNet build records 2,206 tile/parameter certificates, all independently
+revalidated after compilation. Every certificate selected the affine form;
+the adversarial tests separately qualify exact table fallback. The final model
+ELFs pass the target instruction audit, and the emitted new kernel object has
+no floating-point instructions. Slots are aligned to one declared Gemmini
+int32 row (`DIM` elements). Serial dependency/layout refusals remain explicit.
+Retained-source host readouts owned by Merlin remain at their existing ABI
+boundary until that compiler lane supplies its own readout plan.
+
+The measurements, per-kernel instruction counters, proof/audit counts, exact
+source/artifact hashes, test receipts and negative evidence are preserved in
+[the qualification record](perf_records/requant_A_20261019.json). The experiment
+scripts are `tools/qualify_requant_A_phase0.py` and
+`tools/profile_requant_A_model.py`; outputs and copied frozen sources are under
+`out/taskE2/`. Historical Task E receipts are unchanged.
