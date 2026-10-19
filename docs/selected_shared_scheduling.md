@@ -390,3 +390,12 @@ families without this exact native receipt route refuse; neither a saved
 success nor a preparation record can bypass that requirement. Hardware,
 timing, broad dense, asynchronous overlap and attention capabilities remain
 disabled.
+
+The opt-in `test_selected_cleanup_child.py` takes
+`MERLIN_SELECTED_CLEANUP_TEST_INPUTS` pointing to the explicit original factory
+inputs. It reruns original cleanup admission in both parent and fresh sealed
+child, restores the exact selected SDK/pass identities, verifies the final
+consumer is present and checks the parent's child receipt. Its parent compiler
+profile is a neutral transport fixture; passing this test does not certify the
+original Phase1 experiment or authorize another capability. Do not hold a
+parent CPU lease while waiting for the original checker child.
