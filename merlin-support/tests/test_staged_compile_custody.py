@@ -32,8 +32,14 @@ def observed(tmp_path, monkeypatch):
     ):
         (package / name).write_text("fixture")
     (package / "selected-shared-library.json").write_text('"frozen-release"')
-    source = tmp_path / "source.mlir"
+    capsule = tmp_path / "capsule"
+    capsule.mkdir()
+    declaration = capsule / "capsule.yaml"
+    declaration.write_text("original capsule fixture")
+    source = capsule / "capsule.interface.mlir"
     source.write_text("independent source fixture")
+    native_source = tmp_path / "runtime-model.mlir"
+    native_source.write_bytes(source.read_bytes())
     cb = tmp_path / "command_buffer.json"
     lowered = tmp_path / "lowered.mlir"
     argv = [
@@ -59,7 +65,16 @@ def observed(tmp_path, monkeypatch):
         )
     lowered.write_text(result.stdout)
     native = tmp_path / "native.json"
-    native.write_text(json.dumps({"source": {"interface": _pin(source)}}))
+    native.write_text(
+        json.dumps(
+            {
+                "source": {
+                    "interface": _pin(native_source),
+                    "capsule_declaration": _pin(declaration),
+                }
+            }
+        )
+    )
     arm = {
         "compiler_package": {"path": str(package), "sha256": _tree(package)},
         "ordinary_invocation": _pin(
@@ -122,6 +137,9 @@ def test_issued_emission_revalidation_reopens_bytes_without_claiming_new_compila
         "foreign_release",
         "lowered",
         "source",
+        "changed_runtime_copy",
+        "foreign_capsule",
+        "same_bytes_foreign_capsule",
         "cb",
         "forged_package",
     ],
@@ -146,6 +164,30 @@ def test_missing_stale_forged_or_wrong_release_emissions_refuse(observed, damage
         p = Path(arm["native_result"]["path"])
         x = json.loads(p.read_bytes())
         x["source"]["interface"]["path"] = str(p)
+        p.write_text(json.dumps(x))
+        arm["native_result"] = _pin(p)
+    elif damage in (
+        "changed_runtime_copy",
+        "foreign_capsule",
+        "same_bytes_foreign_capsule",
+    ):
+        p = Path(arm["native_result"]["path"])
+        x = json.loads(p.read_bytes())
+        if damage == "changed_runtime_copy":
+            source = Path(x["source"]["interface"]["path"])
+            source.write_text("different source with self-consistent recorded hash")
+            x["source"]["interface"] = _pin(source)
+        else:
+            directory = p.parent / "foreign-capsule"
+            directory.mkdir()
+            declaration = directory / "capsule.yaml"
+            declaration.write_text("foreign capsule")
+            (directory / "capsule.interface.mlir").write_text(
+                "independent source fixture"
+                if damage == "same_bytes_foreign_capsule"
+                else "different source"
+            )
+            x["source"]["capsule_declaration"] = _pin(declaration)
         p.write_text(json.dumps(x))
         arm["native_result"] = _pin(p)
     elif damage == "cb":
