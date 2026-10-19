@@ -10,10 +10,21 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+TASK = Path("/work/merlin/tasks/phase2-pass-integration-20261018")
+INTEGRATED = Path("/work/merlin/tasks/phase2-el4-explore-20261018")
 
 
 def main(argv=None):
+    # Preserve selected B-core owner paths while supplying only missing current
+    # host APIs from the integrated task. The original box separately projects
+    # its exact profile/SDK grants; this does not add compiler-visible roots.
+    selected, fallback = str(TASK / "merlin/src"), str(INTEGRATED / "merlin/src")
+    if selected in sys.path and fallback not in sys.path:
+        sys.path.insert(sys.path.index(selected) + 1, fallback)
+
     from merlin.common.cpu_pool import shared_compute_pool
     from merlin_experiments.phase2 import compiler_library_state as library_state
     from merlin_experiments.phase2 import compiler_pass_state as pass_state
