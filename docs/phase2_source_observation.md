@@ -57,3 +57,14 @@ mutations and saved-object refusal. They qualify transport and fail-closed
 behavior only. The earlier actual paired ELF comparison remains the evidence
 for equivalence of the two complete commit streams; a larger source must still
 pass its own actual native and full live source/output admission.
+
+`gemmini_source_observation_runtime` supports an immutable V1 namespace beside
+the new selection. It loads the selected V2 owner source under a unique private
+module and exports the exact existing issuer method body with explicit V2 owner
+and flag bindings. Original target/native helper imports keep their normal
+resolution. No canonical module or original class is rebound. The factory pins
+both implementation files and the export leaf; the returned owner also reopens
+these bytes. Exported callback code and implementation bindings are checked
+before reuse. This is source export, not a saved-verdict constructor or a second
+trace algorithm. A real B-first live prototype/registry preflight passed; it did
+not execute a new target program or grant scheduling qualification.

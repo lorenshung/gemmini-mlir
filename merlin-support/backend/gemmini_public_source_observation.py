@@ -11,12 +11,12 @@ import time
 import weakref
 from pathlib import Path
 
+import gemmini_source_observation_runtime as _RUNTIME
 from gemmini_public_source_diagnostic import (
     MECHANISM,
     PublicSourceDiagnosticIssuer,
 )
-from gemmini_source_execution import COMMIT_ONLY_PROTOCOL, source_trace_flags
-from gemmini_source_execution_issuer import SourceExecutionIssuer
+from gemmini_source_observation_runtime import COMMIT_ONLY_PROTOCOL, source_trace_flags
 from gemmini_staged_dense_admission import prepare_original_prototype
 from gemmini_staged_dense_capability import StagedDensePrototype, _digest
 from gemmini_timing_resources import _pin, _revalidate_sources
@@ -46,11 +46,18 @@ class PublicSourceObservationIssuer:
                 "gemmini_public_source_observation",
                 "gemmini_public_source_observation_factory",
                 "gemmini_public_source_diagnostic",
+                "gemmini_source_observation_runtime",
                 "gemmini_source_execution_issuer",
                 "gemmini_source_execution",
                 "gemmini_source_packet_artifacts",
             )
         }
+        sources.update(
+            {
+                "explicit_" + name: dict(pin)
+                for name, pin in _RUNTIME.IMPLEMENTATION_PINS.items()
+            }
+        )
         callbacks = tuple(
             (
                 owner,
@@ -61,7 +68,7 @@ class PublicSourceObservationIssuer:
             for owner, names in ((original, ("revalidate", "source_rule", "record")),)
             for name in names
         )
-        trace = SourceExecutionIssuer.create_source_execution_owner
+        trace = _RUNTIME.create_source_execution_owner
         _ISSUED[self] = (
             original,
             prototype,
@@ -78,6 +85,7 @@ class PublicSourceObservationIssuer:
             raise
 
     def _state(self):
+        _RUNTIME.revalidate_export()
         for name, function, code in _ORIGINAL_API:
             method = getattr(self, name)
             if (
@@ -96,7 +104,7 @@ class PublicSourceObservationIssuer:
             or original._prototype is not prototype
             or type(prototype) is not StagedDensePrototype
             or original.identity != identity
-            or SourceExecutionIssuer.create_source_execution_owner is not trace
+            or _RUNTIME.create_source_execution_owner is not trace
             or trace.__code__ is not code
         ):
             raise ValueError("original source observation selection changed")

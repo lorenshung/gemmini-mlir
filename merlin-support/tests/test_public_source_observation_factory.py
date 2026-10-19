@@ -19,8 +19,15 @@ owners = _owners_fixture
 
 @pytest.fixture
 def explicit(original, monkeypatch):
+    # Neutral callback dispatch, not an exported target algorithm or authority.
+    monkeypatch.setattr(M._RUNTIME, "revalidate_export", lambda: None)
     _, prototype, _, calls, returned = original
     monkeypatch.setattr(M, "StagedDensePrototype", type(prototype))
+    monkeypatch.setattr(
+        M._RUNTIME,
+        "create_source_execution_owner",
+        old.SourceExecutionIssuer.create_source_execution_owner,
+    )
     issuer = M.PublicSourceObservationIssuer(prototype)
     return prototype, issuer, calls, returned
 
@@ -102,9 +109,7 @@ def test_v2_custody_refuses_mutated_owners_and_callbacks(explicit, monkeypatch, 
     elif fault == "own_callback":
         monkeypatch.setattr(issuer, "_state", lambda: state)
     else:
-        monkeypatch.setattr(
-            M.SourceExecutionIssuer, "create_source_execution_owner", lambda: None
-        )
+        monkeypatch.setattr(M._RUNTIME, "create_source_execution_owner", lambda: None)
     with pytest.raises(ValueError):
         issuer.revalidate()
 
@@ -180,3 +185,28 @@ def test_v2_factory_source_mutation_refuses_before_restore():
     record["sources"][0]["sha256"] = "0" * 64
     with pytest.raises(ValueError, match="source changed"):
         restore_original_factory(record)
+
+
+def test_explicit_export_never_rebinds_the_canonical_owner():
+    import gemmini_source_execution as canonical
+
+    runtime = M._RUNTIME
+    assert runtime._owner_module is not canonical
+    assert runtime.SourceExecutionObservationOwner is not canonical.SourceExecutionOwner
+    assert (
+        old.SourceExecutionIssuer.create_source_execution_owner.__globals__[
+            "SourceExecutionOwner"
+        ]
+        is canonical.SourceExecutionOwner
+    )
+    runtime.revalidate_export()
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["SourceExecutionOwner", "source_trace_flags", "_native_artifacts", "_limits"],
+)
+def test_exported_algorithm_global_substitution_refuses(monkeypatch, field):
+    monkeypatch.setitem(M._RUNTIME._globals, field, object())
+    with pytest.raises(ValueError, match="binding changed"):
+        M._RUNTIME.revalidate_export()
