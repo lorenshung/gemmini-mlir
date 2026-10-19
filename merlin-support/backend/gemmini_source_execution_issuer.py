@@ -17,7 +17,11 @@ import subprocess
 import time
 from pathlib import Path
 
-from gemmini_source_execution import SourceExecutionOwner
+from gemmini_source_execution import (
+    FULL_LOG_PROTOCOL,
+    SourceExecutionOwner,
+    source_trace_flags,
+)
 from gemmini_staged_dense_capability import _digest
 from gemmini_staged_tile_capability import QualifiedStagedTileOwner
 from gemmini_timing_resources import _revalidate_sources
@@ -141,8 +145,10 @@ class SourceExecutionIssuer:
         return self._prototype.arithmetic.source_rule()
 
     def create_source_execution_owner(
-        self, *, native_result, command_buffer, lowered, work_root, remaining_s
+        self, *, native_result, command_buffer, lowered, work_root, remaining_s,
+        observation_protocol=FULL_LOG_PROTOCOL,
     ):
+        flags = source_trace_flags(observation_protocol)
         if (
             type(remaining_s) not in (int, float)
             or not math.isfinite(remaining_s)
@@ -175,8 +181,7 @@ class SourceExecutionIssuer:
             runtime["spike"]["path"],
             "--extlib=" + runtime["functional_extension"]["path"],
             "--extension=gemmini",
-            "-l",
-            "--log-commits",
+            *flags,
             str(elf),
         ]
         env = dict(os.environ)
@@ -241,6 +246,8 @@ class SourceExecutionIssuer:
                 lowered=paths[2],
                 trace_invocation=invocation,
                 nm=self._prototype.nm,
+                **({"observation_protocol": observation_protocol}
+                   if observation_protocol != FULL_LOG_PROTOCOL else {}),
             )
             if time.monotonic() >= deadline:
                 raise ValueError(
