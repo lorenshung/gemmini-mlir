@@ -142,3 +142,9 @@ def test_zero_init_allowance_requires_complete_actual_bytes_and_order(damage):
             allow_complete_zero_initialization=True,
             commands=commands,
         )
+
+
+@pytest.mark.parametrize("word", [0x00002023, 0x00003023, 0xC218, 0xE218, 0x0000202F])
+def test_unresolved_retired_store_cannot_masquerade_as_no_output_write(word):
+    with pytest.raises(ValueError, match="unresolved committed memory"):
+        _check(_log(inside=[_line(0x202, word)]))
