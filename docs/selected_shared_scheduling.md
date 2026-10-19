@@ -552,6 +552,12 @@ kernel-authenticated parent protocol, plus the exact complete-program epoch.
 The explicit `rhs_allocation_epoch_source` factory input pins that original
 allocation observation's native result, compiler artifacts and trace. A new
 byte-identical compiler invocation does not replace its original path custody.
+An optional bounded `base_compiler_preflight_packages` list can name exact
+original compiler tree pins. After normal base admission, the factory reopens
+each tree and checks its base source/library/effect ledgers before spending the
+six-pair source qualification cost. It rechecks the tree afterward. This is an
+early refusal check only; it issues no compiler or execution qualification and
+does not replace any current-program proof.
 
 The original epoch first proves every issued access in one complete observed
 hart-0 functional call, one external immutable RHS, its original A/B windows,
