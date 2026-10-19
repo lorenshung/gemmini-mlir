@@ -38,6 +38,18 @@ evidence = owner.check_pair(
 )
 ```
 
+The separately named v2 constructor
+`PrimitiveDiagnosticOwner.from_rhs_qualification(original_live_rhs_owner)`
+accepts only the exact original `QualifiedRhsResidencyOwner` and its checked
+`RhsResidencyCompilerPrototype.seed: ZeroInitializerCompilerPrototype`.
+It reopens the original RHS qualification before and after using that seed's
+original bound base-release checker. It refuses an RHS-ledger compiler in
+this seed-only route. This reuses no RHS/zero transformation admission: current
+primitive arithmetic, inputs, actual packets, outputs and permitted issue
+changes still receive the complete independent checks above. Neither JSON nor
+arbitrary wrappers can select this context. The output records this distinct
+compiler context; owner identity is versioned v2.
+
 Call after original ordinary grading releases its CPU lease. The checker owns
 its leaf trace leases; a parent must not hold another lease while waiting.
 Setup/byte-custody/verification wall costs remain separate from target cycles.
