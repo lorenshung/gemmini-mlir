@@ -40,8 +40,11 @@ def _finite_byte_form(value, dtype):
         return False
     if isinstance(value, Sym):
         bound = np.abs(np.asarray(value.const, object))
+        # Sym leaves do not retain storage signedness. Cover both byte domains:
+        # [-128, 127] and [0, 255], including extui/DQ unsigned leaves.
+        byte_magnitude = max(abs(np.iinfo(np.int8).min), np.iinfo(np.uint8).max)
         for _,_,coefficient in value.terms:
-            bound = bound + 128*np.abs(coefficient)
+            bound = bound + byte_magnitude*np.abs(coefficient)
     else:
         bound = np.abs(np.asarray(value, object))
     precision, exponent = formats[dtype]
