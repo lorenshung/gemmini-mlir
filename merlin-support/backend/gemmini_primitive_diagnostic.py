@@ -59,6 +59,7 @@ class PrimitiveDiagnosticOwner:
             for name in (
                 __name__,
                 "gemmini_primitive_context",
+                "gemmini_primitive_caller",
                 "gemmini_primitive_grade",
                 "gemmini_primitive_source",
                 "gemmini_primitive_packets",
