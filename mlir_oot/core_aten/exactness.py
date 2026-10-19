@@ -11,6 +11,12 @@ import numpy as np
 
 
 def rational(value):
+    if isinstance(value, np.ndarray):
+        if value.ndim != 0:
+            raise ValueError('exact rational parameter must be scalar')
+        # Object arrays may hold a Fraction or an arbitrarily wide integer.
+        # Extract the scalar without a floating conversion or a shape squeeze.
+        value = value.item()
     if isinstance(value,(np.floating,np.integer)):
         value=value.item()
     return value if isinstance(value, Fraction) else Fraction(value)
