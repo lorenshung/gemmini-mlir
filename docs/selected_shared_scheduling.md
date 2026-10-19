@@ -160,3 +160,8 @@ retained. Complete memory-guard/input readback, physical beat-level bounds,
 hardware completion qualification, qualified timing, automatic author routing
 and full-model execution are still separate requirements. Successful diagnostic
 issue and output checks do not silently promote the adapter into those domains.
+
+The separate [selected timing-resource adapter](selected_timing_resources.md)
+derives limited CPU issue/execution structure and audits accelerator queue and
+configuration ownership. Its model augmentation preserves unknown prices and
+does not qualify target latency or enable the unavailable shared families.
