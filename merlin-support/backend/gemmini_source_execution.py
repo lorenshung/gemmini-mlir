@@ -30,6 +30,18 @@ from merlin.targetgen.native_model_output_binding import (
 from merlin.targetgen.oot_starterkit.llvm_context import make_llvm_context
 from xdsl.parser import Parser
 
+FULL_LOG_PROTOCOL = "gemmini.source_observation.v1"
+COMMIT_ONLY_PROTOCOL = "gemmini.source_observation.v2"
+
+
+def source_trace_flags(protocol):
+    """Explicit text transport; both versions retain every committed effect."""
+    if type(protocol) is not str or protocol not in {
+        FULL_LOG_PROTOCOL, COMMIT_ONLY_PROTOCOL
+    }:
+        raise ValueError("unknown original source observation protocol")
+    return ("-l", "--log-commits") if protocol == FULL_LOG_PROTOCOL else ("--log-commits",)
+
 
 class SourceExecutionOwner:
     def __init__(
@@ -42,7 +54,10 @@ class SourceExecutionOwner:
         lowered,
         trace_invocation,
         nm,
+        observation_protocol=FULL_LOG_PROTOCOL,
     ):
+        self._observation_protocol = observation_protocol
+        self._observation_flags = source_trace_flags(observation_protocol)
         if (
             type(arithmetic) is not IntegerArithmeticOwner
             or type(selected) is not SelectedSchedulingTarget
@@ -87,18 +102,25 @@ class SourceExecutionOwner:
         self.revalidate()
 
     def _digest(self):
+        binding = [self._pins, self._arithmetic_identity, self._selected_inputs]
+        if self._observation_protocol != FULL_LOG_PROTOCOL:
+            binding.append({"protocol": self._observation_protocol,
+                            "flags": self._observation_flags})
         return hashlib.sha256(
             json.dumps(
-                [self._pins, self._arithmetic_identity, self._selected_inputs],
+                binding,
                 sort_keys=True,
             ).encode()
         ).hexdigest()
 
     @property
     def identity(self):
-        return "gemmini.current_source_execution.v1:" + self._identity
+        version = "v1" if self._observation_protocol == FULL_LOG_PROTOCOL else "v2"
+        return "gemmini.current_source_execution." + version + ":" + self._identity
 
     def revalidate(self):
+        if source_trace_flags(self._observation_protocol) != self._observation_flags:
+            raise ValueError("original source observation flags changed")
         self._arithmetic.revalidate()
         self._selected.revalidate()
         if (
@@ -267,13 +289,12 @@ class SourceExecutionOwner:
             expected_trace_argv=[
                 citation["binary"]["path"],
                 *citation["flags"],
-                "-l",
-                "--log-commits",
+                *self._observation_flags,
                 str(elf),
             ],
         )
         self.revalidate()
-        return {
+        result = {
             "status": "verified_source_execution_correspondence",
             "source_sha256": proof["interface_sha256"],
             "source_rule": self.source_rule(),
@@ -287,3 +308,9 @@ class SourceExecutionOwner:
             "timing_authority": "NONE",
             "general_dense_adapter_enabled": False,
         }
+        if self._observation_protocol != FULL_LOG_PROTOCOL:
+            result["source_observation"] = {
+                "protocol": self._observation_protocol,
+                "flags": list(self._observation_flags),
+            }
+        return result
