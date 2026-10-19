@@ -15,12 +15,25 @@ Its source compiler invocation was a host subprocess. The separate
 17×16×32 pair and its two RHS-load omissions. Original L3 is pending. Unknown
 complete host/physical/overlap timing and floor prevent a performance claim.
 
+The later `boxed-retained-rhs-source-v5/` follow-up compiles **both** retained
+case13 arms in the actual original compiler-profile sandbox. Its new live
+`original_profile_compiler_emission.v2` receipts bind the profile, SDK, compiler,
+original input, actual temporary input/output, command buffer and LLVM stdout.
+Both emitted pairs match the previous native/trace inputs byte for byte; fresh
+original SourceOwners recheck complete source/products/epoch/1,024 outputs per
+arm. Native/trace evidence is explicitly reused, not measured again. The same
+six RHS loads disappear. This is current boxed source/effect evidence; no new
+registry capability, formal grade or timing qualification is issued.
+
 To rerun the original bounded combined diagnostic, choose a fresh output path:
 
 ```sh
 python3 experiments/phase2_pass_diagnostics/reproduce_retained_rhs.py \
   --output-root /work/merlin/tasks/phase2-pass-integration-20261018/out/artifacts/target-adapters/gemmini/combined-FRESH
 ```
+
+Use `--kind boxed --output-root .../boxed-FRESH` to repeat the bounded boxed
+follow-up with its exact retained operator. No saved live receipt is restored.
 
 The replay verifies the exact retained operator/helper bytes. It changes only
 the output path and the location of the byte-identical helper. It retains the
