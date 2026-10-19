@@ -83,3 +83,33 @@ integer golden engine, with new declaration/reference identities and unchanged
 raw signed-i8/i32 contract. It cannot inherit archived measurements merely
 because its geometry or interface matches. The result reports whether each
 actual operand is nonconstant and contains both signs.
+
+An explicitly selected current-proof API separates historical ancestry from
+the actual primitive proof without reusing a current verdict:
+
+```python
+from gemmini_primitive_current_proof import select_from_rhs, check_current_pair
+
+owner = select_from_rhs(original_live_rhs_owner)
+evidence = check_current_pair(owner, **same_actual_pair_arguments)
+```
+
+Only constructor metadata uses the original RHS metadata operation, with its
+full original custody checks at both edges. The current proof runs outside
+that operation. It fully revalidates the historical owner immediately before
+and after the complete proof, including failure exits. Every intervening
+current check reopens the exact original seed, selected facts, runtime, source
+helpers and compiler binding. The same original current-source/ELF/input/
+complete-output/commit-trace/product/readout body executes. Historical pairs
+grant ancestry only; they are not fresh executions or RHS transformation
+admission for a primitive.
+
+The privately issued view has an explicit source-bound identity and expires on
+success, failure and failed initial validation. A serialized receipt, subclass,
+replaced original callback, changed source/seed or an outer metadata operation
+refuses. Constructor metadata, full historical pre/post checks and seed-only
+metadata own bounded CPU leaf leases, released before native trace leases.
+The caller must not hold an outer CPU lease. The report separates historical
+queue and active verification costs from current proof costs; none is a target
+cycle measurement. The default `check_pair` route keeps its previous full
+historical checking behavior.

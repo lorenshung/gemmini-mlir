@@ -59,6 +59,7 @@ class PrimitiveDiagnosticOwner:
             for name in (
                 __name__,
                 "gemmini_primitive_context",
+                "gemmini_primitive_current_proof",
                 "gemmini_primitive_caller",
                 "gemmini_primitive_grade",
                 "gemmini_primitive_source",
@@ -111,6 +112,9 @@ class PrimitiveDiagnosticOwner:
         result = self.context.check_binding(package)
         self.revalidate()
         return result
+
+    def context_record(self):
+        return self.context.record()
 
     def check_pair(
         self,
@@ -246,7 +250,7 @@ class PrimitiveDiagnosticOwner:
             "schema": "gemmini.primitive_pair_diagnostic.v1",
             "status": "checked_actual_primitive_L2_pair",
             "owner": self.identity,
-            "compiler_context": self.context.record(),
+            "compiler_context": self.context_record(),
             "source": pins,
             "arms": arms,
             "actual_issue_effects": effects,
