@@ -271,7 +271,7 @@ class CompilerCleanupOwner:
             raise ValueError("original compiler has no unique startup")
         roots = ",".join(f"Path({str(path)!r})" for path in self._host_roots)
         startup = (
-            '\nfrom _selected_shared_sources import activate_selected_sources\nactivate_selected_sources(json.loads(Path(__file__).with_name("selected-shared-library.json").read_text()), original_host_roots=('
+            '\nfrom _selected_shared_sources import activate_selected_sources_v2 as activate_selected_sources\nactivate_selected_sources(json.loads(Path(__file__).with_name("selected-shared-library.json").read_text()), original_host_roots=('
             + roots
             + ",))\n"
         )
