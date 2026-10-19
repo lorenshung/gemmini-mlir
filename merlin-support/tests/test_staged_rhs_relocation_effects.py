@@ -3,7 +3,12 @@
 import copy
 
 import pytest
-from gemmini_staged_rhs_relocation_effects import RhsPlacementRealizationChecker, canonical_relocated_stream
+from gemmini_staged_rhs_relocation_effects import (
+    RhsPlacementRealizationChecker,
+    canonical_relocated_stream,
+    original_source_capsule,
+)
+from gemmini_timing_resources import _pin
 
 from merlin.compile.scheduling.staged_dense import StagedDenseProblem
 
@@ -89,3 +94,22 @@ def test_actual_cell_source_config_and_pending_state_mismatches_refuse(damage):
 def test_json_qualification_cannot_construct_original_relocation_checker():
     with pytest.raises(ValueError, match="original live selected"):
         RhsPlacementRealizationChecker(selected={"status": "qualified"}, arithmetic={"scratchpad_rows": 16384}, nm="/")
+
+
+def test_explicit_original_publication_needs_pinned_identical_complete_typed_source(tmp_path):
+    original, published = (tmp_path / name for name in ("diagnostic", "published"))
+    for path in (original, published):
+        path.mkdir()
+        (path / "capsule.yaml").write_text("declaration")
+        (path / "capsule.interface.mlir").write_text("complete typed source")
+    native = dict(source=dict(capsule_declaration=_pin(original / "capsule.yaml")))
+    assert original_source_capsule({}, native) == original
+    arm = dict(source_capsule_declaration=_pin(published / "capsule.yaml"))
+    assert original_source_capsule(arm, native) == published
+    (published / "capsule.interface.mlir").write_text("different source with same output shape")
+    with pytest.raises(ValueError, match="original typed source"):
+        original_source_capsule(arm, native)
+    (published / "capsule.interface.mlir").write_text("complete typed source")
+    (published / "capsule.yaml").write_text("changed publication")
+    with pytest.raises(ValueError):
+        original_source_capsule(arm, native)
