@@ -92,13 +92,6 @@ def check_primitive_packets(owner, arm, contraction, values):
         raise ValueError(
             "primitive complete output has no unique original linked storage"
         )
-    host_scope = check_host_output_writes(
-        log,
-        entry=text[entry_name][0][0],
-        main=text["main"][0],
-        outputs=output_ranges,
-        custom_opcode=isa["CUSTOM_OPCODE"],
-    )
 
     def contents(address, width):
         return [
@@ -218,6 +211,15 @@ def check_primitive_packets(owner, arm, contraction, values):
         compute_shape=lambda raw: shape("ComputeRs", raw),
         preload_shape=lambda raw: shape("PreloadRs", raw),
         load_configuration=load,
+    )
+    host_scope = check_host_output_writes(
+        log,
+        entry=text[entry_name][0][0],
+        main=text["main"][0],
+        outputs=output_ranges,
+        custom_opcode=isa["CUSTOM_OPCODE"],
+        allow_complete_zero_initialization=True,
+        commands=trace["instructions"],
     )
     if check_original_caller(selected, arm, values) != caller:
         raise ValueError(
