@@ -50,3 +50,7 @@ candidate outputs. Unpriced operations and unsupported domains remain UNKNOWN.
 Public archive validation is reused diagnostic validation, not unseen final
 generalization; large capacity and attention regimes still require suitable
 independent labels.
+
+The retained native-v2 public calibration, source/runtime pins, failed models,
+costs and reproduction command are recorded in the
+[2026-10-19 handoff](20261019-native-v2-handoff.md).
