@@ -184,3 +184,15 @@ def test_json_cannot_issue():
         M.SourceNativeCorrespondenceOwner.bind({}, {})
     with pytest.raises(TypeError):
         M.SourceNativeCorrespondenceOwner()
+
+
+def test_issuance_does_not_keep_a_dropped_owner_alive(owners):
+    import gc
+    import weakref
+
+    _, source, count, _, _ = owners
+    separate = M.SourceNativeCorrespondenceOwner.bind(source, count)
+    ref = weakref.ref(separate)
+    del separate
+    gc.collect()
+    assert ref() is None
