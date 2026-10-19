@@ -13,6 +13,11 @@ path. The selected original runtime must retain its 64-bit core-cycle counter
 selection. Structural facts do not establish accelerator completion or timing
 accuracy.
 
+The scoped report must contain exactly the closing CSR instruction and no
+system-control instruction. Counter reconfiguration, WFI and other in-window
+CSR/system activity retain a precise refusal rather than assuming that the
+selected core-cycle counter kept its meaning.
+
 `contract.evidence(report_path, original_annotated_invocation,
 counter_review_path, source_sha256=original_source_digest)` reopens the original
 observer process, actual report product, ELF/input/counter scope, model and
