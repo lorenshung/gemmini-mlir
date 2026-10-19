@@ -207,3 +207,34 @@ beat/guard qualification, hardware completion qualification or latency claim.
 Its record retains those limits and requires final pair checking. The original
 Phase 1 compiler, numerical contracts and broad unavailable mechanisms remain
 unchanged.
+## Explicit development numerical diagnostics
+
+A fresh source-only development capsule cannot borrow a Phase 1 capsule's
+admission. The native whole-program evaluator first requires an explicitly
+selected experiment descriptor and its adjacent corpus `MANIFEST.yaml`. The
+capsule's required instruction classes must match its coverage declaration, and
+the manifest must resolve the original prohibited-role policy. This is an
+instruction policy selection, not hardware execution qualification.
+
+For a bounded public integer-contraction diagnostic, make a separate copy of the
+current development capsule. Preserve its source, inputs, references, traces and
+numeric policy byte for byte. Derive the required classes from the exact selected
+software contract's memory, weight-load, matmul and accumulator-readout roles,
+and check every class against the selected observed instruction table. Resolve
+the original `loop_descriptor` prohibition through Phase 0's
+`derive_role_taxonomy` and `resolve_policy` within the selected contract/facts
+scopes; an unresolved or vacuous prohibition must refuse. Record all original
+and copied file hashes and every policy edit. Do not modify the retained capsule.
+
+Select that new descriptor with `MERLIN_TARGET_EXPERIMENT` and use the ordinary
+native evaluator with `simulator="spike"`, `oracle_tier_ceiling="L2"` and
+`complete_call_timing=False`. The explicit development policy retains required
+tiers L0 through L3, so a successful L2 numerical diagnostic leaves the deeper
+gate pending. Reuse unchanged compiled artifacts only when their complete source
+and input bindings still match.
+
+This setup must retain false timing/certification claims and an empty performance
+objective. It establishes no public-program source basis, sealed capture,
+private-validation exclusion, formal Phase 2 admission or hardware-equivalence
+receipt. The ordinary automatic public-program selector separately requires its
+real source/capture basis; writing a development descriptor cannot provide it.
