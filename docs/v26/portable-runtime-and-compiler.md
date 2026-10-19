@@ -137,10 +137,19 @@ export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 No loadmem/signature options are implicit. The functional allocation is one hart,
 machine mode, a16GiB address span; these are executable compatibility selections,
 not proof of physical memory or bitstream ISA. Hardware association is 30MHz
-FireSimGemminiRocketConfig, DIM16, int8/int32; Chipyard
-`009e85b05ca817a15fcd6c3fe4eedd86cc2a3617`, Gemmini
-`63f0b68a68f185a016a2993f2fb32e1661ea9e6c`. The historical dirty FireSim overlay,
-matched FPGA execution and physical timing equivalence remain unestablished.
+FireSimGemminiRocketConfig, DIM16, int8/int32. The two recorded Chipyard revisions
+have different scopes and must not be described as one identical checkout:
+
+| Domain | Recorded Chipyard source | Basis |
+|---|---|---|
+| Functional Spike receiver/parameter association | `009e85b05ca817a15fcd6c3fe4eedd86cc2a3617` | standalone functional profile's original U250 source-handoff association |
+| Selected RTL re-elaboration/facts/descriptor | `3e9bfb4bf58a7dfe6e1082496a9578a5dcd83831` | selected V26 target contract `rtl_source.source_revision` |
+
+Both records pin Gemmini `63f0b68a68f185a016a2993f2fb32e1661ea9e6c`.
+Shared Gemmini lineage does not establish equality of whole Chipyard trees,
+historical FireSim dirty overlays, matched FPGA execution or physical timing.
+Those equivalences remain unestablished; independent selected unit correspondence
+and current functional checks are still required.
 Spike is **untuned**. A current tuned native prediction requires separate exact
 Count/semantics/runtime/model-domain owners; none follows from this archive.
 
@@ -168,3 +177,13 @@ complete-model validation remain incomplete. The120s/1MiB resource sample was no
 admitted. Local resource-executor repair does not retroactively certify V26.
 No full Phase1 package, SDK release, formal gate, timing model or promotion is
 silently substituted merely by preparing this remote setup.
+
+## Public input payload now retained
+
+`inputs/` contains exact public facts, software specification, selected V26
+descriptor contract, generated DTS and original public descriptor, with byte sizes
+and SHA256SUMS. Historical embedded paths remain unchanged; construct a new
+receiving-server binding rather than treating these files or saved proof fields
+as live owners. No model configuration, private corpus/reference/numerics payload
+or private exclusion selection is included. See `inputs/README.md` for the content
+review and applicability limits.
