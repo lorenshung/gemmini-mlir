@@ -552,11 +552,17 @@ def emit_v26_staged_dense(
         "all_other_original_finite_body_lines_preserved": True,
         "finite_original_loop_expansion": True,
         "original_runtime_loop_control_preserved": False,
-        "paired_control": "use enabled=True,rewrite_policy='verify_only' for the same finite expansion; default None retains original runtime loops",
+        "paired_control": (
+            "use enabled=True,rewrite_policy='verify_only' for the same finite expansion; "
+            "default None retains original runtime loops"
+        ),
         "physical_fence_count": sum(
             'asm sideeffect "fence"' in line for line in original.lines
         ),
-        "fence_mapping": "each original leading/reduction/readout fence stays in its complete original tile; prologue/suffix unchanged",
+        "fence_mapping": (
+            "each original leading/reduction/readout fence stays in its complete original tile; "
+            "prologue/suffix unchanged"
+        ),
         "ssa_scope": "every moved tile uses only its own preceding definitions and the three original ABI arguments",
         "enabled_by_default": False,
         "target_capability_issued": False,

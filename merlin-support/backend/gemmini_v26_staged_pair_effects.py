@@ -126,7 +126,8 @@ def compare_decoded_pair(baseline, candidate, *, ports, rhs, operand_rows, dim):
         raise ValueError("actual V26 pair contains unsupported device effects")
     bp, bb, bs = _partition(baseline, ports)
     cp, cb, cs = _partition(candidate, ports)
-    signatures = lambda rows: [_signature(row) for row in rows]
+    def signatures(rows):
+        return [_signature(row) for row in rows]
     if (
         signatures(bp) != signatures(cp)
         or signatures(bs) != signatures(cs)

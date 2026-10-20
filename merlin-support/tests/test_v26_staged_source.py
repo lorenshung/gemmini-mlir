@@ -14,12 +14,13 @@ from types import SimpleNamespace
 
 import gemmini_v26_staged_source as adapter
 import pytest
+from merlin_experiments.phase0.connected_integer_bounds import derive
+
 from merlin.common import mlir_query as mq
 from merlin.compile.scheduling.export import export_shared_scheduling
 from merlin.compile.scheduling.staged_dense import StagedDenseContract
 from merlin.targetgen.compiler_library import freeze_compiler_library
 from merlin.targetgen.package_runtime import CertFailure, integrity_scan
-from merlin_experiments.phase0.connected_integer_bounds import derive
 
 PACKAGE = (
     Path(__file__).resolve().parents[2]

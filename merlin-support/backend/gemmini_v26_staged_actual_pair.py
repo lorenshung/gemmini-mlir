@@ -22,6 +22,7 @@ from gemmini_selected_scheduling import SelectedSchedulingTarget
 from gemmini_staged_dense_admission import StagedCompletionOwner
 from gemmini_timing_resources import _pin, _revalidate_sources
 from gemmini_v26_staged_pair_effects import compare_decoded_pair
+
 from merlin.common import invocation_record
 from merlin.common.paths import module_source_path
 from merlin.compile.scheduling.staged_dense import (

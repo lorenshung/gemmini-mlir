@@ -5,6 +5,7 @@ import copy
 import gemmini_v26_staged_actual_pair as live
 import pytest
 from gemmini_v26_staged_pair_effects import compare_decoded_pair
+
 from merlin.compile.scheduling.staged_dense import StagedDenseContract
 
 PORTS = {"MVIN": 1, "MVIN2": 0, "MVIN3": 2}
