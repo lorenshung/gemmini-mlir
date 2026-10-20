@@ -67,6 +67,114 @@ def check_execution_packets(
     expected_trace_argv,
 ):
     """Reopen an original completed trace, then reconstruct actual required work."""
+    contractions = tuple(
+        Contraction(**row)
+        for row in bind_rank_two_contractions(source, command_buffer, proof)
+    )
+    abi = {
+        f"tensor_{i}": (row["tensor"], command_buffer["tensors"][row["tensor"]])
+        for i, row in enumerate(command_buffer["kernel_abi"]["args"])
+    }
+    return _check_bound_execution_packets(
+        selected=selected,
+        elf=elf,
+        invocation=invocation,
+        nm=nm,
+        input_values=input_values,
+        expected_trace_argv=expected_trace_argv,
+        contractions=contractions,
+        abi=abi,
+        command_buffer=command_buffer,
+    )
+
+
+def check_direct_execution_packets(
+    *,
+    selected,
+    source,
+    proof,
+    command_buffer,
+    elf,
+    invocation,
+    nm,
+    input_values,
+    expected_trace_argv,
+    entry_symbol,
+):
+    """Use the exact typed direct-source binding; never invent a global plan."""
+    from merlin.llvmlower.direct_source_contraction import (
+        bind_direct_source_contraction,
+    )
+
+    contraction = Contraction(
+        **bind_direct_source_contraction(source, command_buffer, proof)
+    )
+    abi = {
+        f"tensor_{i}": (name, command_buffer["tensors"][name])
+        for i, name in enumerate(command_buffer["compiler_pointer_abi"]["arguments"])
+    }
+    report = _check_bound_execution_packets(
+        selected=selected,
+        elf=elf,
+        invocation=invocation,
+        nm=nm,
+        input_values=input_values,
+        expected_trace_argv=expected_trace_argv,
+        contractions=(contraction,),
+        abi=abi,
+        command_buffer=command_buffer,
+    )
+    # Complete products/readouts are established first. The same full trace
+    # must additionally veto host answer stores during the one real call.
+    from gemmini_primitive_host_scope import check_host_output_writes
+
+    checker_path = (
+        Path(__file__).resolve().parents[2]
+        / "experiments/shared_load_configuration/qualify.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "original_direct_host_framing", checker_path
+    )
+    checker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checker)
+    symbols = checker._symbols(Path(elf), Path(nm))
+
+    def symbol(name):
+        rows = [(start, size) for start, size, label in symbols if label == name]
+        if len(rows) != 1 or rows[0][1] <= 0:
+            raise ValueError("direct source scope has no unique complete linked symbol")
+        return rows[0]
+
+    trace = invocation_record.verify(Path(invocation))
+    report["host_output_scope"] = check_host_output_writes(
+        Path(trace["stderr"]["path"]).read_text(),
+        entry=symbol(entry_symbol)[0],
+        main=symbol("main"),
+        outputs=[
+            symbol(physical)
+            for physical, (logical, _tensor) in abi.items()
+            if logical == contraction.output
+        ],
+        custom_opcode=selected.operand_observer().isa_constants("gemmini")[
+            "CUSTOM_OPCODE"
+        ],
+    )
+    invocation_record.verify(Path(invocation))
+    return report
+
+
+def _check_bound_execution_packets(
+    *,
+    selected,
+    elf,
+    invocation,
+    nm,
+    input_values,
+    expected_trace_argv,
+    contractions,
+    abi,
+    command_buffer,
+):
     declaration = invocation_record.verify(Path(invocation))
     if declaration["argv"] != expected_trace_argv:
         raise ValueError(
@@ -75,10 +183,6 @@ def check_execution_packets(
     if Path(declaration["stderr"]["path"]).stat().st_size > 64 << 20:
         raise ValueError("packet trace exceeds its independent byte budget")
     log = Path(declaration["stderr"]["path"]).read_text()
-    contractions = tuple(
-        Contraction(**row)
-        for row in bind_rank_two_contractions(source, command_buffer, proof)
-    )
     checker_path = (
         Path(__file__).resolve().parents[2]
         / "experiments/shared_load_configuration/qualify.py"
@@ -103,10 +207,6 @@ def check_execution_packets(
             stream.append(command)
     if next(instructions, None) is not None:
         raise ValueError("actual packet framing is incomplete")
-    abi = {
-        f"tensor_{i}": (row["tensor"], command_buffer["tensors"][row["tensor"]])
-        for i, row in enumerate(command_buffer["kernel_abi"]["args"])
-    }
     sections = _section_headers(Path(elf).read_bytes())
     elf_bytes = Path(elf).read_bytes()
     writes = _cpu_writes(log, observer.isa_constants("gemmini")["CUSTOM_OPCODE"])

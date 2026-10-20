@@ -46,6 +46,24 @@ stream ceiling. The operator still owns aggregate CPU/wall/RSS/disk guards and
 must not hold a parent lease across a separately leased child. All compilation,
 native execution, trace and verification costs remain separate from target cycles.
 
+An explicit `source_binding_protocol="merlin.native_pointer_source.v1"` selects
+the separate direct-pointer source checker. It also requires
+`execution_contract`, the exact canonical software-contract path selected by the
+actual native renderer. The old absent-field whole-program path keeps its
+original checker. Direct checks initially support only a closed zero-i32
+constant, tensor splat, one signed-i8 rank-two dot and its raw-i32 return.
+No `global_program_plan` or emitted `kernel_abi` is manufactured.
+
+The original neutral pointer binder reopens complete source inputs/references
+and actual pointer order. The direct owner uses the same packet product/state
+engine as the whole-program owner, then independently vetoes CPU result stores
+over the actual original caller invocation. It checks all native and trace
+outputs against unchanged complete references. The selected execution contract
+independently fixes entry/completion symbols; a record cannot select another
+entry to evade the host-write check. Unsupported graphs/layouts/initialization
+or incomplete traces refuse. Source-semantic metadata preparation alone does
+not establish that any direct program passed these checks.
+
 `gemmini_generated_source_native.GeneratedSourceNativeCorrespondenceOwner.bind`
 accepts only the exact live generated-source capability and original
 `CountHardwareCorrespondenceOwner` capability. It keeps composite software and

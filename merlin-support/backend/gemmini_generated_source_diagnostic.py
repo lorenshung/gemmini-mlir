@@ -59,7 +59,12 @@ class GeneratedSourceDiagnosticIssuer:
             raise TypeError(
                 "generated source diagnostics need original explicit inputs"
             )
-        if set(inputs) not in (_FIELDS, _FIELDS | {"metadata_verification_protocol"}):
+        optional = {
+            "metadata_verification_protocol",
+            "source_binding_protocol",
+            "execution_contract",
+        }
+        if not _FIELDS <= set(inputs) or set(inputs) - _FIELDS - optional:
             raise ValueError(
                 "generated source diagnostics reject missing or foreign input fields"
             )
@@ -67,6 +72,22 @@ class GeneratedSourceDiagnosticIssuer:
             raise ValueError(
                 "generated source diagnostics require explicit complete-commit V2 observation"
             )
+        binding_protocol = inputs.get("source_binding_protocol", "whole_program")
+        if binding_protocol not in {"whole_program", "merlin.native_pointer_source.v1"}:
+            raise ValueError("unknown generated-source binding protocol")
+        if (binding_protocol == "whole_program") != (
+            "execution_contract" not in inputs
+        ):
+            raise ValueError(
+                "direct source binding requires its explicit original execution contract"
+            )
+        from gemmini_source_execution import SourceExecutionOwner
+
+        owner_type = SourceExecutionOwner
+        if binding_protocol != "whole_program":
+            from gemmini_direct_source_execution import DirectSourceExecutionOwner
+
+            owner_type = DirectSourceExecutionOwner
         if (
             inputs.get(
                 "metadata_verification_protocol", "merlin.pass_metadata_operation.v1"
@@ -79,6 +100,8 @@ class GeneratedSourceDiagnosticIssuer:
         paths = {
             name: Path(inputs[name]) for name in _FIELDS - {"observation_protocol"}
         }
+        if "execution_contract" in inputs:
+            paths["execution_contract"] = Path(inputs["execution_contract"])
         for path in paths.values():
             if (
                 not path.is_absolute()
@@ -138,6 +161,16 @@ class GeneratedSourceDiagnosticIssuer:
                 "merlin.common.invocation_record",
             )
         }
+        if binding_protocol != "whole_program":
+            sources.update(
+                {
+                    name: _pin(module_source_path(name))
+                    for name in (
+                        "gemmini_direct_source_execution",
+                        "merlin.llvmlower.direct_source_contraction",
+                    )
+                }
+            )
         source_inputs, rule, proof = (
             selected.report()["selected_inputs"],
             arithmetic.source_rule(),
@@ -147,7 +180,9 @@ class GeneratedSourceDiagnosticIssuer:
             source_inputs["facts"]["sha256"],
             _digest([source_inputs, proof["proof"]]),
             _digest([rule, arithmetic.record()]),
-            _digest(runtime),
+            _digest(runtime)
+            if binding_protocol == "whole_program"
+            else _digest([runtime, _pin(paths["execution_contract"])]),
             library.contract.sha256,
         )
         state = {
@@ -170,6 +205,13 @@ class GeneratedSourceDiagnosticIssuer:
             },
             "trace": observe_current_source,
             "trace_code": observe_current_source.__code__,
+            "binding_protocol": binding_protocol,
+            "owner_type": owner_type,
+            "owner_init": owner_type.__init__,
+            "owner_init_code": owner_type.__init__.__code__,
+            "execution_contract": None
+            if binding_protocol == "whole_program"
+            else _pin(paths["execution_contract"]),
         }
         state["callbacks"] = tuple(
             (
@@ -197,6 +239,7 @@ class GeneratedSourceDiagnosticIssuer:
                 runtime,
                 state["nm"],
                 asdict(binding),
+                binding_protocol,
             ]
         )
         _ISSUED[self] = state
@@ -245,6 +288,7 @@ class GeneratedSourceDiagnosticIssuer:
                     state["runtime"],
                     state["nm"],
                     asdict(state["binding"]),
+                    state["binding_protocol"],
                 ]
             )
             != state["identity"]
@@ -255,6 +299,11 @@ class GeneratedSourceDiagnosticIssuer:
             or observe_current_source.__code__ is not state["trace_code"]
         ):
             raise ValueError("original generated-source trace algorithm changed")
+        if (
+            state["owner_type"].__init__ is not state["owner_init"]
+            or state["owner_init"].__code__ is not state["owner_init_code"]
+        ):
+            raise ValueError("original generated-source effect constructor changed")
         return state
 
     @property
@@ -301,6 +350,7 @@ class GeneratedSourceDiagnosticIssuer:
             "sources": copy.deepcopy(state["sources"]),
             "runtime_inputs": copy.deepcopy(state["runtime"]),
             "source_observation_protocol": state["protocol"],
+            "source_binding_protocol": state["binding_protocol"],
             "scheduling_qualification": "NONE",
             "hardware_execution_qualified": False,
             "timing_authority": "NONE",

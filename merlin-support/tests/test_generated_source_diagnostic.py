@@ -226,3 +226,29 @@ def test_saved_success_unissued_and_subclassed_owners_refuse(issued):
 
     with pytest.raises(TypeError):
         Foreign({})
+
+
+def test_direct_protocol_is_explicit_and_selects_only_original_direct_owner(
+    issued, tmp_path
+):
+    M, _, inputs, *_ = issued
+    from gemmini_direct_source_execution import DirectSourceExecutionOwner
+
+    direct = dict(inputs, source_binding_protocol="merlin.native_pointer_source.v1")
+    with pytest.raises(ValueError, match="execution contract"):
+        M.GeneratedSourceDiagnosticIssuer(direct)
+    contract = tmp_path / "selected-contract.yaml"
+    contract.write_text("original selected ABI fixture")
+    direct["execution_contract"] = str(contract)
+    owner = M.GeneratedSourceDiagnosticIssuer(direct)
+    state = M._STATE(owner)
+    assert state["owner_type"] is DirectSourceExecutionOwner
+    assert state["execution_contract"]["path"] == str(contract)
+    assert (
+        owner.record()["source_binding_protocol"] == "merlin.native_pointer_source.v1"
+    )
+    assert owner.record()["timing_authority"] == "NONE"
+    with pytest.raises(ValueError, match="unknown generated-source binding"):
+        M.GeneratedSourceDiagnosticIssuer(
+            dict(direct, source_binding_protocol="foreign")
+        )

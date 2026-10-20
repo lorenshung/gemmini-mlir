@@ -6,12 +6,13 @@ SourceExecutionOwner. This grants no scheduling or compiler qualification.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import time
 from pathlib import Path
 
-from gemmini_source_execution import SourceExecutionOwner, source_trace_flags
+from gemmini_source_execution import source_trace_flags
 from gemmini_source_execution_issuer import _limits, _native_artifacts
 from gemmini_timing_resources import _pin
 from merlin.common import invocation_record
@@ -27,6 +28,17 @@ def observe_current_source(
     paths, pins, elf = _native_artifacts(
         native_result, command_buffer, lowered, state["runtime"]
     )
+    if state["binding_protocol"] != "whole_program" and (
+        json.loads(paths[0].read_bytes()).get("schema")
+        != "merlin_candidate_native_pointer_source_v1"
+        or json.loads(paths[0].read_bytes())
+        .get("pointer_execution", {})
+        .get("protocol")
+        != state["binding_protocol"]
+    ):
+        raise ValueError(
+            "direct source observation requires its explicit original native execution record"
+        )
     work = Path(work_root)
     if (
         not work.is_absolute()
@@ -104,7 +116,7 @@ def observe_current_source(
                 "current generated-source artifacts changed during observation"
             )
         issuer.revalidate()
-        owner = SourceExecutionOwner(
+        owner = state["owner_type"](
             arithmetic=state["arithmetic"],
             selected=state["selected"],
             result=paths[0],
@@ -113,6 +125,11 @@ def observe_current_source(
             trace_invocation=invocation,
             nm=Path(state["nm"]["path"]),
             observation_protocol=state["protocol"],
+            **(
+                {"execution_contract": state["execution_contract"]}
+                if state["binding_protocol"] != "whole_program"
+                else {}
+            ),
         )
         if time.monotonic() >= deadline:
             raise ValueError(
