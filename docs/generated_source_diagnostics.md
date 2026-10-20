@@ -43,7 +43,19 @@ product, state and complete-output checker. No saved success can replace that.
 
 The observation retains the existing 60-second inner process limit and 64MiB
 stream ceiling. The operator still owns aggregate CPU/wall/RSS/disk guards and
-must not hold a parent lease across a separately leased child. All compilation,+native execution, trace and verification costs remain separate from target cycles.
+must not hold a parent lease across a separately leased child. All compilation,
+native execution, trace and verification costs remain separate from target cycles.
+
+`gemmini_generated_source_native.GeneratedSourceNativeCorrespondenceOwner.bind`
+accepts only the exact live generated-source capability and original
+`CountHardwareCorrespondenceOwner` capability. It keeps composite software and
+raw observed-contract identities distinct. Both source/count owners reopen their
+selected inputs, completion proof and runtime; actual five-field compiler/native
+bindings must match. Use a freshly derived count owner with the same selected
+facts/observed/operand paths, not a rewritten saved sidecar. Wrap the resulting
+owner in the existing `compiler_source_native_correspondence` capability using
+the **native** binding. This structural bridge grants no calibration or timing
+domain; the ordinary independent held gates and current observation remain required.
 
 V26 still has no `target_ir_consumer` or `emit_target_bundle`. This factory does
 not supply either interface, qualify hardware execution, complete the original
