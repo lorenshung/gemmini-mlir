@@ -232,6 +232,16 @@ def _check_bound_execution_packets(
     sections = _section_headers(Path(elf).read_bytes())
     elf_bytes = Path(elf).read_bytes()
     writes = _cpu_writes(log, observer.isa_constants("gemmini")["CUSTOM_OPCODE"])
+    observed_zeros = ()
+    if load_streams is not None:
+        from gemmini_private_zero_storage import observed_private_zero_storage
+
+        observed_zeros = observed_private_zero_storage(
+            log,
+            symbols=symbols,
+            abi_symbols=abi,
+            custom_opcode=observer.isa_constants("gemmini")["CUSTOM_OPCODE"],
+        )
     if elf_bytes[5] != 1:
         raise ValueError(
             "selected source packet scope requires explicit little-endian ELF data"
@@ -299,13 +309,12 @@ def _check_bound_execution_packets(
             for start, size, name in symbols
             if start <= address and address + width <= start + size
         ]
-        if (
-            len(found) != 1
-            or found[0][2] in abi
-            or any(
-                start < address + width and address < start + size
-                for start, size in writes
-            )
+        if len(found) != 1 or found[0][2] in abi:
+            return False
+        if found[0] in observed_zeros:
+            return True
+        if any(
+            start < address + width and address < start + size for start, size in writes
         ):
             return False
         for _name, kind, _flags, offset, size, start in sections:
@@ -381,4 +390,14 @@ def _check_bound_execution_packets(
         zero_fill=None if zero_fill is None else zero_fill.accepts,
     )
     invocation_record.verify(Path(invocation))
+    if load_streams is not None:
+        report["observed_private_zero_storage"] = [
+            {
+                "address": start,
+                "bytes": size,
+                "symbol": name,
+                "evidence": "complete committed zero stores before first device command; no later clobber",
+            }
+            for start, size, name in observed_zeros
+        ]
     return report

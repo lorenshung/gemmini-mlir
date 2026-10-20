@@ -84,6 +84,14 @@ independently required. Accumulating flags, nonzero sources and other storage
 refuse. This is functional source evidence, not an asynchronous-completion or
 hardware execution qualification.
 
+Private non-ABI zero buffers in the direct route can instead be established by
+the actual complete commit stream: every byte must have an exact committed
+integer zero store before the first device command, with no later CPU or
+device host-memory clobber. Missing store observations, incomplete coverage,
+nonzero data and ambiguous storage refuse. A NOBITS/BSS section label alone
+supplies no initialization evidence. The older immutable PROGBITS-zero path
+and the whole-program default remain unchanged.
+
 `gemmini_generated_source_native.GeneratedSourceNativeCorrespondenceOwner.bind`
 accepts only the exact live generated-source capability and original
 `CountHardwareCorrespondenceOwner` capability. It keeps composite software and
