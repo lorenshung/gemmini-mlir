@@ -142,6 +142,31 @@ def compiler_python(declaration, intake):
     intake.read(selected["venv_config"])
 
 
+def native_loader_python_preflight():
+    """Check the original frozen-loader interpreter without executing it.
+
+    Keep the loader's exact environment/.env/default precedence and venv spelling.
+    Availability is neither capture/runtime qualification nor a package probe;
+    the original loader and source owners still perform their complete checks.
+    """
+    from merlin.targetgen.capsule_source import _m2m_python
+
+    selected = _m2m_python()
+    if not selected.is_file() or not os.access(selected, os.X_OK):
+        raise ValueError(
+            "selected frozen-loader Python is missing or not executable: "
+            f"{selected}; configure the original MERLIN_M2M_PYTHON / "
+            "MERLIN_M2M_VENV selection or provide its valid default"
+        )
+    return {
+        "selection_owner": "merlin.targetgen.capsule_source._m2m_python",
+        "python": str(selected),
+        "availability": "file_and_executable",
+        "runtime_qualification": "NONE",
+        "framework_or_loader_execution": False,
+    }
+
+
 def reopen_plan(declaration, intake):
     from merlin_experiments.phase0 import development_admission_plan as P
 

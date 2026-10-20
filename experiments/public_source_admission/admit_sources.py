@@ -57,7 +57,12 @@ from merlin_experiments.phase0.instruction_roles import (
     require_enforceable,
     resolve_policy,
 )
-from source_admission_inputs import copy_compiler, read_declaration, select_abi
+from source_admission_inputs import (
+    copy_compiler,
+    native_loader_python_preflight,
+    read_declaration,
+    select_abi,
+)
 from source_admission_source import check
 
 LOGGER = logging.getLogger(__name__)
@@ -300,6 +305,7 @@ def diagnostic(declaration, selected, unqualified, output):
 
 def execute(declaration, intake, selected, output, report, save):
     purpose = require_purpose(declaration, intake)
+    report["native_loader_python"] = native_loader_python_preflight()
 
     def stage(name):
         require_purpose(declaration, intake)
@@ -477,6 +483,7 @@ def main(argv=None):
 
     try:
         with shared_compute_pool(timeout_s=60):
+            report["native_loader_python"] = native_loader_python_preflight()
             selected = check(declaration, intake)
         report.update(
             identity=declaration["source"]["identity"],

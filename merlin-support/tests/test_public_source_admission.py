@@ -231,6 +231,11 @@ def test_output_cannot_mutate_original_input_namespace(tmp_path, under):
 
 
 def test_check_inputs_never_enters_execution(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        RUN,
+        "native_loader_python_preflight",
+        lambda: {"runtime_qualification": "NONE"},
+    )
     att = file(
         tmp_path,
         "check-att.json",

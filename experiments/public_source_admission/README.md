@@ -21,6 +21,14 @@ selection. It executes no compiler or target and grants no admission. The
 original private eligibility check needs the materialized capsule and runs at
 the beginning of `--execute`, before expensive compilation/native execution.
 
+Both modes first check the exact interpreter selected by the original frozen
+loader. Its existing `MERLIN_M2M_PYTHON`, `MERLIN_M2M_VENV`, `.env` and checkout
+default rules remain authoritative; an explicit setting is unnecessary when
+the default is valid. Missing or nonexecutable selections refuse before source
+intake and compilation. The executable check preserves venv symlink spelling,
+runs no framework probe and grants no runtime qualification. `--execute` checks
+availability again before materialization; original loader validation remains.
+
 `--execute` must run under the existing external process-tree resource
 supervisor, using a predeclared immutable purpose with a finite deadline. This
 CLI does not create, prove or claim that external CPU/RSS/disk boundary. Select
