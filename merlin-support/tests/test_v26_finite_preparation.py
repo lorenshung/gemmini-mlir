@@ -97,6 +97,101 @@ def test_source_invocation_reopens_its_pin_after_original_verification(
         module._source_invocation(chain, {})
 
 
+def _checked_relation():
+    checked = {
+        "status": "verified_finite_staged_source_effects",
+        "timing_authority": "NONE",
+        "products": 16384,
+        "outputs": 1024,
+        "computes": 4,
+        "operand_loads": 8,
+        "private_path": "withheld",
+    }
+    return {
+        "schema": "gemmini.v26_original_actual_staged_pair.v1",
+        "status": "checked_actual_source_packet_output_pair_diagnostic",
+        "shared_independent_checks": [copy.deepcopy(checked), copy.deepcopy(checked)],
+    }
+
+
+def test_public_metrics_only_project_four_original_checked_count_pairs():
+    from gemmini_v26_finite_pair import _public_metrics
+    from merlin_experiments.phase2.diagnostic_schedule_metrics import project
+
+    relation = _checked_relation()
+    relation["shared_independent_checks"][1]["operand_loads"] = 6
+    raw = _public_metrics(relation)
+    assert set(raw["quantities"]) == {
+        "workload_products",
+        "output_elements",
+        "compute_commands",
+        "operand_load_commands",
+    }
+    assert "withheld" not in json.dumps(raw)
+    projected = project(raw)
+    assert (
+        projected["quantities"]["operand_load_commands"]["baseline_minus_candidate"]
+        == 2
+    )
+    assert all(
+        projected[key] is None
+        for key in (
+            "measured_cycles",
+            "physical_traffic_bytes",
+            "utilization",
+            "attainment",
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "schema",
+        "status",
+        "one_stream",
+        "missing",
+        "bool",
+        "float",
+        "negative",
+        "changed_work",
+        "zero_output",
+        "timing",
+        "overflow",
+        "unverified",
+    ],
+)
+def test_public_metrics_refuse_partial_or_noncount_evidence(fault):
+    from gemmini_v26_finite_pair import _public_metrics
+    from merlin_experiments.phase2.contracts import StageGateError
+
+    relation = _checked_relation()
+    second = relation["shared_independent_checks"][1]
+    if fault in {"schema", "status"}:
+        relation[fault] = "foreign"
+    elif fault == "one_stream":
+        relation["shared_independent_checks"].pop()
+    elif fault == "missing":
+        second.pop("computes")
+    elif fault in {"bool", "float", "negative", "overflow"}:
+        second["operand_loads"] = {
+            "bool": True,
+            "float": 6.0,
+            "negative": -1,
+            "overflow": 1 << 64,
+        }[fault]
+    elif fault == "changed_work":
+        second["products"] -= 1
+    elif fault == "zero_output":
+        second["outputs"] = 0
+    elif fault == "timing":
+        second["timing_authority"] = "guessed"
+    else:
+        second["status"] = "unverified"
+    with pytest.raises((ValueError, StageGateError)):
+        _public_metrics(relation)
+
+
 @pytest.fixture
 def selected(tmp_path, monkeypatch):
     generated = importlib.import_module("gemmini_generated_source_diagnostic")
@@ -529,7 +624,9 @@ def test_queue_pair_requires_current_grade_selection_and_unique_trace(
         _one(tmp_path, "*/invocation.json")
 
 
-@pytest.mark.parametrize("helper", ["_arm", "_source_invocation"])
+@pytest.mark.parametrize(
+    "helper", ["_arm", "_source_invocation", "_public_metrics", "_project_metrics"]
+)
 def test_queue_pair_private_consumer_function_mutation_refuses(
     selected, tmp_path, monkeypatch, helper
 ):

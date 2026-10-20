@@ -12,10 +12,15 @@ from pathlib import Path
 from gemmini_direct_source_execution import DirectSourceExecutionOwner
 from gemmini_timing_resources import _pin, _revalidate_sources
 from merlin.common import invocation_record
+from merlin.common.paths import module_source_path
 from merlin.common.tree_hash import hash_tree
 from merlin.targetgen import native_model_execution as native
 from merlin.targetgen.native_pointer_source_audit import audit_pointer_source_tiers
 from merlin_experiments.phase0.connected_integer_qualification import source_proof
+from merlin_experiments.phase2 import diagnostic_schedule_metrics
+from merlin_experiments.phase2.diagnostic_schedule_metrics import (
+    project as _project_metrics,
+)
 
 
 def _read(path, pins):
@@ -171,6 +176,43 @@ def _pair_choices(arms):
     return copy.deepcopy((baseline, candidate))
 
 
+def _public_metrics(relation):
+    if (
+        type(relation) is not dict
+        or relation.get("schema") != "gemmini.v26_original_actual_staged_pair.v1"
+        or relation.get("status")
+        != "checked_actual_source_packet_output_pair_diagnostic"
+        or type(relation.get("shared_independent_checks")) is not list
+        or len(relation["shared_independent_checks"]) != 2
+        or any(
+            type(check) is not dict
+            or check.get("status") != "verified_finite_staged_source_effects"
+            or check.get("timing_authority") != "NONE"
+            for check in relation["shared_independent_checks"]
+        )
+    ):
+        raise ValueError("finite public metrics need both original checked streams")
+    baseline, candidate = relation["shared_independent_checks"]
+    fields = (
+        ("products", "workload_products"),
+        ("outputs", "output_elements"),
+        ("computes", "compute_commands"),
+        ("operand_loads", "operand_load_commands"),
+    )
+    if any(key not in check for check in (baseline, candidate) for key, _ in fields):
+        raise ValueError("finite public metrics lack original checked counts")
+    result = {
+        "schema": "merlin.diagnostic_schedule_metrics.v1",
+        "scope": "original_checked_accelerator_command_stream",
+        "quantities": {
+            public: {"baseline": baseline[key], "candidate": candidate[key]}
+            for key, public in fields
+        },
+    }
+    _project_metrics(result)
+    return result
+
+
 def _check_source_pair(
     owner, state, *, baseline_workspace, candidate_workspace, capsule, remaining_s
 ):
@@ -215,6 +257,7 @@ def _check_source_pair(
         "schema": "gemmini.v26_finite_original_queue_pair.v1",
         "status": "PASS",
         "actual_pair": relation,
+        "public_metrics": _public_metrics(relation),
         "compiler_bindings": [arm[1] for arm in arms],
         "baseline_policy": baseline_policy,
         "candidate_policy": candidate_policy,
@@ -227,9 +270,14 @@ def _check_source_pair(
 
 
 def _implementation():
-    if _pin(__file__) != _SOURCE or any(
-        globals()[name] is not function or function.__code__ is not code
-        for name, function, code in _FUNCTIONS
+    if (
+        _pin(__file__) != _SOURCE
+        or _pin(_METRIC_SOURCE["path"]) != _METRIC_SOURCE
+        or diagnostic_schedule_metrics.project is not _project_metrics
+        or any(
+            globals()[name] is not function or function.__code__ is not code
+            for name, function, code in _FUNCTIONS
+        )
     ):
         raise ValueError("finite original queue consumer implementation changed")
 
@@ -243,6 +291,7 @@ def check_source_pair(owner, state, **arguments):
 
 
 _SOURCE = _pin(__file__)
+_METRIC_SOURCE = _pin(module_source_path(diagnostic_schedule_metrics.__name__))
 _FUNCTIONS = tuple(
     (name, globals()[name], globals()[name].__code__)
     for name in (
@@ -251,6 +300,8 @@ _FUNCTIONS = tuple(
         "_source_invocation",
         "_arm",
         "_pair_choices",
+        "_public_metrics",
+        "_project_metrics",
         "_check_source_pair",
         "check_source_pair",
         "_implementation",
