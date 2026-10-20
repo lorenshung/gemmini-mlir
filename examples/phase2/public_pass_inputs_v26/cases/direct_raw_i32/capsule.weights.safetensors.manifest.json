@@ -1,0 +1,10 @@
+{
+  "0": {
+    "kind": "input",
+    "name": "lhs"
+  },
+  "1": {
+    "kind": "input",
+    "name": "rhs"
+  }
+}

@@ -1,0 +1,440 @@
+{
+  "schema": "gemmini.public_integer_fixture.v1",
+  "identity": "decisive33:11",
+  "source_role": "public_synthetic_development_fixture_not_validation",
+  "original_capsule_metadata_sha256": "58094f0b193d99dd271699de4297c03a9970fcbdd96cf1d878393300e62e57af",
+  "original_source_sha256": "df973c5df3745bd67cbe3afbc54da0936b94b686ede356c04b8c77ca31f473f7",
+  "typed_source_sha256": "303f086a86586bc3b5a89fbf1947f9ac2cf1ec7023ed5682d2236a8ed439482b",
+  "loader": "capsule.pytorch.py",
+  "loader_entry": "get_model_and_inputs",
+  "typed_source": "capsule.interface.mlir",
+  "weights": "capsule.weights.safetensors",
+  "weights_manifest": "capsule.weights.safetensors.manifest.json",
+  "reference": "independent-reference.npz",
+  "inputs": [
+    {
+      "ordinal": 0,
+      "name": "I0",
+      "shape": [
+        1,
+        7,
+        7
+      ],
+      "dtype": "i8",
+      "reference_member": "input_0.npy",
+      "npy_sha256": "7a698ada91aa0319392b98ff548515f67e72634d8fc3c481c60045f06dfd0593"
+    },
+    {
+      "ordinal": 1,
+      "name": "I1",
+      "shape": [
+        1,
+        7,
+        7
+      ],
+      "dtype": "i8",
+      "reference_member": "input_1.npy",
+      "npy_sha256": "9e56ccc3244768c55b969fb11056f433e04fb32179df6410ba6402ce48f70bf2"
+    },
+    {
+      "ordinal": 2,
+      "name": "I2",
+      "shape": [
+        3,
+        1,
+        7
+      ],
+      "dtype": "i8",
+      "reference_member": "input_2.npy",
+      "npy_sha256": "fb3245debddedb966d6832f2c3b7bce3e4485dc335316c8a9e350fedaf20f9b0"
+    },
+    {
+      "ordinal": 3,
+      "name": "I3",
+      "shape": [
+        1,
+        1,
+        7
+      ],
+      "dtype": "i8",
+      "reference_member": "input_3.npy",
+      "npy_sha256": "31587c59162669ee6696f0df3392c24b95e4b68cb97428908baa84f6ffd6b445"
+    },
+    {
+      "ordinal": 4,
+      "name": "I4",
+      "shape": [
+        1,
+        1,
+        7
+      ],
+      "dtype": "i8",
+      "reference_member": "input_4.npy",
+      "npy_sha256": "3177b60fedefd845eb2b3d4abf84b244753806d552f387e9f54427d2a08bc4de"
+    },
+    {
+      "ordinal": 5,
+      "name": "I5",
+      "shape": [
+        3,
+        1,
+        7
+      ],
+      "dtype": "i8",
+      "reference_member": "input_5.npy",
+      "npy_sha256": "fbf2eb6b336b91a9176368eb61ddc5842120f803d6fa30d5298b758a2b16f32d"
+    },
+    {
+      "ordinal": 6,
+      "name": "I6",
+      "shape": [
+        1,
+        1,
+        7
+      ],
+      "dtype": "i8",
+      "reference_member": "input_6.npy",
+      "npy_sha256": "e54d531dd2dd8ca0f3c68d4d5452374f8db0f1cae420d48c68f5c498b73aa393"
+    },
+    {
+      "ordinal": 7,
+      "name": "I7",
+      "shape": [
+        1,
+        1,
+        7
+      ],
+      "dtype": "i8",
+      "reference_member": "input_7.npy",
+      "npy_sha256": "5f815f3211fab4d93014a3cdb8b5a49c1b77b09c84904de7f99d0b65e1b053aa"
+    }
+  ],
+  "outputs": [
+    {
+      "ordinal": 0,
+      "name": "Y0",
+      "shape": [
+        1,
+        8
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_0.npy",
+      "npy_sha256": "51a0ab7cf7b4afc750e6bfe08e86197966b793ec1fc752e26185e1216a41c037"
+    },
+    {
+      "ordinal": 1,
+      "name": "Y1",
+      "shape": [
+        1,
+        7
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_1.npy",
+      "npy_sha256": "1c10888657d2be80c49f9b546525e2866c40466baaadb779cc80ee99db482763"
+    },
+    {
+      "ordinal": 2,
+      "name": "Y2",
+      "shape": [
+        1,
+        8
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_2.npy",
+      "npy_sha256": "6e8c202d764ef58b905518b88ce9c635c8b7dd9838d584b7691fef447a1d427a"
+    },
+    {
+      "ordinal": 3,
+      "name": "Y3",
+      "shape": [
+        1,
+        7
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_3.npy",
+      "npy_sha256": "b5636c10a2f55dbfe539265211ca82d166e49a7cbbb1eca3f12c34e3c93211d3"
+    },
+    {
+      "ordinal": 4,
+      "name": "Y4",
+      "shape": [
+        1,
+        8
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_4.npy",
+      "npy_sha256": "522267736da84aaf532c6518a6e5cba30a4b9f4844861461ad9b77f1246cec5a"
+    },
+    {
+      "ordinal": 5,
+      "name": "Y5",
+      "shape": [
+        1,
+        7
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_5.npy",
+      "npy_sha256": "270c0b108990691fd0134efd0606d49fa7ee7083ebfeecf48415b4b632a61a15"
+    },
+    {
+      "ordinal": 6,
+      "name": "Y6",
+      "shape": [
+        1,
+        8,
+        7
+      ],
+      "dtype": "i8",
+      "comparison": "exact_int",
+      "reference_member": "output_6.npy",
+      "npy_sha256": "2a9e12c6a261116d680ba0f56fc7a1a4ca4064c53f8a86c2ed5670e0d6eaab7f"
+    },
+    {
+      "ordinal": 7,
+      "name": "Y7",
+      "shape": [
+        1,
+        8,
+        7
+      ],
+      "dtype": "i8",
+      "comparison": "exact_int",
+      "reference_member": "output_7.npy",
+      "npy_sha256": "07bd70bf13a6bd9ebd3e4d1a78288ff46b92c3cb62989f75de42d55afc7f1dd8"
+    },
+    {
+      "ordinal": 8,
+      "name": "Y8",
+      "shape": [
+        1,
+        9
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_8.npy",
+      "npy_sha256": "042b8cb41e3768c4eeb8dfd3b7b061fbb98b6fdefb920de47e545c90a91f228c"
+    },
+    {
+      "ordinal": 9,
+      "name": "Y9",
+      "shape": [
+        1,
+        7
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_9.npy",
+      "npy_sha256": "bb2fc1c7ad895cafbfdde279f7d6fc843bc23efbc267f945fdb4391b043e3590"
+    },
+    {
+      "ordinal": 10,
+      "name": "Y10",
+      "shape": [
+        1,
+        9
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_10.npy",
+      "npy_sha256": "c5fc535753dac1433c63ef319f135f5a7c7f8991205bb60f8d689064a7e9a544"
+    },
+    {
+      "ordinal": 11,
+      "name": "Y11",
+      "shape": [
+        1,
+        7
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_11.npy",
+      "npy_sha256": "b0401f0aa9c2111e7420759f1bea7daefc67be6fd181f32d6a086b666bca88ba"
+    },
+    {
+      "ordinal": 12,
+      "name": "Y12",
+      "shape": [
+        1,
+        9
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_12.npy",
+      "npy_sha256": "81c1d5c80715601c0d4949bf509aa88032c612b7392f0e6e02e6ebf752d233d2"
+    },
+    {
+      "ordinal": 13,
+      "name": "Y13",
+      "shape": [
+        1,
+        7
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_13.npy",
+      "npy_sha256": "19424dedabcd5bb8edd68db888159e0fcb1b0ba9770ce3899c7ac5e7048edce0"
+    },
+    {
+      "ordinal": 14,
+      "name": "Y14",
+      "shape": [
+        1,
+        9,
+        7
+      ],
+      "dtype": "i8",
+      "comparison": "exact_int",
+      "reference_member": "output_14.npy",
+      "npy_sha256": "a12815b2c8c6c5bcbb901048a8f200b8cb8926aa29436d5962b7902783da4cce"
+    },
+    {
+      "ordinal": 15,
+      "name": "Y15",
+      "shape": [
+        1,
+        9,
+        7
+      ],
+      "dtype": "i8",
+      "comparison": "exact_int",
+      "reference_member": "output_15.npy",
+      "npy_sha256": "dd778470973d0d10f75e375cd4e62b2f232c29e2101c3d95df96bb19fdb42f5f"
+    }
+  ],
+  "arg_order": [
+    "I0",
+    "I1",
+    "I2",
+    "I3",
+    "I4",
+    "I5",
+    "I6",
+    "I7",
+    "Y0",
+    "Y1",
+    "Y2",
+    "Y3",
+    "Y4",
+    "Y5",
+    "Y6",
+    "Y7",
+    "Y8",
+    "Y9",
+    "Y10",
+    "Y11",
+    "Y12",
+    "Y13",
+    "Y14",
+    "Y15"
+  ],
+  "numeric_policy": {
+    "schema": "merlin.numeric_policy.per_output.v1",
+    "compare": "per_output",
+    "outputs": {
+      "Y0": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y1": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y2": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y3": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y4": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y5": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y6": {
+        "compare": "exact_int",
+        "dtype": "i8"
+      },
+      "Y7": {
+        "compare": "exact_int",
+        "dtype": "i8"
+      },
+      "Y8": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y9": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y10": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y11": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y12": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y13": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "Y14": {
+        "compare": "exact_int",
+        "dtype": "i8"
+      },
+      "Y15": {
+        "compare": "exact_int",
+        "dtype": "i8"
+      }
+    }
+  },
+  "arithmetic": {
+    "operands": "signed_i8",
+    "contractions": "exact_i32_source_results",
+    "intermediate_readout": "signed floor((wide+4)/8), followed by clamp[-128,127] and cast_i8 exactly where original source places it",
+    "arbitrary_new_quantization_allowed": false
+  },
+  "required_algorithmic_products": 714,
+  "boundary": {
+    "scope": "complete_source_call",
+    "includes": [
+      "packing",
+      "layouts",
+      "weight_transport",
+      "accelerator_transfers",
+      "command_issue",
+      "carried_state",
+      "all_live_outs"
+    ],
+    "timing": "NOT_MEASURED"
+  },
+  "qualification": {
+    "reconstructed_public_fixture": true,
+    "original_sealed_capture_or_admitted_capsule": false,
+    "V26_compilation": "NOT_RUN",
+    "V26_numerical_execution": "NOT_RUN",
+    "V26_source_realization": "NOT_QUALIFIED",
+    "V26_writer_admission": "NOT_ISSUED",
+    "fresh_host_capture_and_admission_required": true,
+    "formal_cohort": false
+  },
+  "limitations": [
+    "Development source already inspected; not heldout.",
+    "Complete integer QK/PV/cache graph is not softmax/FlashAttention or physicalKV residency."
+  ]
+}

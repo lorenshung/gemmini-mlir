@@ -1,0 +1,105 @@
+{
+  "schema": "gemmini.public_integer_fixture.v1",
+  "identity": "complete_public_parameter_chain_3MiB",
+  "source_role": "public_synthetic_development_fixture_not_validation",
+  "original_capsule_metadata_sha256": "feafb1eb0e551ade6d529f5a7b7fd2e7fe243d159335fce708bbae2a3d5d35b3",
+  "original_source_sha256": "cbeea17c18b4725426d4c5b75a57c6869ca968401384349ff5887d352f2e1767",
+  "typed_source_sha256": "1f3473c95913efd154960225892395d0493e6b2ac015d9fa243a227323af67a6",
+  "loader": "capsule.pytorch.py",
+  "loader_entry": "get_model_and_inputs",
+  "typed_source": "capsule.interface.mlir",
+  "weights": "capsule.weights.safetensors",
+  "weights_manifest": "capsule.weights.safetensors.manifest.json",
+  "reference": "independent-reference.npz",
+  "inputs": [
+    {
+      "ordinal": 0,
+      "name": "I0",
+      "shape": [
+        1,
+        1024
+      ],
+      "dtype": "i8",
+      "reference_member": "input_0.npy",
+      "npy_sha256": "786b5ef2e49abf96974bdfa5724cd474a15340285e364d252296b8e64f5705f9"
+    }
+  ],
+  "outputs": [
+    {
+      "ordinal": 0,
+      "name": "wide",
+      "shape": [
+        1,
+        1024
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_0.npy",
+      "npy_sha256": "af432cfeaf4993400dd139f1c9ca91a1f6bad7b37f14c574dbb1aaeb398479f2"
+    },
+    {
+      "ordinal": 1,
+      "name": "state",
+      "shape": [
+        1,
+        1024
+      ],
+      "dtype": "i8",
+      "comparison": "exact_int",
+      "reference_member": "output_1.npy",
+      "npy_sha256": "b6d1f35864b387db338b8de3811817532ec14002126a0011ac7afb1785e73e1b"
+    }
+  ],
+  "arg_order": [
+    "I0",
+    "wide",
+    "state"
+  ],
+  "numeric_policy": {
+    "schema": "merlin.numeric_policy.per_output.v1",
+    "compare": "per_output",
+    "outputs": {
+      "wide": {
+        "compare": "exact_int",
+        "dtype": "i32"
+      },
+      "state": {
+        "compare": "exact_int",
+        "dtype": "i8"
+      }
+    }
+  },
+  "arithmetic": {
+    "operands": "signed_i8",
+    "contractions": "exact_i32_source_results",
+    "intermediate_readout": "signed floor((wide+4)/8), followed by clamp[-128,127] and cast_i8 exactly where original source places it",
+    "arbitrary_new_quantization_allowed": false
+  },
+  "required_algorithmic_products": 3145728,
+  "boundary": {
+    "scope": "complete_source_call",
+    "includes": [
+      "packing",
+      "layouts",
+      "weight_transport",
+      "accelerator_transfers",
+      "command_issue",
+      "carried_state",
+      "all_live_outs"
+    ],
+    "timing": "NOT_MEASURED"
+  },
+  "qualification": {
+    "reconstructed_public_fixture": true,
+    "original_sealed_capture_or_admitted_capsule": false,
+    "V26_compilation": "NOT_RUN",
+    "V26_numerical_execution": "NOT_RUN",
+    "V26_source_realization": "NOT_QUALIFIED",
+    "V26_writer_admission": "NOT_ISSUED",
+    "fresh_host_capture_and_admission_required": true,
+    "formal_cohort": false
+  },
+  "limitations": [
+    "Synthetic parameter graph compiled historically, not V26execution evidence; all3weights and2liveouts required."
+  ]
+}

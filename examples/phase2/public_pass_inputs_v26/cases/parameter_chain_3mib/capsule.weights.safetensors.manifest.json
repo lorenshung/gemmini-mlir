@@ -1,0 +1,33 @@
+{
+  "0": {
+    "weight": "w0",
+    "kind": "param",
+    "dtype": "int8",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "1": {
+    "weight": "w1",
+    "kind": "param",
+    "dtype": "int8",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "2": {
+    "weight": "w2",
+    "kind": "param",
+    "dtype": "int8",
+    "shape": [
+      1024,
+      1024
+    ]
+  },
+  "3": {
+    "kind": "input",
+    "name": "x"
+  }
+}
