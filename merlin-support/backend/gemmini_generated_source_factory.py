@@ -13,6 +13,15 @@ def restore_registry(inputs, *, work_root):
 
 def original_factory(inputs, *, sources=()):
     names = ("gemmini_generated_source_diagnostic", "gemmini_generated_source_trace")
+    if (
+        inputs.get("source_binding_protocol")
+        == "gemmini.pointer_source_contractions.v1"
+    ):
+        names += (
+            "gemmini_direct_source_execution",
+            "gemmini_source_packet_artifacts",
+            "merlin.llvmlower.pointer_source_contractions",
+        )
     protocol = inputs.get("source_memory_effects_protocol")
     if protocol is not None:
         from gemmini_whole_program_memory_effects import require_protocol

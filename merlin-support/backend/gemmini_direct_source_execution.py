@@ -10,11 +10,15 @@ import hashlib
 import json
 from pathlib import Path
 from types import MethodType
+from weakref import WeakKeyDictionary
 
 import numpy as np
 import yaml
 from gemmini_source_execution import SourceExecutionOwner
-from gemmini_source_packet_artifacts import check_direct_execution_packets
+from gemmini_source_packet_artifacts import (
+    POINTER_CONTRACTIONS_PROTOCOL,
+    check_direct_execution_packets,
+)
 from gemmini_timing_resources import _pin
 from merlin.common import invocation_record
 from merlin.common.paths import module_source_path
@@ -24,12 +28,22 @@ from merlin.targetgen import native_model_execution as native
 from merlin.targetgen.golden_store import load_golden
 
 PROTOCOL = "merlin.native_pointer_source.v1"
+_OWNER_SELECTIONS = WeakKeyDictionary()
 
 
 class DirectSourceExecutionOwner(SourceExecutionOwner):
     def __init__(self, *, execution_contract, **kwargs):
-        if type(self) is not DirectSourceExecutionOwner:
+        if type(self) not in _OWNER_TYPES:
             raise TypeError("direct source proof requires its exact original owner")
+        _OWNER_SELECTIONS[self] = type(self)
+        try:
+            self._initialize(execution_contract, kwargs)
+        except BaseException:
+            _OWNER_SELECTIONS.pop(self, None)
+            raise
+
+    def _initialize(self, execution_contract, kwargs):
+        self._require_original_type()
         super().__init__(**kwargs)
         if (
             type(execution_contract) is not dict
@@ -51,15 +65,23 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             "merlin.targetgen.native_pointer_source_execution",
         ):
             self._pins[name] = _pin(module_source_path(name))
+        if type(self) is PointerContractionsExecutionOwner:
+            self._pins["merlin.llvmlower.pointer_source_contractions"] = _pin(
+                module_source_path("merlin.llvmlower.pointer_source_contractions")
+            )
         self._identity = self._digest()
         self.revalidate()
 
     @property
     def identity(self):
+        self._require_original_type()
+        if type(self) is PointerContractionsExecutionOwner:
+            return "gemmini.current_pointer_contractions_execution.v1:" + self._identity
         return "gemmini.current_direct_source_execution.v1:" + self._identity
 
     def revalidate(self):
-        if type(self) is not DirectSourceExecutionOwner:
+        self._require_original_type()
+        if type(self) not in _OWNER_TYPES:
             raise ValueError("direct source proof lost its original type")
         if (
             SourceExecutionOwner.revalidate is not _BASE_REVALIDATE
@@ -76,6 +98,31 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             ):
                 raise ValueError("direct source proof lost its original callback")
         _BASE_REVALIDATE(self)
+
+    def _require_original_type(self):
+        if (
+            _OWNER_SELECTIONS.get(self) is not type(self)
+            or type(self) not in _OWNER_TYPES
+        ):
+            raise ValueError(
+                "direct source proof changed its originally selected owner type"
+            )
+
+    def _digest(self):
+        self._require_original_type()
+        if (
+            SourceExecutionOwner._digest is not _BASE_DIGEST
+            or _BASE_DIGEST.__code__ is not _BASE_DIGEST_CODE
+        ):
+            raise ValueError("original base source digest changed")
+        protocol = (
+            POINTER_CONTRACTIONS_PROTOCOL
+            if type(self) is PointerContractionsExecutionOwner
+            else PROTOCOL
+        )
+        return hashlib.sha256(
+            json.dumps([_BASE_DIGEST(self), protocol]).encode()
+        ).hexdigest()
 
     def verify_source_execution(self, source_path, proof, capsule_dir):
         from merlin.targetgen.native_pointer_source_binding import bind_pointer_source
@@ -98,7 +145,15 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             raise ValueError(
                 "direct source proof differs from its complete original native artifacts"
             )
-        contraction = bind_direct_source_contraction(source_path, cb, proof)
+        multiple = type(self) is PointerContractionsExecutionOwner
+        if multiple:
+            from merlin.llvmlower.pointer_source_contractions import (
+                bind_pointer_source_contractions,
+            )
+
+            contractions = bind_pointer_source_contractions(source_path, cb, proof)
+        else:
+            contractions = (bind_direct_source_contraction(source_path, cb, proof),)
         interface = native._pinned_native_file(row["source"], "interface")
         if interface.read_bytes() != raw:
             raise ValueError(
@@ -235,6 +290,11 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             ],
             entry_symbol=selection["entry_symbol"],
             zero_fill=SelectedAccumulatorZeroFill(self._selected, self._arithmetic),
+            **(
+                {"source_binding_protocol": POINTER_CONTRACTIONS_PROTOCOL}
+                if multiple
+                else {}
+            ),
         )
         self.revalidate()
         return {
@@ -243,20 +303,40 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             "source_rule": self.source_rule(),
             "owner_identity": self.identity,
             "actual_packet_effects": packets,
-            "direct_source_binding": contraction,
+            **(
+                {"source_contractions": contractions}
+                if multiple
+                else {"direct_source_binding": contractions[0]}
+            ),
             "complete_output_values": sum(
                 np.asarray(v).size for v in golden["outputs"].values()
             ),
-            "scope": "one exact typed direct signed dot, real pointer inputs, complete actual products/readout/outputs and host-store veto",
-            "source_binding_protocol": PROTOCOL,
+            "scope": "exact typed direct signed dots, real pointer inputs, complete actual products/readout/outputs and host-store veto"
+            if multiple
+            else "one exact typed direct signed dot, real pointer inputs, complete actual products/readout/outputs and host-store veto",
+            "source_binding_protocol": POINTER_CONTRACTIONS_PROTOCOL
+            if multiple
+            else PROTOCOL,
             "hardware_execution_qualified": False,
             "timing_authority": "NONE",
             "general_dense_adapter_enabled": False,
         }
 
 
+class PointerContractionsExecutionOwner(DirectSourceExecutionOwner):
+    """Explicit independent-dot protocol; no casts, packing or derived operands.
+
+    Only this exact original class selects the separate typed multi-dot binder.
+    It shares the complete native/trace/output checks and every returned tensor's
+    host-store veto. It grants no timing or scheduling capability.
+    """
+
+
+_OWNER_TYPES = (DirectSourceExecutionOwner, PointerContractionsExecutionOwner)
 _BASE_REVALIDATE = SourceExecutionOwner.revalidate
 _BASE_REVALIDATE_CODE = _BASE_REVALIDATE.__code__
+_BASE_DIGEST = SourceExecutionOwner._digest
+_BASE_DIGEST_CODE = _BASE_DIGEST.__code__
 _ORIGINAL_API = tuple(
     (
         name,
@@ -265,9 +345,11 @@ _ORIGINAL_API = tuple(
     )
     for name in (
         "__init__",
+        "_initialize",
         "revalidate",
         "verify_source_execution",
         "source_rule",
         "_digest",
+        "_require_original_type",
     )
 )

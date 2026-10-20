@@ -13,6 +13,8 @@ from merlin.common import invocation_record
 from merlin.llvmlower.source_contraction_bindings import bind_rank_two_contractions
 from merlin.targetgen.elf_lanes import _section_headers
 
+POINTER_CONTRACTIONS_PROTOCOL = "gemmini.pointer_source_contractions.v1"
+
 
 def _cpu_writes(log, custom_opcode):
     result = []
@@ -120,6 +122,7 @@ def check_direct_execution_packets(
     expected_trace_argv,
     entry_symbol,
     zero_fill=None,
+    source_binding_protocol="merlin.native_pointer_source.v1",
 ):
     """Use the exact typed direct-source binding; never invent a global plan."""
     from gemmini_load_streams import SelectedLoadStreams
@@ -140,9 +143,23 @@ def check_direct_execution_packets(
             )
         zero_fill.revalidate()
 
-    contraction = Contraction(
-        **bind_direct_source_contraction(source, command_buffer, proof)
-    )
+    if source_binding_protocol == "merlin.native_pointer_source.v1":
+        contractions = (
+            Contraction(
+                **bind_direct_source_contraction(source, command_buffer, proof)
+            ),
+        )
+    elif source_binding_protocol == POINTER_CONTRACTIONS_PROTOCOL:
+        from merlin.llvmlower.pointer_source_contractions import (
+            bind_pointer_source_contractions,
+        )
+
+        contractions = tuple(
+            Contraction(**row)
+            for row in bind_pointer_source_contractions(source, command_buffer, proof)
+        )
+    else:
+        raise ValueError("unknown pointer source contraction protocol")
     abi = {
         f"tensor_{i}": (name, command_buffer["tensors"][name])
         for i, name in enumerate(command_buffer["compiler_pointer_abi"]["arguments"])
@@ -154,7 +171,7 @@ def check_direct_execution_packets(
         nm=nm,
         input_values=input_values,
         expected_trace_argv=expected_trace_argv,
-        contractions=(contraction,),
+        contractions=contractions,
         abi=abi,
         command_buffer=command_buffer,
         load_streams=load_streams,
@@ -191,7 +208,7 @@ def check_direct_execution_packets(
         outputs=[
             symbol(physical)
             for physical, (logical, _tensor) in abi.items()
-            if logical == contraction.output
+            if logical in {contraction.output for contraction in contractions}
         ],
         custom_opcode=selected.operand_observer().isa_constants("gemmini")[
             "CUSTOM_OPCODE"

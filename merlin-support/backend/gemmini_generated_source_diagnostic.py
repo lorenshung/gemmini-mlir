@@ -18,6 +18,7 @@ from gemmini_arithmetic_scope import IntegerArithmeticOwner
 from gemmini_generated_source_trace import observe_current_source
 from gemmini_selected_scheduling import SelectedSchedulingTarget
 from gemmini_source_execution import COMMIT_ONLY_PROTOCOL
+from gemmini_source_packet_artifacts import POINTER_CONTRACTIONS_PROTOCOL
 from gemmini_staged_dense_admission import StagedCompletionOwner
 from gemmini_staged_dense_capability import _digest
 from gemmini_timing_resources import _pin, _revalidate_sources
@@ -74,7 +75,11 @@ class GeneratedSourceDiagnosticIssuer:
                 "generated source diagnostics require explicit complete-commit V2 observation"
             )
         binding_protocol = inputs.get("source_binding_protocol", "whole_program")
-        if binding_protocol not in {"whole_program", "merlin.native_pointer_source.v1"}:
+        if binding_protocol not in {
+            "whole_program",
+            "merlin.native_pointer_source.v1",
+            POINTER_CONTRACTIONS_PROTOCOL,
+        }:
             raise ValueError("unknown generated-source binding protocol")
         memory_effects_protocol = inputs.get("source_memory_effects_protocol")
         if memory_effects_protocol is not None:
@@ -95,9 +100,16 @@ class GeneratedSourceDiagnosticIssuer:
 
         owner_type = SourceExecutionOwner
         if binding_protocol != "whole_program":
-            from gemmini_direct_source_execution import DirectSourceExecutionOwner
+            from gemmini_direct_source_execution import (
+                DirectSourceExecutionOwner,
+                PointerContractionsExecutionOwner,
+            )
 
-            owner_type = DirectSourceExecutionOwner
+            owner_type = (
+                PointerContractionsExecutionOwner
+                if binding_protocol == POINTER_CONTRACTIONS_PROTOCOL
+                else DirectSourceExecutionOwner
+            )
         if (
             inputs.get(
                 "metadata_verification_protocol", "merlin.pass_metadata_operation.v1"
@@ -186,6 +198,10 @@ class GeneratedSourceDiagnosticIssuer:
                     )
                 }
             )
+            if binding_protocol == POINTER_CONTRACTIONS_PROTOCOL:
+                sources["merlin.llvmlower.pointer_source_contractions"] = _pin(
+                    module_source_path("merlin.llvmlower.pointer_source_contractions")
+                )
         if memory_effects_protocol is not None:
             sources.update(
                 {
@@ -382,9 +398,16 @@ class GeneratedSourceDiagnosticIssuer:
 
         expected_type = SourceExecutionOwner
         if state["binding_protocol"] != "whole_program":
-            from gemmini_direct_source_execution import DirectSourceExecutionOwner
+            from gemmini_direct_source_execution import (
+                DirectSourceExecutionOwner,
+                PointerContractionsExecutionOwner,
+            )
 
-            expected_type = DirectSourceExecutionOwner
+            expected_type = (
+                PointerContractionsExecutionOwner
+                if state["binding_protocol"] == POINTER_CONTRACTIONS_PROTOCOL
+                else DirectSourceExecutionOwner
+            )
         if (
             state["owner_type"] is not expected_type
             or state["execution_contract"]

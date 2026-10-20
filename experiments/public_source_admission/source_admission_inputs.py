@@ -172,11 +172,22 @@ def reopen_plan(declaration, intake):
 
 def select_abi(command_buffer, inputs, execution_contract):
     """Select original execution owners from emitted ABI; never modify its program."""
+    requested = inputs.get("source_binding_protocol", "whole_program")
+    if type(requested) is not str or requested not in {
+        "whole_program",
+        "merlin.native_pointer_source.v1",
+        "gemmini.pointer_source_contractions.v1",
+    }:
+        raise ValueError("unknown requested source binding protocol")
     chosen = json.loads(json.dumps(inputs))
     chosen.pop("source_binding_protocol", None)
     chosen.pop("execution_contract", None)
     abi = command_buffer.get("kernel_abi")
     if type(abi) is dict and abi.get("kind") == "whole_program":
+        if requested == "gemmini.pointer_source_contractions.v1":
+            raise ValueError(
+                "selected pointer contractions protocol requires the emitted pointer ABI"
+            )
         chosen["source_binding_protocol"] = "whole_program"
         return "whole_program", chosen
     pointer = command_buffer.get("compiler_pointer_abi")
@@ -186,11 +197,17 @@ def select_abi(command_buffer, inputs, execution_contract):
         and type(pointer.get("version")) is int
         and pointer["version"] == 1
     ):
+        protocol = (
+            "gemmini.pointer_source_contractions.v1"
+            if inputs.get("source_binding_protocol")
+            == "gemmini.pointer_source_contractions.v1"
+            else "merlin.native_pointer_source.v1"
+        )
         chosen.update(
-            source_binding_protocol="merlin.native_pointer_source.v1",
+            source_binding_protocol=protocol,
             execution_contract=execution_contract,
         )
-        return "merlin.native_pointer_source.v1", chosen
+        return protocol, chosen
     raise ValueError("emitted ABI has no original checked source execution route")
 
 

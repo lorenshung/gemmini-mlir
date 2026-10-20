@@ -34,7 +34,7 @@ def observe_current_source(
         or json.loads(paths[0].read_bytes())
         .get("pointer_execution", {})
         .get("protocol")
-        != state["binding_protocol"]
+        != "merlin.native_pointer_source.v1"
     ):
         raise ValueError(
             "direct source observation requires its explicit original native execution record"

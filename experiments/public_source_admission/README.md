@@ -77,3 +77,22 @@ The operator output is private setup/verification evidence. Only an actually
 published capsule is a public writer result. Neither that result nor this CLI
 establishes formal full-cohort or hardware/timing qualification. Guard/objective
 membership and historical refusals remain in the complete original plan.
+
+An operator may explicitly select
+`source_binding_protocol: gemmini.pointer_source_contractions.v1` in a **new**
+`factory_inputs` release. This separate source checker accepts multiple
+zero-initialized signed-i8/i32 rank-two contractions with immutable function
+inputs and complete distinct returned outputs. The source return order must
+match the actual positional pointer ABI, including each shape and type. It
+does not infer ownership from compiler tensor-name suffixes, fabricate a global
+plan, or accept casts, packed operands, unreturned computations or intermediate
+arithmetic. The existing single-dot protocol remains the default.
+
+The new owner reuses the complete native/source/reference checks and original
+packet engine for every contraction, and checks CPU writes to **every** returned
+output during the original call. Its source closure is frozen before factory
+restoration; constructor type/protocol, callbacks and artifact identities are
+revalidated. A new source release and fresh execution evidence are required;
+old refusals and owners are never repinned or upgraded. This interface does not
+qualify scheduling capabilities, hardware execution or timing, and does not
+change the compiler package or the selected numerical policy.

@@ -122,13 +122,18 @@ def test_direct_protocol_refuses_old_native_schema_before_process(generated):
     assert not calls and not (f.root / "trace").exists()
 
 
+@pytest.mark.parametrize(
+    "source_protocol",
+    ["merlin.native_pointer_source.v1", "gemmini.pointer_source_contractions.v1"],
+)
 def test_direct_protocol_preserves_current_native_record_and_selected_contract(
     generated,
+    source_protocol,
 ):
     import json
 
     T, f, owner, state, calls = generated
-    state["binding_protocol"] = "merlin.native_pointer_source.v1"
+    state["binding_protocol"] = source_protocol
     state["execution_contract"] = {
         "path": str(f.source),
         "sha256": "neutral original pin",
@@ -136,7 +141,7 @@ def test_direct_protocol_preserves_current_native_record_and_selected_contract(
     row = json.loads(f.result.read_bytes())
     row.update(
         schema="merlin_candidate_native_pointer_source_v1",
-        pointer_execution={"protocol": state["binding_protocol"]},
+        pointer_execution={"protocol": "merlin.native_pointer_source.v1"},
     )
     f.result.write_text(json.dumps(row))
     T.observe_current_source(
