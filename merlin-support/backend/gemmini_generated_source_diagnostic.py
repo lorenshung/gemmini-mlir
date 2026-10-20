@@ -304,6 +304,20 @@ class GeneratedSourceDiagnosticIssuer:
             or state["owner_init"].__code__ is not state["owner_init_code"]
         ):
             raise ValueError("original generated-source effect constructor changed")
+        from gemmini_source_execution import SourceExecutionOwner
+
+        expected_type = SourceExecutionOwner
+        if state["binding_protocol"] != "whole_program":
+            from gemmini_direct_source_execution import DirectSourceExecutionOwner
+
+            expected_type = DirectSourceExecutionOwner
+        if (
+            state["owner_type"] is not expected_type
+            or state["execution_contract"]
+            != state["input_pins"].get("execution_contract")
+            or state["protocol"] != COMMIT_ONLY_PROTOCOL
+        ):
+            raise ValueError("original generated-source execution selection changed")
         return state
 
     @property

@@ -252,3 +252,19 @@ def test_direct_protocol_is_explicit_and_selects_only_original_direct_owner(
         M.GeneratedSourceDiagnosticIssuer(
             dict(direct, source_binding_protocol="foreign")
         )
+
+
+@pytest.mark.parametrize("field", ["execution_contract", "owner_type", "protocol"])
+def test_forwarded_execution_selection_cannot_drift(issued, field):
+    M, owner, *_ = issued
+    state = M._ISSUED[owner]
+    if field == "execution_contract":
+        state[field] = {"path": "/foreign", "sha256": "foreign"}
+    elif field == "owner_type":
+        from gemmini_direct_source_execution import DirectSourceExecutionOwner
+
+        state[field] = DirectSourceExecutionOwner
+    else:
+        state[field] = "gemmini.source_observation.v1"
+    with pytest.raises(ValueError):
+        owner.revalidate()
