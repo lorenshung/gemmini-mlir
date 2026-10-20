@@ -7,6 +7,20 @@ and copies each complete source file without rewriting. It also copies the
 canonical quant schema and pin. A source manifest records every copied hash.
 An existing destination refuses, so stale host files cannot leak into a package.
 
+Export requires `MERLIN_COMPILER_PYTHON=/absolute/venv/bin/python`. The generated
+executable pins that exact path in its shebang, with Python's `-I` isolation;
+runtime PATH, PYTHONPATH and PYTHONHOME do not select the interpreter or imports.
+The exporter checks that this interpreter can import xdsl before creating the
+package. It preserves the venv executable path without resolving its symlink:
+invoking the underlying system binary would lose the venv's site-packages.
+`python_interpreter` in both `manifest.yaml` and `source-manifest.json` records
+`path`, `version` (the complete `sys.version`), executable-byte `sha256`,
+`flags`, `prefix` and `base_prefix`. These are export-time identity records;
+they do not freeze installed dependencies or enforce immutability at runtime.
+The grader must grant the venv, its base interpreter and dependency paths at
+their original locations. Re-export after changing the selected environment.
+Paths containing whitespace or exceeding the Linux shebang limit refuse.
+
 The package declares the four ordinary compiler entrypoints (parse, interface
 lowering, command-buffer emission, target-artifact emission) under the existing
 experiment ABI with `integrity_exempt: false`. It is independent of Merlin.

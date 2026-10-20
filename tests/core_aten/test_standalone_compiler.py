@@ -34,8 +34,62 @@ def test_vendored_helpers_are_exact_extractions():
 
 
 @pytest.fixture
-def package(tmp_path):
+def package(tmp_path, monkeypatch):
+    monkeypatch.setenv('MERLIN_COMPILER_PYTHON', os.environ.get('MERLIN_COMPILER_PYTHON', sys.executable))
     return exporter().export(tmp_path/'compiler')
+
+
+def test_export_records_interpreter_and_venv_context(package):
+    import hashlib
+    import yaml
+    metadata = yaml.safe_load((package/'manifest.yaml').read_text())['python_interpreter']
+    selected = os.environ['MERLIN_COMPILER_PYTHON']
+    assert metadata['path'] == selected
+    assert metadata['sha256'] == hashlib.sha256(Path(selected).read_bytes()).hexdigest()
+    probe = subprocess.check_output([selected, '-I', '-c',
+        'import json,sys; print(json.dumps([sys.version,sys.prefix,sys.base_prefix]))'], text=True)
+    assert [metadata[k] for k in ('version', 'prefix', 'base_prefix')] == json.loads(probe)
+    assert metadata['flags'] == ['-I']
+    assert (package/'gemmini-opt').read_text().splitlines()[0] == f'#!{selected} -I'
+    assert json.loads((package/'source-manifest.json').read_text())['python_interpreter'] == metadata
+
+
+@pytest.mark.parametrize('selected', [None, 'python3'])
+def test_export_requires_explicit_absolute_interpreter(tmp_path, monkeypatch, selected):
+    monkeypatch.delenv('MERLIN_COMPILER_PYTHON', raising=False)
+    if selected is not None:
+        monkeypatch.setenv('MERLIN_COMPILER_PYTHON', selected)
+    with pytest.raises(ValueError, match='explicitly name an absolute'):
+        exporter().export(tmp_path/'compiler')
+    assert not (tmp_path/'compiler').exists()
+
+
+def test_export_runs_from_clean_environment_with_chipyard_python_first(package, tmp_path, matmul_input):
+    # The actual failing deployment environment, or a dependency-free Python
+    # stand-in on installations without Chipyard. Never invoke the tool through
+    # sys.executable: that would bypass the shebang this regression exercises.
+    conda = Path('/scratch2/loren/chipyard/.conda-env/bin')
+    if not (conda/'python3').exists():
+        conda = tmp_path/'wrong-python'; conda.mkdir()
+        (conda/'python3').write_text('#!/bin/sh\nexit 99\n')
+        (conda/'python3').chmod(0o755)
+    env = {'PATH': str(conda)+':/usr/bin:/bin'}
+    wrong = subprocess.run(['python3', '-c', 'import xdsl'], env=env, capture_output=True)
+    assert wrong.returncode != 0, 'regression environment must lack xdsl on PATH'
+    cb = tmp_path/'commands.json'
+    args = ['--convert-iface-to-gemmini', '--emit-target-artifact',
+            f'--emit-command-buffer={cb}', str(matmul_input)]
+    run = subprocess.run([str(package/'gemmini-opt'), *args], env=env, cwd=tmp_path,
+                         capture_output=True, text=True)
+    assert run.returncode == 0, run.stderr
+    baseline = subprocess.run([os.environ['MERLIN_COMPILER_PYTHON'], '-I',
+                               str(package/'gemmini-opt'), *args], env=env, cwd=tmp_path,
+                              capture_output=True, text=True)
+    assert baseline.returncode == 0, baseline.stderr
+    assert run.stdout == baseline.stdout
+    assert 'llvm.func' in run.stdout
+    assert json.loads(cb.read_text())['commands']
+    assert not list(package.rglob('__pycache__'))
 
 
 def test_export_copies_complete_import_closure_without_rewriting(package):
@@ -94,7 +148,8 @@ def test_pipeline_refactor_is_identical_to_vcs_engine_head():
         assert ast.dump(a)==ast.dump(b)
 
 
-def test_standalone_compiles_general_single_tile_matmul_interface(package,tmp_path):
+@pytest.fixture
+def matmul_input(tmp_path):
     source=tmp_path/'matmul.mlir'
     source.write_text('''module attributes {merlin_iface.version = "0.1", merlin_iface.target = "gemmini", merlin_iface.abi_version = "0.1"} {
  %a = merlin_iface.tensor {name = "a", role = "input"} : tensor<16x16xi8>
@@ -104,8 +159,12 @@ def test_standalone_compiles_general_single_tile_matmul_interface(package,tmp_pa
  %y = merlin_iface.commit %acc {name = "y", epilogue = [], output_dtype = "i32"} : (!merlin_iface.acc<i32>) -> tensor<16x16xi32>
  merlin_iface.evict %r : (!merlin_iface.resident) -> ()
 }''')
+    return source
+
+
+def test_standalone_compiles_general_single_tile_matmul_interface(package,tmp_path,matmul_input):
     cb=tmp_path/'matmul.json'
-    run=subprocess.run([sys.executable,str(package/'gemmini-opt'),'--convert-iface-to-gemmini','--emit-target-artifact',f'--emit-command-buffer={cb}',str(source)],capture_output=True,text=True)
+    run=subprocess.run([sys.executable,str(package/'gemmini-opt'),'--convert-iface-to-gemmini','--emit-target-artifact',f'--emit-command-buffer={cb}',str(matmul_input)],capture_output=True,text=True)
     assert run.returncode==0,run.stderr
     commands=json.loads(cb.read_text())['commands']
     assert any(c['opcode']=='MATMUL_RESIDENT' for c in commands)
