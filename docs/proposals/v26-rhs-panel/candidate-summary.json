@@ -1,0 +1,138 @@
+{
+  "cycle_or_fullmodel_gain": null,
+  "default_enabled": false,
+  "disabled_patch": {
+    "path": "/work/merlin/tasks/phase2-target-adapters-20261019/gemmini-mlir/docs/proposals/v26-rhs-panel/candidate.patch.disabled",
+    "sha256": "42f5493d5a448abd18c448e0a7e54b22857a08f39d82dd5ee7391b20f5a55158",
+    "size_bytes": 10272
+  },
+  "disabled_untested_composition_draft": {
+    "path": "/work/merlin/tasks/phase2-target-adapters-20261019/gemmini-mlir/docs/proposals/v26-rhs-panel/composition-preparer.py.txt",
+    "sha256": "454e113f8b5475cea38cb45224553bff28f4c9d9feea4bb2e195eaeb5b6db3c0",
+    "size_bytes": 5555
+  },
+  "draft_safety": "Text only. Not imported/collected/executed. No tested composition or no-overwrite/filesystem-safety claim. Review and test before any prospective use.",
+  "existing_library": {
+    "SDK_sha256": "cf9f09e70e849af036fe954f6b6103f02b6956b39c544e8e609ab98d36755868",
+    "contract_sha256": "82c7b18ad2df3704e864340275398a56bf811101b3f5d7b22a5c9979ae2ca8db",
+    "new_grants_issued": false
+  },
+  "existing_static_test_result": {
+    "CPU_seconds": 8.120146257,
+    "actual_shared_CPU": 24,
+    "cost": {
+      "path": "/work/merlin/tasks/phase2-target-adapters-20261019/out/artifacts/target-adapters/gemmini/v26-rhs-panel-proposal-v3/test-cost.json",
+      "sha256": "4891bdd0dd6c661b4d01c482b40947ba80fae9e70ef12602628b65d4f4c40d40",
+      "size_bytes": 275
+    },
+    "tests_passed": 25,
+    "wall_seconds": 8.152869259996805
+  },
+  "factory_or_library_registration_added": false,
+  "final_host_test_result": {
+    "CPU_seconds": 7.827633748,
+    "actual_shared_cpus": [
+      24
+    ],
+    "exit_code": 0,
+    "result": {
+      "path": "/work/merlin/tasks/phase2-target-adapters-20261019/out/artifacts/target-adapters/gemmini/v26-rhs-panel-proposal-final-host/test-cost.json",
+      "sha256": "6e5661b921f6f22e112af2ab216faa9492f808cb40ba88b53264d905cafb6aab"
+    },
+    "scope": "static Python original-emitter+existing independent source packet and shared numeric checks only; no compiler/native/Spike/target/fits",
+    "tests_passed": 25,
+    "wall_seconds": 7.828499991010176
+  },
+  "immutable_prospective_candidate": {
+    "changed_original_files": [
+      "backend.py",
+      "contraction.py"
+    ],
+    "inventory": {
+      "path": "/work/merlin/tasks/phase2-target-adapters-20261019/out/artifacts/target-adapters/gemmini/v26-rhs-panel-proposal-v3/candidate-inventory.json",
+      "sha256": "aeb2dc50a992a70549d5ac7c2f0e1520f75529ec88fd6ca32572388c6d717aa5",
+      "size_bytes": 7155
+    },
+    "manifest_unchanged": true,
+    "n_files": 17,
+    "new_file": "rhs_panel.py",
+    "path": "/work/merlin/tasks/phase2-target-adapters-20261019/out/artifacts/target-adapters/gemmini/v26-rhs-panel-proposal-v3/candidate",
+    "source_inventory_sha256": "c6745e1650b6a8f90d6cf40344ac7e2de5e90d519fbf449936e8dfc4ca817911"
+  },
+  "implementation": {
+    "path": "/work/merlin/tasks/phase2-target-adapters-20261019/gemmini-mlir/merlin-support/backend/gemmini_v26_rhs_panel.py",
+    "sha256": "0e98be5e5642ea8eff20b25fbcaec8519aa955a054f8cb431a98abeeb2fce88b",
+    "size_bytes": 8424
+  },
+  "native_execution": "NOT_RUN",
+  "new_compiler_jobs": 0,
+  "original_compiler_package_sha256": "29213759089b71de26f8a5ab26ca6ef1b8071dc0bb690041eb7de5d0efb53f24",
+  "policy": "shape/resource/request-benefit choice; completeK, oneNstripe, multipleM accumulator slots; no model/workload-ID flags",
+  "promotion_authority": "NONE",
+  "required_future_checks": [
+    "original copied-source edit/preparation authority and equal SDK binding",
+    "final actual ELF/ISA all15 raw-loop prohibition audit",
+    "complete original numerical and independent-reference checks",
+    "live source/actual-packet and accumulator/private-storage/alias ownership checks",
+    "same-evaluator baseline/candidate control and negative shapes/resources",
+    "timing-domain/held evidence before qualified prediction or promotion"
+  ],
+  "resource_source": {
+    "DIM": 16,
+    "accumulator_rows": 1024,
+    "facts_sha256": "b8ff28edc096392cec356f9fececdf17ba70cd3e4b02e6c5931aedc43bb117af",
+    "operand_rows": 16384,
+    "physical_overlap_completion_claim": false,
+    "separate_accumulator_view": true
+  },
+  "schema": "gemmini.experimental_rhs_panel_delivery.v1",
+  "shared_algorithms": [
+    "merlin.transforms.dense_planning.choose_dense_block",
+    "merlin.compile.scheduling.block_schedule.schedule_contraction",
+    "merlin.compile.scheduling.block_schedule.check_residency"
+  ],
+  "source_reuse_witnesses": [
+    "original190:96",
+    "original190:127"
+  ],
+  "static_tests": {
+    "path": "/work/merlin/tasks/phase2-target-adapters-20261019/gemmini-mlir/merlin-support/tests/test_v26_rhs_panel.py",
+    "sha256": "3c3325b08e187a630cc660e1fcecf48cd4303d12498e58695a19aabdda94aa3b",
+    "size_bytes": 11064
+  },
+  "static_witnesses": [
+    [
+      17,
+      16,
+      32
+    ],
+    [
+      64,
+      256,
+      64
+    ],
+    [
+      64,
+      464,
+      48
+    ],
+    [
+      81,
+      641,
+      63
+    ],
+    [
+      33,
+      33,
+      529
+    ],
+    [
+      32,
+      1041,
+      17
+    ]
+  ],
+  "status": "UNENABLED_EXPERIMENTAL_STATIC_ONLY",
+  "target_jobs": 0,
+  "timing_qualified": false
+}
