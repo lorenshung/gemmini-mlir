@@ -171,7 +171,6 @@ class Stream:
     readouts: list = field(default_factory=list)
     packs: list = field(default_factory=list)
     bitwise: bool = False
-    constant_layouts: list = field(default_factory=list)
 
     def __post_init__(self):
         self._index = {a.name: i for i, a in enumerate(self.args)}

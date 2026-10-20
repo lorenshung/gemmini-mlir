@@ -67,29 +67,24 @@ This rule needs the proved identity map, unit integer weights and zero constant;
 it does not move a ReLU across a negative factor or arbitrary host expression.
 Other ReLUs remain at their explicit source/host boundary.
 
-### requant-A
+### Phase 1 plain exact host readout
 
-`kernels[].meta.host_requantization_proofs` records `requant-A-v1` certificates
-per output/parameter class, including independent channel/frozen-bias parameters.
-Put multi-term rationals over a common denominator, factor the coefficient gcd,
-and form an exact integer normal form `x`. Bound each product and partial sum
-and choose a sufficiently wide host integer type **before** narrowing.
+The emitter records `host_readout_contract="exact_rational_RNE_v1"` in kernel
+metadata and `gemmini.host_readout_contract` on an emitted module with readouts.
+It puts each exact rational expression over a common positive denominator.
+Host integer widths cover the entire signed-int32 domain of every input tile,
+the constant, twice the numerator and all half-integer output boundaries.
+A bounded search compares that exact numerator to half-integer boundaries,
+including parity at a tie; it implements the equation above without FP or an
+intermediate rounding. No multiply-shift approximation, stored transition table,
+per-channel algorithm certificate or recorded reachable-range specialization is
+used. Channel, broadcast, permutation and placement semantics are unchanged.
 
-The preferred certified form is `v=clamp(x,L,H); q=(v*M+B) >> S`, with arithmetic
-right shift and optional final output clamp. `M>=0`, `0<=S<=62`; products and
-product-plus-bias endpoints separately fit signed i64. It implements exactly
-`clamp(RNE(x*ratio+offset)+zero_point)` (and any requested real-domain ReLU).
-Exact monotone transition boundaries, their neighbors and domain/band endpoints
-prove every value, including ties. Imported certificates are revalidated.
-If no safe affine candidate exists, `threshold_table` stores exact transitions
-and evaluates `quant_min + upper_bound(thresholds,x)`; duplicate transitions are
-intentional. Neither path uses FP division or a second rounding.
-
-Optional `readout_pipeline` metadata describes two private int32 slots and
-`ready_after`/`host_after` primitive boundaries. A fence makes a tile readable;
-commands may write the other slot while the CPU consumes it, and reuse follows
-the last consumer. Unproved dependencies/layouts retain serial fenced readout.
-See [the full certificate/overlap contract](docs/requant_A_contract.md).
+Readouts execute serially at their fenced `after` boundary (or after the complete
+stream). There are no overlap slots, slot offsets, partial-index parameters or
+`readout_pipeline`/`host_requantization_proofs` records. Each complete private i32
+tile remains available for its host consumers. Merlin-owned retained-source
+readouts are unchanged; this emitter contract applies to provider-owned readouts.
 
 ## F1, F2, F4 and quantized movement
 
@@ -172,8 +167,10 @@ loop tree directly; hazard lint and encoding checks stream its expansion.
 Digests authenticate canonical loop descriptors, proofs and source bindings.
 DMA widths/strides, scratchpad capacity, element boundaries and HW3/HW4 fences
 remain target legality requirements. Singleton axes may be removed only after
-bounds proof; contiguous axes may be coalesced. Literal layout transforms fold
-at compile time with byte hashes instead of runtime movement.
+bounds proof; contiguous axes may be coalesced. Literal layout transforms use
+the ordinary DMA schedule. There is no `constant_folds` manifest record; a
+literal-only movement still has a real device binding and object. Encoding
+literal input bytes and unsigned XOR packing remain required ABI operations.
 
 `Readout.after` records the fenced primitive boundary before subsequent DMA
 reads host-converted storage. Optional `placement` gives a shape/stride/offset
@@ -188,3 +185,14 @@ other specialized maps retain their documented limits. These are compiler
 budgets, not RTL capacity claims. Unsupported forms decline before uncontrolled
 materialization. Final-ELF audits must still find unit data-path scales and no
 narrowed accumulator readouts; scratchpad byte MVOUT is valid movement.
+
+## Phase 1 placement
+
+This provider has no cost gate or profitability policy. A native family needs
+its semantic constraints, source-bound exactness proof and legal target schedule.
+No runtime samples or expected outputs establish those proofs. Unsupported or
+unsafe constructions decline with a reason. Generic hack detection and native
+dtype semantics are Merlin obligations; a provider proof never waives them.
+Structural compact DMA loops remain because supported model-size layouts need
+them to fit compiler memory/code-generation budgets. Literal folding and the
+requant-A performance implementation are preserved only on `gemmini-perf`.

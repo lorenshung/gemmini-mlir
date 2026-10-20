@@ -433,7 +433,6 @@ class Program:
                 s.readouts.append(replace(r,out=mapping[r.out],terms=[(mapping[n],f) for n,f in r.terms],
                     permutations={mapping[n]:v for n,v in (r.permutations or {}).items()},
                     broadcasts={mapping[n]:v for n,v in (r.broadcasts or {}).items()},
-                    source_offsets={mapping[n]:v for n,v in (r.source_offsets or {}).items()},
                     after=start+(len(ks.ins) if r.after is None else r.after)))
         s.fence()
         return s
@@ -509,8 +508,6 @@ def build(module, text: str | None = None) -> tuple[dict, object, Stream]:
                 opcode, operands = "WINDOW_SUM", {"src": srcs[0]}
         except (Decline, ValueError, NotImplementedError) as exc:
             raise IfaceDecline(f"{m}: {exc}", m, dst_shape) from exc
-        from .readout_pipeline import prepare
-        prepare(k.stream, k.meta)
         ins_args = [x.name for x in k.stream.args if x.role == "input"]
         if len(ins_args) != len(srcs):
             raise IfaceDecline(f"{m}: kernel reads {len(ins_args)} operands, the op has {len(srcs)}", m)

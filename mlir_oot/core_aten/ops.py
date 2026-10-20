@@ -64,8 +64,6 @@ def _end(op, s, **meta) -> Kernel:
         if instruction.kind not in ('config_ld','config_st'): continue
         factor=instruction.a('scale') if instruction.kind=='config_ld' else instruction.a('acc_scale')
         require(factor == 1, 'nonunit device scale requires an exact integer schedule and host requantization')
-    if s.constant_layouts:
-        meta['constant_layout_proofs']=s.constant_layouts
     meta['fp32_product_proofs']=[]
     return Kernel(op, s, meta)
 
@@ -364,16 +362,6 @@ def _permute_into(s: Stream, x: str, shape, out: str, perm) -> None:
     from . import layout
     require(x != out, 'internal layout permutation requires distinct buffers')
     require(sorted(perm)==list(range(len(shape))), 'invalid internal layout permutation')
-    if x in s.consts:
-        from hashlib import sha256
-        source = s.consts[x].reshape(shape)
-        transformed = np.ascontiguousarray(source.transpose(perm))
-        s.bind_constant(out,transformed)
-        s.constant_layouts.append(dict(source=x,destination=out,shape=list(shape),permutation=list(perm),
-            source_storage_sha256=sha256(source.tobytes()).hexdigest(),
-            result_storage_sha256=sha256(transformed.tobytes()).hexdigest(),
-            proof='literal_byte_permutation',runtime_instructions=0))
-        return
     strides = layout.dense_strides(shape)
     layout.move(s,(x,0),(out,0),tuple(shape[p] for p in perm),tuple(strides[p] for p in perm))
 

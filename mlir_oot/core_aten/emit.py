@@ -114,8 +114,7 @@ def verify_forms(stream: Stream) -> int:
 class _Emitter:
     def __init__(self, stream: Stream, symbol: str, meta=None):
         self.meta = meta if meta is not None else {}
-        self.meta["host_requantization_proofs"] = []
-        self.meta["host_readout_contract"] = "requant-A-v1"
+        self.meta["host_readout_contract"] = "exact_rational_RNE_v1"
         self.stream = stream
         self.symbol = symbol
         self.ptr_type = PTR
@@ -223,12 +222,9 @@ def instruction_tree(instructions):
     return nodes(instructions.nodes)
 
 
-def build_module(stream: Stream, symbol: str, *, check_expand: bool = True, meta=None, pipeline: bool = True) -> tuple[ModuleOp, list]:
+def build_module(stream: Stream, symbol: str, *, check_expand: bool = True, meta=None) -> tuple[ModuleOp, list]:
     if meta is None:
         meta = {}
-    if pipeline:
-        from .readout_pipeline import prepare
-        prepare(stream, meta)
     from .reroll import iter_expand
     from itertools import zip_longest
     tree = instruction_tree(stream.ins)
@@ -238,8 +234,7 @@ def build_module(stream: Stream, symbol: str, *, check_expand: bool = True, meta
     module = _Emitter(stream, symbol, meta).module(tree)
     module.attributes["gemmini.core_aten_kernel"] = StringAttr(symbol)
     if stream.readouts:
-        module.attributes["gemmini.host_readout_contract"] = StringAttr("requant-A-v1")
-        module.attributes["gemmini.host_requantization_proofs"] = StringAttr(json.dumps(meta["host_requantization_proofs"], sort_keys=True))
+        module.attributes["gemmini.host_readout_contract"] = StringAttr("exact_rational_RNE_v1")
     return module, tree
 
 

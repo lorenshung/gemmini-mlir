@@ -1504,7 +1504,7 @@ def _bind_dense_layouts(match):
     match.operands[:] = [(name,value) for name,value in match.operands if name not in constant_names]
 
 
-def match_all(module, *, constant_folds=None) -> tuple[list[Match], list[dict]]:
+def match_all(module) -> tuple[list[Match], list[dict]]:
     """Every matched region in program order, plus recorded declines (with reasons)."""
     from .integer_regions import match_integer_region, has_integer_readout
     from functools import partial
@@ -1517,11 +1517,7 @@ def match_all(module, *, constant_folds=None) -> tuple[list[Match], list[dict]]:
     from .liveness import live_source_ops, live_bindings
     from .quantized_movement import match as match_quantized_movement
     from .layout_match import native as match_native_layout, describe as describe_layout, internal_view
-    from .constant_dma import specialize
     ordinals = {op: i for i, op in enumerate(module.walk())}
-    folds = specialize(module, ordinals)
-    if constant_folds is not None:
-        constant_folds.extend(folds)
     live = live_source_ops(module)
     matches, declines = [], []
     quantized_module = any(name_of(o).startswith('quant_ext.') for o in module.walk())

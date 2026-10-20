@@ -1,15 +1,9 @@
-"""requant-A host epilogues: exact clamp/multiply/add/shift or threshold table."""
-from fractions import Fraction
-from math import gcd, lcm
-from functools import reduce
+"""Plain exact rational host RNE; widths cover every full-int32 input."""
+from math import lcm
 
 import numpy as np
 from xdsl.dialects import llvm
-from xdsl.dialects.builtin import DenseIntOrFPElementsAttr, TensorType, IntegerAttr, IntegerType, DenseArrayBase, i8, i32, i64
-from xdsl.ir import Block, Region
-from ..codegen.builder import iconst
-from .requant_a import plan, validate
-from .readout_bounds import interval
+from xdsl.dialects.builtin import DenseIntOrFPElementsAttr, TensorType, IntegerAttr, IntegerType, i8, i32, i64
 from .exactness import rational
 
 
@@ -32,24 +26,8 @@ def emit(emitter, readouts=None):
     def table(values, typ, suffix):
         name = f"{emitter.symbol}__{suffix}_{len(emitter.globals)}"
         array = llvm.LLVMArrayType(len(values), typ)
-        if typ.bitwidth <= 64:
-            global_op = llvm.GlobalOp(array, name, 'internal', constant=True,
-                value=DenseIntOrFPElementsAttr.from_list(TensorType(typ, [len(values)]), values), alignment=64)
-        else:
-            # xDSL's dense packing supports only <=64-bit elements. LLVM's
-            # typed initializer region supports exact wider thresholds too.
-            block = Block()
-            undef = llvm.UndefOp(array)
-            block.add_op(undef)
-            value = undef.results[0]
-            for i, number in enumerate(values):
-                literal = iconst(number, typ)
-                block.add_op(literal)
-                insert = llvm.InsertValueOp(DenseArrayBase.from_list(i64, [i]), value, literal.results[0])
-                block.add_op(insert)
-                value = insert.results[0]
-            block.add_op(llvm.ReturnOp(value))
-            global_op = llvm.GlobalOp(array, name, 'internal', constant=True, alignment=64, body=Region(block))
+        global_op = llvm.GlobalOp(array, name, 'internal', constant=True,
+            value=DenseIntOrFPElementsAttr.from_list(TensorType(typ, [len(values)]), values), alignment=64)
         emitter.globals.append(global_op)
         return fb.add(llvm.AddressOfOp(name, emitter.ptr_type)).results[0]
 
@@ -63,7 +41,7 @@ def emit(emitter, readouts=None):
         uniform = all(np.ndim(v) == 0 for v in values)
         if placement is not None and not uniform:
             raise ValueError('structural placement requires scalar readout parameters')
-        indices = range(size) if readout.indices is None else readout.indices
+        indices = range(size)
         classes = {}
         if uniform:
             if any(rational(v).denominator != 1 for v in values[-3:]):
@@ -81,31 +59,20 @@ def emit(emitter, readouts=None):
             fractions, (zp, qmin, qmax) = signature[:-3], signature[-3:]
             denominator = lcm(*(f.denominator for f in fractions))
             coeffs = [int(f*denominator) for f in fractions]
-            common = reduce(gcd, (abs(c) for c in coeffs[:-1]), 0) or 1
-            weights = [c//common for c in coeffs[:-1]]
-            low, high, sources, _ = interval(readout, [*weights, 0], emitter.meta)
-            record = plan(Fraction(common, denominator), Fraction(coeffs[-1], denominator),
-                          zp, qmin, qmax, readout.relu, low, high)
-            # Revalidate before emitting imported or locally cached constants.
-            validate(record)
-            step = positions[1]-positions[0] if len(positions) > 1 else 1
-            regular = isinstance(positions, range) or all(b-a == step for a, b in zip(positions, positions[1:]))
-            binding = dict(start=positions[0], stop=positions[-1]+1, step=step) if regular else dict(indices=positions)
-            record.update(output=readout.out, elements=len(positions), output_indices=binding,
-                          normal_form=[dict(tile=n, weight=str(w)) for (n, _), w in zip(readout.terms, weights)],
-                          accumulator_bounds=sources)
-            if placement is not None:
-                record['output_placement'] = placement
-            emitter.meta['host_requantization_proofs'].append(record)
-            bound = sum(abs(w)*(1 << 31) for w in weights)
-            required = max(64, bound.bit_length()+1)
-            typ = IntegerType(1 << (required-1).bit_length())
-            record["normal_form_width"] = typ.bitwidth
+            weights = coeffs[:-1]
+            if not 0 <= qmax-qmin <= 255 or not qmin <= zp <= qmax:
+                raise ValueError('invalid byte output quantization range or zero point')
+            # No reachable-value specialization: include all signed-i32 tile
+            # inputs, the constant, twice the numerator and every RNE boundary.
+            bound = abs(coeffs[-1]) + sum(abs(w)*(1 << 31) for w in weights)
+            edge = max(abs(qmin-zp), abs(qmax-zp))
+            required = max(64, (2*bound).bit_length()+2,
+                           ((2*edge+1)*denominator).bit_length()+2)
+            typ = IntegerType(required)
             def c(v):
                 return fb.const(v, typ)
-            fast = record['algorithm'] == 'clamp_mul_add_shift'
-            thresholds = list(map(int, record.get('thresholds', [])))
-            thresholds_ptr = table(thresholds, typ, 'thresholds') if not fast else None
+            step = positions[1]-positions[0] if len(positions) > 1 else 1
+            regular = isinstance(positions, range) or all(b-a == step for a,b in zip(positions,positions[1:]))
 
             def body(iv):
                 target = iv
@@ -118,7 +85,7 @@ def emit(emitter, readouts=None):
                     _, block, offset, stride = placement
                     target = fb.add_i(fb.add_i(fb.mul_i(fb.udiv_i(iv, fb.const(block)), fb.const(stride)),
                                               fb.urem_i(iv, fb.const(block))), fb.const(offset))
-                value = c(0)
+                value = c(coeffs[-1])
                 for (name, _), weight in zip(readout.terms, weights):
                     if not weight:
                         continue
@@ -139,36 +106,27 @@ def emit(emitter, readouts=None):
                             pos = len(outarg.shape)-len(shp)+axis
                             coordinate = fb.urem_i(fb.udiv_i(target, fb.const(int(np.prod(outarg.shape[pos+1:])))), fb.const(dim))
                             index = fb.add_i(index, fb.mul_i(coordinate, fb.const(int(np.prod(shp[axis+1:])))))
-                    if readout.source_offsets and name in readout.source_offsets:
-                        index = fb.add_i(index, fb.const(readout.source_offsets[name]))
                     raw = fb.add(llvm.LoadOp(fb.gep(bases[name], index, i32), i32)).results[0]
                     wide = fb.add(llvm.SExtOp(raw, typ)).results[0]
                     term = wide if weight == 1 else binary(llvm.MulOp, wide, c(weight))
                     value = binary(llvm.AddOp, value, term)
-                if fast:
-                    k = record['constants']
-                    lower, upper = c(int(k['L'])), c(int(k['H']))
-                    v = select(compare(value, lower, 'slt'), lower, value)
-                    v = select(compare(v, upper, 'sgt'), upper, v)
-                    if typ != i64:
-                        v = fb.add(llvm.TruncOp(v, i64)).results[0]
-                    product = binary(llvm.MulOp, v, fb.const(int(k['M'])))
-                    added = binary(llvm.AddOp, product, fb.const(int(k['B'])))
-                    code = binary(llvm.AShrOp, added, fb.const(k['S']))
-                    if k['out_clamp']:
-                        lower, upper = fb.const(k['qlo']), fb.const(k['qhi'])
-                        code = select(compare(code, lower, 'slt'), lower, code)
-                        code = select(compare(code, upper, 'sgt'), upper, code)
-                else:
-                    lo, hi = fb.const(0), fb.const(len(thresholds))
-                    for _ in range(len(thresholds).bit_length()):
-                        active = compare(lo, hi, 'slt')
-                        mid = fb.ashr_i(fb.add_i(lo, hi), 1)
-                        index = select(active, mid, fb.const(0))
-                        threshold = fb.add(llvm.LoadOp(fb.gep(thresholds_ptr, index, typ), typ)).results[0]
-                        above = binary(llvm.AndOp, active, compare(value, threshold, 'sge'))
-                        lo, hi = select(above, fb.add_i(mid, fb.const(1)), lo), select(above, hi, mid)
-                    code = fb.add_i(lo, fb.const(qmin))
+                if readout.relu:
+                    value = select(compare(value, c(0), 'slt'), c(0), value)
+                twice = binary(llvm.MulOp, value, c(2))
+                lo, hi = c(qmin-zp), c(qmax-zp)
+                # Compare exact rationals to half-integer boundaries, without
+                # constructing a transition table or dividing/rounding twice.
+                for _ in range((qmax-qmin).bit_length()):
+                    mid = binary(llvm.AShrOp, binary(llvm.AddOp, lo, hi), c(1))
+                    threshold = binary(llvm.MulOp,
+                        binary(llvm.AddOp, binary(llvm.MulOp, mid, c(2)), c(1)), c(denominator))
+                    greater = compare(twice, threshold, 'sgt')
+                    equal = compare(twice, threshold, 'eq')
+                    odd = compare(binary(llvm.AndOp, mid, c(1)), c(0), 'ne')
+                    above = binary(llvm.AndOp, compare(lo, hi, 'slt'),
+                        binary(llvm.OrOp, greater, binary(llvm.AndOp, equal, odd)))
+                    lo, hi = select(above, binary(llvm.AddOp, mid, c(1)), lo), select(above, hi, mid)
+                code = binary(llvm.AddOp, lo, c(zp))
                 byte = fb.add(llvm.TruncOp(code, i8)).results[0]
                 fb.add(llvm.StoreOp(byte, fb.gep(bases[readout.out], target, i8)))
 

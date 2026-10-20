@@ -1,4 +1,4 @@
-"""Spike qualification of overlapped per-channel, biased multi-term readout."""
+"""Spike qualification of serial per-channel, biased multi-term readout."""
 from fractions import Fraction as F
 from pathlib import Path
 import sys
@@ -11,7 +11,7 @@ import runner
 
 
 @need_spike
-def test_per_channel_multiterm_frozen_bias_overlaps_exactly():
+def test_per_channel_multiterm_frozen_bias_serial_readout():
     from mlir_oot.core_aten import ops
     from mlir_oot.core_aten.stream import Arg,simulate
     from mlir_oot.core_aten.emit import build_module,compile_to_object
@@ -34,17 +34,17 @@ def test_per_channel_multiterm_frozen_bias_overlaps_exactly():
     acc=feed['a'].astype(np.int64)@feed['b'].astype(np.int64)
     expected=np.array([[min(255,max(0,round(int(acc[i,j])*factors[j]+F(int(feed['bias'][j]),3)+r.constant[j])+int(r.zero_point[j])))
                         for j in range(N)] for i in range(M)],np.uint8)
-    wd=runner.work_root()/'requant_A_pipeline'
-    module,_=build_module(stream,'rq_pipeline',meta=kernel.meta)
-    assert kernel.meta['readout_pipeline']['status']=='enabled'
-    assert len(kernel.meta['readout_pipeline']['tiles'])>2
+    wd=runner.work_root()/'plain_host_readout'
+    module,_=build_module(stream,'plain_readout',meta=kernel.meta)
     lint(stream)
     assert np.array_equal(simulate(stream,feed)['out'].view(np.uint8),expected)
     receipt=compile_to_object(module,wd)
     buffers={a.name:feed[a.name] if a.role=='input' else np.zeros(a.shape,np.int32 if a.dtype=='i32' else np.int8)
              for a in kernel.args}
-    test=runner.DeviceTest('requant_A_pipeline',[Path(receipt['object'])],buffers,
-        [('rq_pipeline',[a.name for a in kernel.args])],[runner.Check('out',expected.view(np.int8),0,'pipeline_exact')],{'out'})
+    test=runner.DeviceTest('plain_host_readout',[Path(receipt['object'])],buffers,
+        [('plain_readout',[a.name for a in kernel.args])],[runner.Check('out',expected.view(np.int8),0,'serial_exact')],{'out'})
+    # Independent checker ISA omits Zicntr; machine cycle CSR is equivalent here.
+    (wd/'ca_harness.h').write_text((Path(__file__).parent/'ca_harness.h').read_text().replace('rdcycle %0', 'csrr %0, mcycle'))
     elf=runner.build_elf(test,wd)
     result=runner.run_spike(elf)
     (wd/'spike.log').write_text(result.log)

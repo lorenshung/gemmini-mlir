@@ -121,7 +121,7 @@ def core_aten_catalog(prepared, workdir, *, package, llvm_bin=None):
     workdir = Path(workdir)
     manifest = catalog.compile_catalog(Path(prepared), workdir,
                             llvm_bin=Path(llvm_bin) if llvm_bin else toolchain.llvm_install() / "bin")
-    return workdir / "core_aten_catalog.json", (workdir / "core_aten.o" if manifest['kernels'] or manifest.get('constant_folds') else None)
+    return workdir / "core_aten_catalog.json", (workdir / "core_aten.o" if manifest['kernels'] else None)
 
 
 def core_aten_offload(prepared, workdir, *, package, llvm_bin=None):

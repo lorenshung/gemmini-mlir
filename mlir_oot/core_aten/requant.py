@@ -24,10 +24,7 @@ class Readout:
     broadcasts: dict = None
     after: int | None = None
     placement: tuple | dict | None = None  # scalar-parameter destination region, in elements
-    indices: object = None
-    source_offsets: dict = None
     axis: int = -1
-    parameters_compact: bool = False
 
 
 def expanded(value, shape, axis=-1):
@@ -43,10 +40,7 @@ def expanded(value, shape, axis=-1):
 
 
 def parameters(readout, value, shape):
-    if readout.parameters_compact:
-        return expanded(value, (len(readout.indices),))
-    a = expanded(value, shape, readout.axis)
-    return a if readout.indices is None else a[np.asarray(readout.indices,dtype=np.int64)]
+    return expanded(value, shape, readout.axis)
 
 
 def evaluate(
@@ -160,7 +154,6 @@ def apply(stream, buffers, readouts=None):
                 values = np.maximum(values, 0)
             out.reshape(-1)[positions] = [min(readout.quant_max,max(readout.quant_min,round(Fraction(v))+readout.zero_point)) for v in values]
             continue
-        indices = np.arange(out.size) if readout.indices is None else np.asarray(readout.indices, dtype=np.int64)
         values = parameters(readout, readout.constant, out.shape).copy()
         for name, factor in readout.terms:
             raw = by_name[name]
@@ -169,14 +162,11 @@ def apply(stream, buffers, readouts=None):
                 raw = raw.reshape(shp).transpose(perm)
             if readout.broadcasts and name in readout.broadcasts:
                 raw = raw.reshape(readout.broadcasts[name])
-            if readout.source_offsets and name in readout.source_offsets:
-                raw_values = raw.reshape(-1)[indices+readout.source_offsets[name]]
-            else:
-                raw_values = expanded(raw, out.shape)[indices]
+            raw_values = expanded(raw, out.shape)
             values += raw_values.astype(object)*parameters(readout, factor, out.shape)
         if readout.relu:
             values = np.maximum(values, 0)
         zps, lows, highs = [parameters(readout, v, out.shape) for v in
                            (readout.zero_point, readout.quant_min, readout.quant_max)]
-        out.flat[indices] = np.array([min(int(hi), max(int(lo), round(Fraction(v))+int(zp)))
+        out.flat[:] = np.array([min(int(hi), max(int(lo), round(Fraction(v))+int(zp)))
                                      for v,zp,lo,hi in zip(values,zps,lows,highs)], dtype=np.int64).astype(out.dtype)

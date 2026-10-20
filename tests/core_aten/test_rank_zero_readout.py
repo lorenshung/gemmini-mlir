@@ -52,8 +52,6 @@ def test_native_readout_accepts_scalar_object_arrays_in_all_parameter_roles(tmp_
                                   quant_min=scalar(-128), quant_max=scalar(127)))
     meta = {}
     module, _ = build_module(stream, 'scalar_parameters', meta=meta)
-    certificate, = meta['host_requantization_proofs']
-    assert certificate['elements'] == (7 if shape else 1)
     source, ir, obj, shared = (tmp_path/('scalar'+ext) for ext in ('.mlir', '.ll', '.o', '.so'))
     source.write_text(str(module)+'\n')
     subprocess.run([str(bindir/'mlir-translate'), '--mlir-to-llvmir', str(source), '-o', str(ir)], check=True)

@@ -39,15 +39,6 @@ def rewrite(source: str, manifest: dict) -> str:
     declared = {}
     doomed = []
     replacements = {}
-    if manifest.get('constant_folds'):
-        from hashlib import sha256
-        from .constant_dma import specialize
-        if sha256(source.encode()).hexdigest() != manifest['source_sha256']:
-            raise ValueError('constant DMA source identity differs from catalog')
-        folds = specialize(module)
-        if [proof for proof, _, _ in folds] != manifest['constant_folds']:
-            raise ValueError('constant DMA proof differs from catalog')
-        replacements.update((old.results[0], new.result) for _, old, new in folds)
     for b in manifest["bindings"]:
         k = kernels[b["symbol"]]
         (out_name, out_src), = b["result"].items()

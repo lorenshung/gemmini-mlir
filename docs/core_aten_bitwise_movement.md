@@ -342,22 +342,8 @@ any address. Contiguous byte groups can then coalesce even when a transpose
 moves singleton dimensions. This applies to every element width and does not
 alter quantization, byte order, fences or the instruction budget.
 
-A paired Phase 0 convolution qualification with Merlin `c4332ec60`, model2mlir
-`23b0cd5`, unchanged captures/inputs and `reference_scale` measured:
-
-| Provider | Retired target instructions | Retired CPU tail instructions |
-| --- | ---: | ---: |
-| `719bada` | 261 | 28,122 |
-| wtD layout changes, before the boundary fix | 770 | 69,769 |
-| `898d2ea` (wtD + wtE) | 770 | 69,769 |
-| Internal-view/readout boundaries and singleton coalescing | 184 | 28,122 |
-
-All four executions pass the exact oracle. The tail counts CPU instructions
-after the last accelerator instruction until the first return to
-`_mlir_ciface_forward`; it includes support calls and copies and excludes earlier
-interleaved epilogues. These are Spike retired instructions, not hardware cycles
-or a whole-model speedup. The identical wtD-only and merged counts isolate the
-regression from requant-A and overlap. The wtD-only control includes the
-matcher-callback identity compatibility fix needed to run it on `719bada`;
-requant-A and overlap are absent from that control. Their merged
-implementations remain enabled.
+Phase 1 retains these source/readout boundaries and structural DMA loops for
+functional fitting, but removes literal layout folding and requant-A/overlap.
+Literal selectors execute ordinary device movement. Provider-owned readouts use
+serial `exact_rational_RNE_v1`; see the repository ABI notes. No cost policy
+selects placement. Historical performance measurements remain on `gemmini-perf`.

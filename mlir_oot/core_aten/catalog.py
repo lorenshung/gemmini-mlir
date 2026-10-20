@@ -12,7 +12,6 @@ command stream, and returns the combined device module plus a manifest:
     bindings  per matched region: root op ordinal (whose result the kernel writes), the
               ordinals it replaces, and each kernel argument's source value as a function
               argument index or an (op ordinal, result index) pair
-    constant_folds source-bound literal DMA specializations, with no runtime binding
     declines  recognised regions this backend refuses, with the reason
 
 It is opt-in beside the integer GEMM catalog (``golden_device_catalog``) and does not alter
@@ -51,8 +50,6 @@ def _stream_digest(kernel) -> str:
         h.update(json.dumps(kernel.meta['limb_plan'], sort_keys=True).encode())
     if 'constant_code_packing' in kernel.meta:
         h.update(json.dumps(kernel.meta['constant_code_packing'],sort_keys=True).encode())
-    if 'constant_layout_proofs' in kernel.meta:
-        h.update(json.dumps(kernel.meta['constant_layout_proofs'],sort_keys=True).encode())
     if 'identical_qparam_proof' in kernel.meta:
         h.update(json.dumps(kernel.meta['identical_qparam_proof'], sort_keys=True).encode())
     h.update(json.dumps([(a.name, a.dtype, list(a.shape), a.role) for a in kernel.stream.args]).encode())
@@ -60,8 +57,7 @@ def _stream_digest(kernel) -> str:
         h.update(name.encode() + data.tobytes())
     from dataclasses import asdict
     h.update(json.dumps(_jsonable([asdict(r) for r in kernel.stream.readouts]),sort_keys=True).encode())
-    # Reciprocal certificates specialize to these recorded intervals. Kernels
-    # with identical commands but different input bounds cannot share a symbol.
+    # Bounds belong to the source-bound integer schedule proof.
     h.update(json.dumps({key: _jsonable(kernel.meta[key]) for key in
                         ('accumulator_min', 'accumulator_max', 'accumulator_bounds',
                          'zero_point_corrections') if key in kernel.meta}, sort_keys=True).encode())
@@ -89,18 +85,13 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
     ordinals = {op: i for i, op in enumerate(module.walk())}
     funcs = [op for op in module.walk() if op.name == "func.func"]
     func_args = list(funcs[0].body.blocks[0].args) if funcs else []
-    folds = []
-    matches, declines = match_all(module, constant_folds=folds)
-    for _, original, replacement in folds:
-        ordinals[replacement] = ordinals[original]
+    matches, declines = match_all(module)
     kernels: dict[str, dict] = {}
     device = ModuleOp([])
     bindings = []
     accepted = []
     audits = {}
     for m in matches:
-        from .readout_pipeline import prepare
-        prepare(m.kernel.stream, m.kernel.meta)
         digest = _stream_digest(m.kernel)
         try:
             report = audits.get(digest)
@@ -145,7 +136,6 @@ def build(source: str) -> tuple[ModuleOp, dict, list]:
                              aliasing="none", completion="kernel fences before returning",
                              quantization="per-binding numeric contract: F1 opaque bytes without quantization; F2/F4 full-i32 components and retained exact host recombination; F3 identical-qparam movement storage codes or exact rational host RNE, zero point and declared clamp"),
                     kernels=list(kernels.values()), bindings=bindings, declines=declines,
-                    constant_folds=[proof for proof, _, _ in folds],
                     matched=len(bindings), unique_kernels=len(kernels))
     return device, manifest, accepted
 
@@ -178,7 +168,7 @@ def compile_catalog(source_path: Path, workdir: Path, *, llvm_bin: Path | None =
     source = Path(source_path).read_text()
     device, manifest, _ = build(source)
     workdir.mkdir(parents=True, exist_ok=True)
-    if manifest["kernels"] or manifest["constant_folds"]:
+    if manifest["kernels"]:
         receipt = compile_to_object(device, workdir, llvm_bin=llvm_bin, stem="core_aten")
         manifest["compilation"] = receipt
         manifest['status'] = 'compiled'
@@ -193,7 +183,7 @@ def merlin_builder(llvm_bin: Path):
 
     def build_fn(prepared: Path, workdir: Path):
         manifest = compile_catalog(Path(prepared), Path(workdir), llvm_bin=Path(llvm_bin))
-        return Path(workdir) / "core_aten_catalog.json", (Path(workdir) / "core_aten.o" if manifest['kernels'] or manifest['constant_folds'] else None)
+        return Path(workdir) / "core_aten_catalog.json", (Path(workdir) / "core_aten.o" if manifest['kernels'] else None)
 
     return build_fn
 
