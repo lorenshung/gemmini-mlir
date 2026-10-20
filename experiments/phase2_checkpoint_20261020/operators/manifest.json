@@ -36,6 +36,18 @@
       "saved_path": "operators/phase2-verification-env-v1.sh.txt",
       "sha256": "7f5b944f9b4f2c9c4d76f96e98ee64a3dc653c2e4b772267c8ec01b48f4cbb3c",
       "status": "historical operator snapshot; original selections/gates remain required"
+    },
+    {
+      "original_path": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/verify_el4_publication_additional_20261020_v2.py",
+      "saved_path": "operators/verify_el4_publication_additional_20261020_v2.py.txt",
+      "sha256": "464a0b5f48148fa0f7a812cda6c57d4dc4af508759f973ca2d4cb8f53c17aefc",
+      "status": "historical explicit host regression operator; not automatic launch"
+    },
+    {
+      "original_path": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/verify_el4_publication_two_cpus_20261020.py",
+      "saved_path": "operators/verify_el4_publication_two_cpus_20261020.py.txt",
+      "sha256": "d2ab47abdbd3bbd47a8de652e2c6fe0355a6782be46b4f02f374cd38d0875c0b",
+      "status": "historical explicit host regression operator; not automatic launch"
     }
   ],
   "automatic_launch": false,

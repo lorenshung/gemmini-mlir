@@ -1,4 +1,11 @@
 {
+  "calibration_boundary": {
+    "candidate_or_golden_cycle_fitting": false,
+    "fitting_this_publication": false,
+    "labels": "Eligible public Phase1 only, compatible hardware/memory/window identities",
+    "new_source_mechanisms": "Separately versioned, unselected until original qualification protocol passes",
+    "splits": "Original source-group TRAIN/held separation; no private evidence"
+  },
   "created_utc": "2026-10-20T23:20:23.893404+00:00",
   "draft_policy": "Untested helpers retained as disabled exact-byte snapshots; panel adapter remains unselected pending native checks",
   "functional_claim": "No new full-model speedup; see dated technical status and original receipts",
@@ -28,6 +35,13 @@
     "larger175_pairs": "both refused: evaluation output exceeded assigned disk grant",
     "promotion": "NONE",
     "small544_complete_baseline_candidate_pairs": 2
+  },
+  "merlin_publication": {
+    "branch": "feat/el4-experiment",
+    "commit": "efb2e39adf61b2ddc219f32730cd9b788d4e4a62",
+    "includes_consolidated_local_EL4": "91667e86c712de986ee07e872f93e5a79c37e48c",
+    "includes_queued_deadline_fix": "671fe82919732629fb9309ae1179726300b36d27",
+    "repository": "https://github.com/ucb-bar/merlin"
   },
   "models": [
     {
@@ -211,6 +225,12 @@
     ],
     "public_upstream_branch": "feat/annotated-spike-model",
     "public_upstream_commit": "806ec0adda2242597b253ebf17adfaa5cdb395e3",
+    "publication": {
+      "branch": "phase2/el4-fire-aligned-20261020",
+      "commit": "e6fc3992faf6a30558f7f382a69ac12daa46d672",
+      "phase1_branch_unchanged": true,
+      "repository": "https://github.com/copparihollmann/riscv-isa-sim-gemmini"
+    },
     "upstream_source_url": "https://github.com/copparihollmann/riscv-isa-sim-gemmini.git"
   }
 }

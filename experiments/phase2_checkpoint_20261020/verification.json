@@ -32,5 +32,24 @@
   "protected_packages": "All21 V23 and16 V26 original files SHA256-identical to before integration",
   "scope": "Host regression/static sourceeffect/emitter tests; no target simulation or timing qualification",
   "initial_failure": "One dispatch test inherited ambient capture configuration; fixture now explicitly selects a local sealed-source fixture, original gate unchanged",
-  "merlin_integrated_head": "1a2631a24cdd17e9576aaeb9fb321892a3c20561"
+  "merlin_integrated_head": "2c8dd4632d9d123797376be3a61d9489bd7981d5",
+  "deduplicated_final_checks": {
+    "passed": 426,
+    "failed": 0,
+    "skipped": 4
+  },
+  "remaining_skips": [
+    "could not import 'torch': No module named 'torch'"
+  ],
+  "additional_reports": [
+    {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/integration/el4-publication-20261020-additional-v2/merlin/tests.xml",
+      "sha256": "c542abee03dc629d3782866c034397576750569a25b8306c6f78066563b8159a"
+    },
+    {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/integration/el4-publication-20261020-two-cpus/merlin/tests.xml",
+      "sha256": "d44fec67ebd47f83144d04dc696495b2ee7014492a010d43dd4cc21f9f2f00a1"
+    }
+  ],
+  "deduplication": "Module filename + parametrized testcase name; pytest rootdir changes classname prefixes between invocations"
 }

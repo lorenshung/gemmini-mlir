@@ -4,6 +4,14 @@ This preserves source work on the EL4 branch. It does not promote a compiler or
 declare the performance campaign qualified. The immutable generated V23 and V26
 packages are unchanged. No handwritten backend replaced either package.
 
+**Calibration stays Phase 1-derived.** Use eligible public Phase 1 measurements
+with compatible hardware/memory/window identities and multiple independent
+source groups. Keep training and held-out sources separate, and freeze the
+evaluator before compiler comparisons. Do not fit to Phase 2 candidates, private
+validation answers, the newest checkpoint alone, or quoted golden-model timings.
+No coefficients were fitted during integration/publication. Publishing the Spike
+fork's alternative mechanisms does not select a replacement evaluator.
+
 ## Included work
 
 - Explicit accumulator first-product overwrite semantics and its independent
@@ -27,14 +35,19 @@ Merlin's corresponding EL4 integration contains scoped exploratory counts and
 estimates, partial roofline feedback, the scoped roofline/Spike bridge, source
 verification and lifecycle fixes, the technical-status note and generic draft
 snapshots. It also merges the previously unpublished local EL4 implementation
-line through `fa6a18e95` without selecting its prospective numerical recipes for
-this frozen V26 campaign.
+line through `fa6a18e95`, the consolidated `91667e86c` public benchmark additions,
+and the queued-deadline fix `671fe8291`, without selecting prospective numerical
+recipes for this frozen V26 campaign.
 
 ## Portable Spike source work
 
 The managed `spike-timing` repository's configured remote is a local directory
-inside Phase 1. We deliberately did not push to or edit that task. Instead all
-eight source commits are preserved as `spike-patches/*.patch`, including finite
+inside Phase 1. We deliberately did not push to or edit that task. All source
+work is published on the GitHub fork's dedicated
+[`phase2/el4-fire-aligned-20261020`](https://github.com/copparihollmann/riscv-isa-sim-gemmini/tree/phase2/el4-fire-aligned-20261020)
+branch at `e6fc3992faf6a30558f7f382a69ac12daa46d672`. The original fork branch
+remains unchanged. All eight timing commits are also preserved as
+`spike-patches/*.patch`, including finite
 reservation windows, staged issue/completion, dependency-ordered phases,
 conservative local-store holds and the separately selected execute-service model.
 
@@ -85,6 +98,13 @@ one shared CPU grant. The initial run exposed a dispatch test depending on an
 ambient capture-runtime variable; its fixture now explicitly selects its own
 sealed source. Production admission checks were not weakened. These checks are
 host regressions/static emitter proofs, not fresh accelerator timing evidence.
+
+Additional deadline, queue and benchmark checks were run, including the fork
+queue checks with two real shared CPU grants. Across final reports there are
+**426 distinct passing checks**, no failures, and four benchmark numerical checks
+skipped because the selected test interpreter lacks Torch. CPU-dependent skips
+from the single-CPU pass were covered by the two-CPU pass. The independent worker
+fixture now uses its actual assigned CPU rather than inventing CPU zero.
 
 `operators/` preserves exact historical launcher/constructor/test-driver bytes as
 `.txt` snapshots with hashes. They include the explicit selected Chipyard path

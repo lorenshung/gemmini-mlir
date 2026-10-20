@@ -1,0 +1,18 @@
+import json,os,resource,subprocess,sys,time
+from pathlib import Path
+from merlin.common.cpu_pool import shared_compute_pool
+T=Path('/work/merlin/tasks/phase2-el4-explore-20261018');O=T/'out/artifacts/integration/el4-publication-20261020-additional-v2';O.mkdir(parents=True,exist_ok=False)
+resource.setrlimit(resource.RLIMIT_CPU,(300,301));resource.setrlimit(resource.RLIMIT_AS,(2<<30,2<<30));resource.setrlimit(resource.RLIMIT_FSIZE,(64<<20,64<<20))
+groups={'merlin': ['packages/merlin-experiments/tests/test_queued_job_deadlines.py', 'packages/merlin-experiments/tests/test_retained_evaluation_pool.py', 'packages/merlin-experiments/tests/test_search_configuration.py', 'packages/merlin-experiments/tests/test_ordinary_fast_feedback.py', 'merlin/tests/infra/test_phase2_public_benchmarks.py']}
+reports=[]
+with shared_compute_pool(timeout_s=120):
+ cpus=sorted(os.sched_getaffinity(0));assert len(cpus)==1
+ env=dict(os.environ);env.update(MERLIN_COMPUTE_CPUS=str(cpus[0]),MERLIN_COMPUTE_CPU_SLOTS=str(T/'.tmp/el4-publication-test-child-slots'),PANEL_FACTS='/work/merlin/tasks/phase1-harness-v2/merlin/out/artifacts/probes/gemmini/fire-aligned-30mhz/input/facts-v6.json',PANEL_CONTRACT='/work/merlin/tasks/phase1-harness-v2/merlin/out/artifacts/probes/gemmini/v1/probes_gemmini_v1_20261018T090833Z_580ba4a/target_contract.json',PANEL_OOT_ROOT=str(T/'gemmini-mlir'),GEMMINI_V26_COMPILER_BASELINE=str(T/'gemmini-mlir/phase1_generated/el4_fire_aligned_v26_original_29213759/package'))
+ for name,files in groups.items():
+  root=O/name;root.mkdir();start=time.monotonic();before=resource.getrusage(resource.RUSAGE_CHILDREN)
+  argv=[sys.executable,'-B','-m','pytest','-q','-p','no:cacheprovider',*files,'--basetemp',str(T/'.tmp'/('el4-publication-pytest-additional-v2-'+name)),'--junitxml',str(root/'tests.xml')]
+  with (root/'stdout').open('w') as out,(root/'stderr').open('w') as err:
+   r=subprocess.run(argv,cwd=T/name,env=env,stdout=out,stderr=err,timeout=300,check=False)
+  after=resource.getrusage(resource.RUSAGE_CHILDREN)
+  row={'repo':name,'returncode':r.returncode,'argv':argv,'single_shared_cpu':cpus,'wall_seconds':time.monotonic()-start,'reaped_CPU_seconds':after.ru_utime+after.ru_stime-before.ru_utime-before.ru_stime,'scope':'focused host regressions and static target emitter checks; no target execution or new timing qualification'};reports.append(row);(root/'report.json').write_text(json.dumps(row,indent=2)+'\n');print(json.dumps(row),flush=True)
+(O/'report.json').write_text(json.dumps(reports,indent=2)+'\n');raise SystemExit(any(r['returncode'] for r in reports))
