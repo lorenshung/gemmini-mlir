@@ -27,6 +27,13 @@ CLI does not create, prove or claim that external CPU/RSS/disk boundary. Select
 common `MERLIN_COMPUTE_CPUS`/`MERLIN_COMPUTE_CPU_SLOTS`, thread count one, task-owned
 `TMPDIR`, and the already reviewed native toolchain/runtime environment. The
 original compiler45s/native60s/trace60s limits and64MiB trace file ceiling remain.
+Set `MERLIN_M2M_PYTHON` explicitly to the existing reference/capture interpreter
+selected by the original runtime record. Preserve and recheck its binary and
+environment identities. A source snapshot's neighbouring default Python path
+does not select a qualified reference runtime. Set `PYTHONDONTWRITEBYTECODE=1`
+for all descendant interpreters so verification cannot add bytecode files to
+original compiler packages. These environment selections change neither the
+numerical policy nor the original runtime qualification requirements.
 The declared purpose may select at most120 aggregate CPU seconds,300wall,
 1GiB RSS and128MiB new output. Actual supervision, cost and cleanup receipts
 remain external inputs to any subsequent readiness claim.
