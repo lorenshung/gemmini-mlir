@@ -21,6 +21,82 @@ from test_v26_staged_source import PACKAGE
 from test_v26_staged_source import inputs as staged_inputs
 
 
+def _neutral_emission_observation():
+    return "host observation fixture; no compiler or target execution"
+
+
+@pytest.fixture
+def source_invocation(tmp_path):
+    from merlin.common import invocation_record as I
+
+    source = tmp_path / "source"
+    source.write_text("ordinary observed input")
+    with I.observe_call(
+        tmp_path,
+        stage="ordinary_source_emission",
+        function=_neutral_emission_observation,
+        arguments={},
+        inputs=(source,),
+    ) as observed:
+        observed.returned(stdout=_neutral_emission_observation())
+    module = importlib.import_module("gemmini_v26_finite_pair")
+    return (
+        module,
+        observed.path,
+        source,
+        {"compiler_source_invocation": module._pin(observed.path)},
+    )
+
+
+def test_source_invocation_consumes_original_two_field_pin(source_invocation):
+    module, path, _, chain = source_invocation
+    pins = {}
+    selected, record = module._source_invocation(chain, pins)
+    assert selected == path
+    assert record["stage"] == "ordinary_source_emission"
+    assert pins[str(path)] == chain["compiler_source_invocation"]
+
+
+@pytest.mark.parametrize(
+    "fault", ["size_bytes", "bytes", "missing_hash", "wrong_hash", "symlink", "input"]
+)
+def test_source_invocation_rejects_foreign_shape_and_stale_bytes(
+    source_invocation, fault
+):
+    module, path, source, chain = source_invocation
+    declared = chain["compiler_source_invocation"]
+    if fault in {"size_bytes", "bytes"}:
+        declared[fault] = path.stat().st_size
+    elif fault == "missing_hash":
+        declared.pop("sha256")
+    elif fault == "wrong_hash":
+        declared["sha256"] = "0" * 64
+    elif fault == "symlink":
+        link = path.parent / "linked.json"
+        link.symlink_to(path)
+        declared["path"] = str(link)
+    else:
+        source.write_text("changed observed input")
+    with pytest.raises(ValueError):
+        module._source_invocation(chain, {})
+
+
+def test_source_invocation_reopens_its_pin_after_original_verification(
+    source_invocation, monkeypatch
+):
+    module, path, _, chain = source_invocation
+    verify = module.invocation_record.verify
+
+    def change_after_verify(selected):
+        record = verify(selected)
+        path.write_bytes(path.read_bytes() + b"\n")
+        return record
+
+    monkeypatch.setattr(module.invocation_record, "verify", change_after_verify)
+    with pytest.raises(ValueError, match="changed during verification"):
+        module._source_invocation(chain, {})
+
+
 @pytest.fixture
 def selected(tmp_path, monkeypatch):
     generated = importlib.import_module("gemmini_generated_source_diagnostic")
@@ -453,13 +529,14 @@ def test_queue_pair_requires_current_grade_selection_and_unique_trace(
         _one(tmp_path, "*/invocation.json")
 
 
+@pytest.mark.parametrize("helper", ["_arm", "_source_invocation"])
 def test_queue_pair_private_consumer_function_mutation_refuses(
-    selected, tmp_path, monkeypatch
+    selected, tmp_path, monkeypatch, helper
 ):
     import gemmini_v26_finite_pair as pair
 
     _, _, _, _, owner, _ = selected
-    monkeypatch.setattr(pair, "_arm", lambda *_: {"status": "PASS"})
+    monkeypatch.setattr(pair, helper, lambda *_: {"status": "PASS"})
     with pytest.raises(ValueError, match="consumer implementation changed"):
         owner.check_source_pair(
             baseline_workspace=tmp_path / "b",

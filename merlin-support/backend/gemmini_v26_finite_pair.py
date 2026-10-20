@@ -44,6 +44,24 @@ def _one(parent, pattern):
     return matches[0]
 
 
+def _source_invocation(chain, pins):
+    declared = chain.get("compiler_source_invocation")
+    if (
+        type(declared) is not dict
+        or set(declared) != {"path", "sha256"}
+        or type(declared["path"]) is not str
+    ):
+        raise ValueError("finite pair requires the original source invocation pin")
+    path = Path(declared["path"])
+    before = _read(path, pins)
+    if pins[str(path)] != declared:
+        raise ValueError("finite source invocation bytes differ from their pin")
+    verified = invocation_record.verify(path)
+    if verified != before or _pin(path) != declared:
+        raise ValueError("finite source invocation changed during verification")
+    return path, verified
+
+
 def _arm(owner, state, workspace, pins, deadline):
     if time.monotonic() >= deadline:
         raise TimeoutError("finite actual-pair deadline expired before product intake")
@@ -84,9 +102,7 @@ def _arm(owner, state, workspace, pins, deadline):
         root / "generated", "emission-custody-*/emission_proof_chain.json"
     )
     chain = _read(chain_path, pins)
-    producer_path = native._pinned_native_file(chain, "compiler_source_invocation")
-    producer = invocation_record.verify(producer_path)
-    pins[str(producer_path)] = _pin(producer_path)
+    _, producer = _source_invocation(chain, pins)
     expected = (_pin(command_buffer), _pin(lowered))
     if (
         producer.get("stage") != "ordinary_source_emission"
@@ -232,6 +248,7 @@ _FUNCTIONS = tuple(
     for name in (
         "_read",
         "_one",
+        "_source_invocation",
         "_arm",
         "_pair_choices",
         "_check_source_pair",
