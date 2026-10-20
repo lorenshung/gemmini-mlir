@@ -1,0 +1,216 @@
+{
+  "created_utc": "2026-10-20T23:20:23.893404+00:00",
+  "draft_policy": "Untested helpers retained as disabled exact-byte snapshots; panel adapter remains unselected pending native checks",
+  "functional_claim": "No new full-model speedup; see dated technical status and original receipts",
+  "large_outputs": "Retained read-only in original managed task paths; metadata links are not restored live owners or fresh measurements",
+  "last_queue_reports": [
+    {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T190502Z/retained-parallel-estimates-v5/host-status.json",
+      "sha256": "2267c4e1196d50e11b2f5d23c60acf67ddecfebb208383d91f874a520de4ed79"
+    },
+    {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T190502Z/retained-parallel-estimates-v5/outcomes.json",
+      "sha256": "a5b3fbf4cf71099b7f3190a1c25a4b7777f0015e9b2cde9d17c26bfe623fd2a8"
+    },
+    {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T190502Z/retained-parallel-estimates-v5/terminal.json",
+      "sha256": "1b78beb7fb0545eff3ae37e561904de028689b103c0e0bf8c192f2df3c089f8e"
+    },
+    {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T190502Z/retained-parallel-estimates-v5/invocation.json",
+      "sha256": "ec4b2e2c730586465dbd6d4f2079f7e2ecb0a7670b83d057e5e7efcab8e43c51"
+    }
+  ],
+  "last_queue_summary": {
+    "campaign_stop": "budget reached at original23:05:02UTC; no automatic newcampaign",
+    "cleanup": "complete",
+    "fresh_timing": "UNAVAILABLE: CensusUnavailable",
+    "larger175_pairs": "both refused: evaluation output exceeded assigned disk grant",
+    "promotion": "NONE",
+    "small544_complete_baseline_candidate_pairs": 2
+  },
+  "models": [
+    {
+      "original_path": "/work/merlin/tasks/phase2-target-adapters-20261019/out/build/native-staged-v2/replay-holds-refined-v1/model.json",
+      "path": "models/selected-dc413.json",
+      "sha256": "dc413b315b21b0bb2874098c0421db5900d541aef99cf20f76fa8eaf02f3fc0d",
+      "status": "selected scoped exploratory model"
+    },
+    {
+      "original_path": "/work/merlin/tasks/phase2-pass-integration-20261018/out/artifacts/verification/v26-joint-public-train-refinement-v2/selected-model.json",
+      "path": "models/unpromoted-e2a.json",
+      "sha256": "e2a2328a451034fbd2e2a6be2c8fc3b636e945e0303d799ab6047df44a827c21",
+      "status": "not live-qualified successor"
+    }
+  ],
+  "original_campaign_clock": {
+    "authorization": "User: them do it!!! after explicit three launch gates and fixed-loop rerun recommendation",
+    "clock_reset_allowed": false,
+    "compiler_mode": "immutable copy, separate control and candidate products",
+    "compiler_origin": "/work/merlin/tasks/el4-capsule-requalification/.tmp/external-closure-20261020-v3/capsule-qualification/compiler",
+    "compiler_sha256": "29213759089b71de26f8a5ab26ca6ef1b8071dc0bb690041eb7de5d0efb53f24",
+    "deadline_utc": "2026-10-20T23:05:02+00:00",
+    "final_reserve_seconds": 2700,
+    "formal_campaign_started": false,
+    "hardware_loop_instructions_allowed": false,
+    "initial_merlin_commit": "370098483999fa950487150cea7fd0f8f29e92e5",
+    "initial_oot_commit": "4f4670e9a951848ced249dabba062826ed466ee7",
+    "maximum_cpu_ids": [
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+    ],
+    "new_gsim_jobs_allowed": false,
+    "new_paid_author_calls": 0,
+    "new_separately_authorized_run": true,
+    "objective": "Preserve original243member90requirement declaration and all refusals; no silent cohort reduction, weights, numerical or timing gate changes",
+    "phase1_task_edits": false,
+    "preceding_infrastructure_purpose": {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/perf-studies/gemmini/el4-20261018/phase2-infrastructure-followup-20261020T084208Z/purpose.json",
+      "sha256": "d111d65ae00e078b4ef2e1e42321c339b1c34143492955c983256be7c24061ea"
+    },
+    "previous_clock_modified": false,
+    "previous_closed_campaign": {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T142320Z/launch-intent.json",
+      "sha256": "6e8ab43cec873deb0c6c1a7403cf0ecb0806bfb1df0a56fd7bb330b7723b92ee"
+    },
+    "previous_final_result": {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T142320Z/final-result.json",
+      "sha256": "c8799ed48482a2040bc521014d8332d4947c878f5e07555f14b3c007c4493131"
+    },
+    "promotion": "Measured correct comparable evidence only; UNKNOWN cannot promote",
+    "schema": "merlin.phase2.authorized_development_loop_intent.v1",
+    "selected_execution": "explicit capsule-qualified development; full model/formal grade pending remain pending",
+    "shared_slot_root": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/phase2-compute-slots",
+    "source_qualification": {
+      "path": "/work/merlin/tasks/el4-capsule-requalification/.tmp/external-closure-20261020-v3/capsule-qualification/capsule_qualification_handoff.json",
+      "sha256": "53e52f0fcd866cc80dafbe1b99abe59edc7626ce48edf8db6974f91c7aafd73d"
+    },
+    "source_selection": {
+      "path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T142320Z/source-v7/selection.json",
+      "sha256": "a16d6fbb53b93c801e0c9d6cd471a707b02e6f88d53bfa663577910d8f1608e0"
+    },
+    "start_utc": "2026-10-20T19:05:02+00:00",
+    "state": "RUNNING_PREFLIGHT",
+    "target_admission_cutoff_utc": "2026-10-20T22:20:02+00:00",
+    "token_usage": {
+      "cached_input": null,
+      "output": null,
+      "reasoning_subset": null,
+      "uncached_input": null
+    }
+  },
+  "protected_packages": {
+    "el4_fire_aligned_v23_20261018": {
+      "REPORT.md": "8267d55fd1cafe6ea6bd4079bf027ef5d8f38f3fc98bdc5598d5756e6ddef684",
+      "bias_validation.py": "43cb76f1cf77918e7ac796bb1a71bc5118557612764acf66fb5052b43a4521fb",
+      "compiler.py": "75cea1f10234728f5f24b572d7b49da8d54ac68aeb6c927cc1ca98498e89ffde",
+      "conv_codegen.py": "64ad47086bedf4ea42138719dd924e41b4e63fb7ed4733d51551b3ff371760f8",
+      "device_fast.py": "4eb3a3dc869ef2ec6bde146e7d4b1e0859c88cf99b4eb464cfd3ae96cf8f5147",
+      "device_runtime.py": "58be975aa625957e6bfa9dae093af80a10b8e6cc3743f9ff29a9f54f42496695",
+      "direct_codegen.py": "3c41dc993c36d91a1b828e8f9ceafb95aa68b48eb8f3e43d20a10063bb0c9715",
+      "docs/iteration_notes.md": "82189fd2fbb55137dab54b7daeda4e4b4be9810d7451023fd9d32dc092437a2e",
+      "elementwise.py": "9b8581ac882d690eb64b02a654c9222353daebe5a92f227b205bf3ec2ed8ee70",
+      "emitter.py": "9a9a6af2941dee91a989946dc5588382e1595297ab480a173ba2b87524cfdb24",
+      "epilogue_validation.py": "3c74535f779774d28f0dfa6c87402fddf213d2be2532c5191ed59e2ed104cd33",
+      "frontend.py": "064377206663c8413f0861879b5e91ef7986dd2362a6a995c0259b0953d29e56",
+      "kernel_abi.py": "a410ff1e0b4d6e9bea2dd1e79b2a073e4aa5c0de0ae77071b79b956534df6276",
+      "linalg_frontend.py": "d668ed6ee3c0da29c7604355ff95600e452d8db277c6ae45625c6dbf5c825201",
+      "manifest.yaml": "bb1bad4cb82c4b6d31a156748feac86b4f4daec0deaabd6bb47423303a94d37d",
+      "mixed_codegen.py": "0bedc5e43ab7f011537226fbc1be7c2945d7b85660084a974a3b51b4e9a40711",
+      "pool_codegen.py": "67cedf1164028af6f8703a05035fbc6f015135f8326c403e22c134ec66e32089",
+      "pool_runtime.py": "6ae11e977f4a66eabbb45d2d0021a28c7132fa3529e7f71261bb4504da430cc9",
+      "provenance.py": "c5702a1b0d5f5917d10670373f1def402ee48e8bd43b4d4294120dbb52e86f2c",
+      "scalar_codegen.py": "4b700466b1e1d977c3da37055b9213de3164da0bd73e24b4b31bb420d9ffb24b",
+      "tensor_codegen.py": "8bdb74cc41ecf52e5da84d24068d1d979589ad37ad76f4540326e16218db7a23"
+    },
+    "el4_fire_aligned_v26_original_29213759": {
+      "REPORT.md": "f7d10a195379916d6e52bc4aac0d8467fe86bd7b21cd09a4ec262a421402bd14",
+      "backend.py": "3775fde5f87de2534585633a1b1a9db1d1c703840a6ebc2580cb79dd13206ab4",
+      "builder.py": "6ef98c486e55c84bf0b946f3174e74c66d11d2e70ee724c7e28c4937081894b0",
+      "compiler.py": "22d16ffbf42e404baf6b4554eab5796c2bc2f08eeedaea84eb2520bef6b2078a",
+      "contraction.py": "b96d460ff0cdb19731f79104a16c3c2d0d7d6872a81c6826d208ab0d98369d59",
+      "conv.py": "440902d6ca893231337ff33b79da7ef14ad00d21bd9c305b1f4b1ffc0e5de3e4",
+      "docs/iteration_notes.md": "5bc4723469694148a88a73d588d5980501268f9c20e0b6df5f54e3575d178422",
+      "elementwise.py": "d59e8e0e2f10c6f5e4224edaca1bca1730c4644289deb26702a78866d25ff0aa",
+      "frontend.py": "414c9ac1432f448c4508f5bc6403dd4c0a82a59a138419dc78f1bbee39d71dd4",
+      "linalg_frontend.py": "6df81874ecdbde74fd2ff799a0a167ea2bf5acfdb030492007c1741ccab28897",
+      "manifest.yaml": "1a8b513d4f017898da6bb679eb1e62a0d3e60bce9fce0dae7b0f18dc5e6df179",
+      "mixed_codegen.py": "c27270324e47a02c162baf1f5e2731267621fa82aff45367f1a737d1e9f6cc3e",
+      "mixed_frontend.py": "8ab858b35d7df02e9c781317c8f357e5d29a6a5a23a03efa76f5ef1618bd19f1",
+      "mixed_scalar.py": "ba2b57a9ce740304f04c373d3383acce7f69e43a43cf5569c69923dfb0d5368e",
+      "pooling.py": "b6a0ef91b4d4444bce5d33c13d9a1253bcd27639032e0eb92f87f53613ecf84b",
+      "task_tags.py": "39385352d5edea3351d590d60ce39a0d7ae480f4793983868cfdd714e4a6966e"
+    }
+  },
+  "purpose": "Source preservation and integration; no new performance qualification",
+  "schema": "phase2.el4.integration_checkpoint.v1",
+  "spike": {
+    "base_commit": "dea21091bc2164989eaacd0c7acf62c79d004ee8",
+    "branch": "cx/phase2-el4-explore-20261018",
+    "head_commit": "e6fc3992faf6a30558f7f382a69ac12daa46d672",
+    "original_remote": "local P1 task, intentionally not pushed or edited",
+    "patches": [
+      {
+        "commit": "42d1618db3867e956f76ea006f6cdf141cdb4f6f",
+        "path": "spike-patches/0001-42d1618db386.patch",
+        "sha256": "132a9e68f7b3c60ada2ee026ea4e4b47e26601d9c81de2c9eff330fc31558944"
+      },
+      {
+        "commit": "83439ef98709e30297bd123a378a6a1bf63142e0",
+        "path": "spike-patches/0002-83439ef98709.patch",
+        "sha256": "7ba5340ab4d31edbdb4773591e067c781012fb124b1f00e2c995fad71d25dcb3"
+      },
+      {
+        "commit": "92b66313896a15c32a05352f1fb8938fad35a898",
+        "path": "spike-patches/0003-92b66313896a.patch",
+        "sha256": "3f43cfa043395f19e0fc2ca3b95251ac6deb0ea1ea550c76dc09674767d62755"
+      },
+      {
+        "commit": "b113394ce7fcbae6b2796ed26ab80e50aa2d6f9b",
+        "path": "spike-patches/0004-b113394ce7fc.patch",
+        "sha256": "622d75325fb213dd01f998d9684ccd1a844233c2dae936f40c88c2bab87c945e"
+      },
+      {
+        "commit": "878a91144244aae89eaa9b7a0e039f08678acb36",
+        "path": "spike-patches/0005-878a91144244.patch",
+        "sha256": "398b2058966cba6380de46be803736dd57316ac491b484170960bff3e0640094"
+      },
+      {
+        "commit": "c6cb9b79d0f7264d07f71f3293714d351aa5a14e",
+        "path": "spike-patches/0006-c6cb9b79d0f7.patch",
+        "sha256": "ce1f9dd0dde00abe32ce58110d98106781af264c83fd391a41d8f2c12bcf8102"
+      },
+      {
+        "commit": "e8205a161a1c2e07413a596239573bebd34fcf33",
+        "path": "spike-patches/0007-e8205a161a1c.patch",
+        "sha256": "7c5d7d8c26247282b10cb9df7d045ef2d26a7c7b50e12f619ad813740abb57f3"
+      },
+      {
+        "commit": "e6fc3992faf6a30558f7f382a69ac12daa46d672",
+        "path": "spike-patches/0008-e6fc3992faf6.patch",
+        "sha256": "443cc83c902f666feb99d5e4e9dd823f8e8a039e0eacc04461ed8f285c2c3fa3"
+      }
+    ],
+    "profile_prerequisite_patches": [
+      {
+        "commit": "8aa62f2a609713f197ab4f57446f517956b127ba",
+        "path": "spike-patches/0000-base-01-8aa62f2a6097.patch",
+        "sha256": "40a049a4e089d433f5c73e4788f398c3c2eb55decf8e066d438519c3d9c12dc7"
+      },
+      {
+        "commit": "dea21091bc2164989eaacd0c7acf62c79d004ee8",
+        "path": "spike-patches/0000-base-02-dea21091bc21.patch",
+        "sha256": "35e1c4021d3e8e7ccf299e66c9164535739687f507dd0e5c67b8ef304e6fc982"
+      }
+    ],
+    "public_upstream_branch": "feat/annotated-spike-model",
+    "public_upstream_commit": "806ec0adda2242597b253ebf17adfaa5cdb395e3",
+    "upstream_source_url": "https://github.com/copparihollmann/riscv-isa-sim-gemmini.git"
+  }
+}

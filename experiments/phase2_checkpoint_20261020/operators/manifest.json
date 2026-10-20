@@ -1,0 +1,43 @@
+{
+  "schema": "phase2.original_operator_source_snapshots.v1",
+  "files": [
+    {
+      "original_path": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/launch_phase2_loop_190502_parallel_estimates_v5.py",
+      "saved_path": "operators/launch_phase2_loop_190502_parallel_estimates_v5.py.txt",
+      "sha256": "df24477c75ce56e1c05324f5f2a182dffc43b9bc6a6dc6648e24f9d39e9eb614",
+      "status": "historical operator snapshot; original selections/gates remain required"
+    },
+    {
+      "original_path": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/phase2_loop_190502_parallel_estimates_v5.py",
+      "saved_path": "operators/phase2_loop_190502_parallel_estimates_v5.py.txt",
+      "sha256": "84b6214c171bfa5f21a3e91e5a816e72d8ef10c5409077a7e3f25848e07d63f1",
+      "status": "historical operator snapshot; original selections/gates remain required"
+    },
+    {
+      "original_path": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/prepare_runtime_accumulator_overwrite_v2.py",
+      "saved_path": "operators/prepare_runtime_accumulator_overwrite_v2.py.txt",
+      "sha256": "eeb9938309e93f3a9915c076bb8ca268c773e1558ecf7e4a1e3541f479875a3f",
+      "status": "historical operator snapshot; original selections/gates remain required"
+    },
+    {
+      "original_path": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/native-exploratory-constructor-v1.py",
+      "saved_path": "operators/native-exploratory-constructor-v1.py.txt",
+      "sha256": "d0adf2768ffc3a55ef2bc77a178b16247e9ddf728ee338014c36989e610a6704",
+      "status": "historical operator snapshot; original selections/gates remain required"
+    },
+    {
+      "original_path": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/verify_el4_publication_20261020_v2.py",
+      "saved_path": "operators/verify_el4_publication_20261020_v2.py.txt",
+      "sha256": "dd5658eba43eb12495a20af38b037cfe3414fa2048e3dba1a8b591f401303cba",
+      "status": "historical operator snapshot; original selections/gates remain required"
+    },
+    {
+      "original_path": "/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/phase2-verification-env-v1.sh",
+      "saved_path": "operators/phase2-verification-env-v1.sh.txt",
+      "sha256": "7f5b944f9b4f2c9c4d76f96e98ee64a3dc653c2e4b772267c8ec01b48f4cbb3c",
+      "status": "historical operator snapshot; original selections/gates remain required"
+    }
+  ],
+  "automatic_launch": false,
+  "portability": "Paths and original source owners must be explicitly selected for another task; saved source never restores qualifications"
+}

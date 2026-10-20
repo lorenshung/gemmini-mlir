@@ -1,0 +1,135 @@
+From 92b66313896a15c32a05352f1fb8938fad35a898 Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Mon, 19 Oct 2026 04:27:09 +0000
+Subject: [PATCH] Refresh exact canonical timing core v2 source snapshot
+
+---
+ timing/core/CMakeLists.txt       |  3 +++
+ timing/core/README.md            | 46 ++++++++++++++++++++++++++++++++
+ timing/core/source-manifest.json | 24 ++++++++++++-----
+ 3 files changed, 66 insertions(+), 7 deletions(-)
+
+diff --git a/timing/core/CMakeLists.txt b/timing/core/CMakeLists.txt
+index c0fbad0..bd2d0e3 100644
+--- a/timing/core/CMakeLists.txt
++++ b/timing/core/CMakeLists.txt
+@@ -12,6 +12,9 @@ if(BUILD_TESTING)
+   add_executable(merlin_timing_test tests/test_engine.cpp)
+   target_link_libraries(merlin_timing_test PRIVATE merlin_timing)
+   add_test(NAME merlin_timing_core COMMAND merlin_timing_test)
++  add_executable(merlin_timing_reservations_test tests/test_reservations.cpp)
++  target_link_libraries(merlin_timing_reservations_test PRIVATE merlin_timing)
++  add_test(NAME merlin_timing_reservations COMMAND merlin_timing_reservations_test)
+ endif()
+ 
+ install(DIRECTORY include/ DESTINATION include)
+diff --git a/timing/core/README.md b/timing/core/README.md
+index 89dcfac..92b5710 100644
+--- a/timing/core/README.md
++++ b/timing/core/README.md
+@@ -53,3 +53,49 @@ header, native test, CMake file, README and license into a fresh directory, with
+ per-file SHA-256 identities. The same source payload is included in the wheel,
+ so export works without a compiler checkout. `verify_cpp_core` detects changed,
+ missing or additional files. Build outside the exported source directory.
++
++## Target provider bundles
++
++`merlin_timing.provider_bundle.export_bundle(payloads, destination,
++entrypoint="observer.cpp")` packages a caller-selected map of filenames to source
++bytes. The manifest declares the translation unit and complete source roster;
++the builder contains no accelerator name, instruction semantics or hardware
++parameters. Exports are limited to one MiB and 64 files.
++
++The export includes the canonical `build_provider.py`, which runs independently
++of this package using Python's standard library:
++
++```sh
++python3 /path/to/provider-source/build_provider.py --verify-only
++python3 /path/to/provider-source/build_provider.py \
++  --spike-root /path/to/annotated-spike \
++  --output-library /path/to/libtiming_provider.so
++```
++
++Compilation uses one C++17 compiler process, pins the source bundle and generic
++runtime headers before and after building, and publishes a new library inode.
++Target simulator sources and facts belong in the simulator repository's examples,
++independently of the generated OOT compiler. The shared builder supplies no
++kernel, schedule, timing prices or calibration evidence. Candidate grants expose
++reviewed runtime endpoints through the broker; simulator sources remain operator
++build inputs.
++# Asynchronous reservation APIs
++
++The additive `Engine::submit_detached` API schedules a controller effect without
++advancing CPU admission to its future completion. `advance_issue` separately
++applies explicit frontend backpressure. Original `submit` and `barrier` behavior
++is unchanged. Adapters must establish actual dependency and completion effects;
++these APIs supply no physical timing qualification.
++
++`ReservationWindow` tracks bounded entries by generation and keeps each owned
++until its explicit release stage. Allocation can wait for a known release;
++unresolved releases cannot become zero cost or free entries. A selected adapter
++may exclude an exact outstanding ticket from its drain predicate only when its
++original hardware/software completion contract allows that exception. Waiting
++resource queues and completion-owned reservations are different abstractions.
++
++The portable source export now emits version 2, including the reservation header
++and its executable checks. Version 1 exports retain their exact original roster
++and remain verifiable without being rewritten. The simulator's source package
++must retain the manifest of its exact canonical export; copied vendor bytes are
++a versioned source snapshot, never another maintained implementation.
+diff --git a/timing/core/source-manifest.json b/timing/core/source-manifest.json
+index 8657712..25704a1 100644
+--- a/timing/core/source-manifest.json
++++ b/timing/core/source-manifest.json
+@@ -1,14 +1,14 @@
+ {
+   "members": [
+     {
+-      "bytes": 18369,
++      "bytes": 19075,
+       "path": "include/merlin_timing/engine.hpp",
+-      "sha256": "938000dbab04276be63e37b1a148c8fe0927fe0d6143f08ec5f92e6fb7ef4018"
++      "sha256": "452f82eaeb9c23044a49b8704d4301ad3613076037cbc18d2943918a41dee5ff"
+     },
+     {
+-      "bytes": 765,
++      "bytes": 1006,
+       "path": "CMakeLists.txt",
+-      "sha256": "80b57d8bc513beb5d6a7bc47e5c24b5f7418a09544802d882c6701293d6a3aa2"
++      "sha256": "d8d486eb5989be350104b95753e254ae324649294fbbdc789c98d3a5ac04b868"
+     },
+     {
+       "bytes": 15327,
+@@ -16,16 +16,26 @@
+       "sha256": "fcf416201274e1cfedd0c8a93c46526ccc50d41321c8965e30b52750908ab99a"
+     },
+     {
+-      "bytes": 3164,
++      "bytes": 5661,
+       "path": "README.md",
+-      "sha256": "0ccfbd4ebbfffac67cfd5f11162e6c6f751b783f196bb4cc621b3d4a1c5eacb5"
++      "sha256": "6b20bf4cd43f1452bedcc295098aa1924276dd495369f8b1dec67fee5f4f2e7b"
+     },
+     {
+       "bytes": 13139,
+       "path": "LICENSE",
+       "sha256": "d1343a273045ca4e0abe4c7dc8b39fb066b699d3c16060b468d08347b7d41d0e"
++    },
++    {
++      "bytes": 2422,
++      "path": "include/merlin_timing/reservations.hpp",
++      "sha256": "672ed5be138226533b49a8c38c91b2623494b5162286862ed7fcc48f77e37c65"
++    },
++    {
++      "bytes": 1357,
++      "path": "tests/test_reservations.cpp",
++      "sha256": "cf32aea3d5e1e3cd6473f2669d4e17d03d27393ddc63768ea17346ba82ca0c7d"
+     }
+   ],
+-  "schema": "merlin_timing.cpp_export.v1",
++  "schema": "merlin_timing.cpp_export.v2",
+   "scope": "source byte identity only; no model, hardware or timing qualification"
+ }
+-- 
+2.34.1
+

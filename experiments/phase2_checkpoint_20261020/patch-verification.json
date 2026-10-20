@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "method": "Separate temporary Git index; apply all8 patches to exactbase and compare entiretree to preservedhead",
+  "expected_tree": "0dbe447588a44fe569ee134eab0860f923926ed6",
+  "actual_tree": "0dbe447588a44fe569ee134eab0860f923926ed6",
+  "source_worktrees_changed": false,
+  "wall_seconds": 0.023450435983249918
+}

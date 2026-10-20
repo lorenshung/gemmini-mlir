@@ -1,0 +1,269 @@
+"""Trusted launch selection for the normal capsule-source author and queue."""
+import hashlib
+import importlib.util
+import json
+import os
+import resource
+import time
+import traceback
+from dataclasses import asdict
+from pathlib import Path
+
+ROOT = Path('/work/merlin/tasks/phase2-el4-explore-20261018')
+PREVIOUS = ROOT / 'out/artifacts/perf-studies/gemmini/el4-20261018/phase2-launch-20261020T091838Z'
+LAUNCH = ROOT / 'out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T190502Z'
+RETAINED_FROM = ROOT / 'out/artifacts/perf-studies/gemmini/el4-20261018/phase2-loop-20261020T142320Z'
+OUT = LAUNCH / 'retained-parallel-estimates-v5'
+B = Path('/work/merlin/tasks/phase2-pass-integration-20261018/out/artifacts/verification')
+A = Path('/work/merlin/tasks/phase2-dev-capsules-20261019/out/artifacts/verification/development-sources')
+intent = json.loads((LAUNCH / 'launch-intent.json').read_bytes())
+selection = json.loads((LAUNCH / 'selected-source-v10.json').read_bytes())
+historical_seal = Path(selection['historical_qualification']['path'])
+qual = {'path':'/work/merlin/tasks/el4-capsule-requalification/.tmp/external-closure-20261020-v3/capsule-qualification/capsule_qualification_handoff.json',
+        'sha256':'53e52f0fcd866cc80dafbe1b99abe59edc7626ce48edf8db6974f91c7aafd73d'}
+state = {'schema':'phase2.automatic_capsule_author_host.v1','author_started':False,
+         'formal_campaign_started':False,'timing':'UNKNOWN outside original qualified domain',
+         'promotion_authority':'NONE','stages':[]}
+started = time.monotonic()
+
+
+def pin(path):
+    path = Path(path)
+    return {'path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def write(path, document):
+    temporary = path.with_suffix(path.suffix+'.new')
+    temporary.write_text(json.dumps(document,indent=2)+'\n')
+    temporary.replace(path)
+
+
+def progress(stage, **values):
+    state.update(stage=stage,wall_seconds=time.monotonic()-started,**values)
+    write(OUT/'host-status.json',state)
+
+
+def load(name, path, sha):
+    if pin(path)['sha256']!=sha:
+        raise ValueError('Trusted original constructor source changed')
+    spec=importlib.util.spec_from_file_location(name,path)
+    module=importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+# V8 reserves virtual address space beyond its resident memory.
+# The outer original-owned-process supervisor samples aggregate RSS at 4 GiB;
+# candidate queue workers retain their independent 1 GiB AS limit.
+resource.setrlimit(resource.RLIMIT_CORE,(0,0))
+resource.setrlimit(resource.RLIMIT_FSIZE,(128<<20,128<<20))
+resource.setrlimit(resource.RLIMIT_CPU,(20000,20001))
+try:
+    from merlin.common.cpu_pool import current_thread_owns_cpu_lease
+    from merlin.benchharness import hash_tree
+    from merlin_experiments.phase1.feedback import capsule_qualification_replay as Q
+    from merlin_experiments.phase2 import authoring, campaign as PC
+    from merlin.targetgen.sandbox import toolchain as TC
+    from merlin_experiments.phase2.capsule_iteration import FrozenQualifiedCapsulePhase1
+    from merlin_experiments.phase2.capsule_source_development import CapsuleSourceDevelopment
+    from merlin_experiments.phase2.evaluation_pool import AssignedResources, JobResources
+    from merlin_experiments.phase2.search_configuration import read_search_configuration
+    from merlin_experiments.phase2.search_coordinator import SearchSettings
+
+    progress('reconstruct_original_current_runtime_and_public_source_owners')
+    runtime=load('phase2_trusted_runtime_constructor','/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/prepare_runtime_accumulator_overwrite_v2.py',
+                 'eeb9938309e93f3a9915c076bb8ca268c773e1558ecf7e4a1e3541f479875a3f')
+    public=load('phase2_trusted_public_constructor','/work/merlin/tasks/phase2-dev-capsules-20261019/out/artifacts/verification/development-sources/public544-objective175-constructor-v1/constructor.py',
+                'cbf58736b65ed425d6a9f86e43cff8352b29010ead4795ee39a43e8dbaa68c9d')
+    owners,runtime_report=runtime.prepare_runtime(OUT/'runtime')
+    corpus,corpus_report=public.prepare(OUT/'public-corpus')
+    write(OUT/'runtime-selection.json',runtime_report)
+    write(OUT/'public-corpus-selection.json',corpus_report)
+    if current_thread_owns_cpu_lease():
+        raise ValueError('Author coordinator retained a parent CPU lease')
+    progress('construct_original_archive_calibrated_native_observer')
+    constructor=load('phase2_trusted_native_constructor','/work/merlin/tasks/phase2-el4-explore-20261018/.tmp/native-exploratory-constructor-v1.py',
+                     'd0adf2768ffc3a55ef2bc77a178b16247e9ddf728ee338014c36989e610a6704')
+    native=constructor.prepare_exploration(OUT/'native-observer',source_capability=owners['source_capability'],
+                                          direct_source_domain=True,collect_unqualified_counts=True)
+    write(OUT/'native-observer-selection.json',native.record())
+    config={'snapshot':str(historical_seal.parent),'seal_sha256':selection['historical_qualification']['sha256'],
+            'qualification':qual}
+    q=json.loads(Path(qual['path']).read_bytes())
+    baseline=Path(q['handoff']['compiler']['path'])
+    if hash_tree(baseline)['sha256']!=intent['compiler_sha256']:
+        raise ValueError('Original qualified compiler changed')
+    owner=FrozenQualifiedCapsulePhase1(Path(q['original_run_dir']),Path(q['descriptor']['path']),
+                                     q['submission_sha256'],Path(qual['path']),qual['sha256'])
+    development=CapsuleSourceDevelopment(corpus,owners['service'],owners['target_experiment'],
+                                         native_exploration=native,qualification_verification=config)
+    import shutil
+    from merlin.targetgen.compiler_library import scoped_compiler_library
+    from merlin.targetgen.compiler_pass_selection import scoped_compiler_passes
+    from merlin_experiments.phase1.feedback.compiler_pass_delegation import scoped_selected_parent_pass_delegation
+    from merlin_experiments.phase2 import capsule_ordinary_scope as C
+    from merlin_experiments.phase2 import capsule_source_development as D
+    from merlin_experiments.phase2 import ordinary_fast_feedback as FAST
+    from merlin_experiments.phase2.edit_authority import FrozenEditAuthority
+    from merlin_experiments.phase2.retained_revisions import RetainedRevisionStore
+    from merlin_experiments.phase2.native_development_decision import decide
+    planning=A/'DS0-selected-target-publication-v2/handoff-v1/all243-selected-target-writer-overlay.json'
+    if pin(planning)['sha256']!='0bba25309bb31179f1813ce99460ad2ef96c16fb0d3ffadf3d248892410a4a3a':
+        raise ValueError('Complete243 declaration changed')
+    edit=A/'broad-v26-author-configuration-v1/compiler-edit-contract-v2.json'
+    if pin(edit)['sha256']!='1584be23b60154aa2d7f4d8f3d9d3f37aeb711233208c3d9c34b343c964730e1':
+        raise ValueError('Broad original edit authority changed')
+    candidate=OUT/'candidate'
+    shutil.copytree(baseline,candidate)
+    baseline_copy=OUT/'baseline'
+    PC.materialize_readonly_tree(candidate,baseline_copy)
+    resources=AssignedResources(tuple(intent['maximum_cpu_ids']),4<<30,2<<30,4,author_cores=0,reserve_fraction=0)
+    grant=JobResources(1,1<<30,128<<20,1,files=16384)
+    resources.verify();grant.verify()
+    authority_root=OUT/'edit-authority';authority_root.mkdir()
+    authority=FrozenEditAuthority(authority_root,guidance_contract=PREVIOUS/'author-contract')
+    authority.freeze(candidate,json.loads(edit.read_bytes()),has_iterations=False)
+    with (scoped_compiler_library(owners['library']),scoped_compiler_passes(owners['compiler_pass_selection']),
+          scoped_selected_parent_pass_delegation(owners['compiler_pass_selection']),
+          Q.qualification_verification_snapshot(**config)):
+        progress('fresh_original_capsule_qualified_scope')
+        functional,scope=C.select(owner,functional_runs_root=Path(q['original_run_dir']).parent,
+            functional_run_id=Path(q['original_run_dir']).name,functional_submission_sha256=q['submission_sha256'],
+            target_experiment=owners['target_experiment'],required_cohort_declaration=pin(planning),
+            development_inputs=development)
+        progress('fresh_original_scoped_policy')
+        policy=D.prepare_policy(development,scope,candidate=candidate,baseline=baseline_copy,corpus=corpus,
+            target_experiment=owners['target_experiment'],edit_authority=authority,
+            compiler_library_selection=owners['library'],compiler_pass_selection=owners['compiler_pass_selection'],
+            checked_source_diagnostic=owners['checked_source_diagnostic'],contract_root=PREVIOUS/'author-contract',
+            work_root=OUT/'execution',receipt_path=OUT/'receipts/diagnostic-policy.json')
+        policy.receipt_path.parent.mkdir();write(policy.receipt_path,policy.binding())
+        campaign_remaining=int(__import__('datetime').datetime.fromisoformat(intent['deadline_utc']).timestamp()-time.time())
+        settings=SearchSettings(beam_width=2,soft_seconds=campaign_remaining,hard_seconds=campaign_remaining,
+            final_reserve_seconds=2700,minimum_improvement=.01,plateau_batches=3)
+        search={'schema':'merlin.capsule_diagnostic_search_configuration.v1',
+            'manifest_sha256':corpus.manifest_sha256,'corpus_sha256':corpus.capsules_sha256,
+            'baseline_sha256':q['submission_sha256'],'certificate_sha256':None,
+            'resources':{**asdict(resources),'cpu_ids':list(resources.cpu_ids)},'job_resources':asdict(grant),
+            'settings':asdict(settings),'source_bytes':32<<20,'source_files':8192,'retained_source_bytes':128<<20,
+            'max_pending':4,'max_jobs':4,'author_agents':1}
+        search_path=OUT/'search-configuration.json';write(search_path,search)
+        pool=read_search_configuration(search_path).install(policy,edit_authority=authority,root=OUT/'_search')
+        revision=pool.baseline_revision
+        try:
+            from datetime import datetime
+            from merlin_experiments.phase2.retained_revisions import source_inventory
+            members=tuple((m.family,m.capsule) for m in corpus.capsules)
+            original_prior=RETAINED_FROM/'author-run-v3/stage/_search/revisions/580af833ab28e23e52e8b1268f6d38ff516383731d3261d74f8c54bb7314e96f.json'
+            old_revisions=RETAINED_FROM/'author-run-v3/stage/_search/revisions'
+            prior_rows=[]
+            for leaf in old_revisions.glob('*.json'):
+                row=json.loads(leaf.read_bytes())
+                if row.get('source_sha256')=='85f4799617a22bcd06afd2032775b90831a8276fdd7f3e727cd8b323d0a793ed':
+                    prior_rows.append((leaf,row))
+            if len(prior_rows)!=1:
+                raise ValueError('Prior genuine authored retained source is ambiguous or absent')
+            prior_leaf,prior_record=prior_rows[0]
+            prior_source=old_revisions/'sources'/prior_record['source_sha256']
+            prior_inventory=source_inventory(prior_source,max_bytes=32<<20,max_files=8192,readonly=True)
+            if prior_inventory['sha256']!=prior_record['source_sha256']:
+                raise ValueError('Prior retained source changed')
+            write(OUT/'prior-authored-source-selection.json',{'source':str(prior_source),
+                'source_sha256':prior_record['source_sha256'],'original_revision':pin(prior_leaf),
+                'original_native_author_events':pin(RETAINED_FROM/'author-run-v3/stage/rounds/round_00.codex_events.raw.jsonl'),
+                'status':'unpromoted authored source; old refused checkpoint remains refused',
+                'hypothesis':'bounded RHS residency across M tiles',
+                'affected_selection_reason':'M17 uses multiple M panels with the same original RHS; full pending corpus retained',
+                'new_numerical_or_timing_authority':False})
+            from merlin_experiments.phase2.exploratory_development_priority import decide as advise
+            control_revision=revision
+            config_source=A/'store-config-hoist-candidate-v3/candidate'
+            config_delivery=A/'store-config-hoist-candidate-v3/delivery.json'
+            if pin(config_delivery)['sha256']!='99b5402c259828472e9d51d926f10e1831a8db7d908cd102def05f1239f31fbd':
+                raise ValueError('Independent configuration candidate declaration changed')
+            config_sha='a3cd3019f3406310201bdbf78402c662165b22fe721d15236984b6cb7cbb0118'
+            if source_inventory(config_source,max_bytes=32<<20,max_files=8192,readonly=True)['sha256']!=config_sha:
+                raise ValueError('Independent configuration candidate source changed')
+            treatments=(('rhs_residency',prior_source,prior_record['source_sha256']),
+                        ('store_config_hoist',config_source,config_sha))
+            jobs=[]
+            # Stage immutable source revisions first; admitted workers consume their
+            # retained copies, never this next editable candidate directory.
+            for treatment,source,expected_sha in treatments:
+                candidate.chmod(candidate.stat().st_mode|0o200)
+                for leaf in candidate.rglob('*'):
+                    leaf.chmod(leaf.stat().st_mode|0o200)
+                shutil.copytree(source,candidate,dirs_exist_ok=True)
+                for leaf in candidate.rglob('*'):
+                    leaf.chmod(leaf.stat().st_mode|0o200)
+                revision=pool.revisions.freeze(candidate,parent_revision=control_revision.revision_id,
+                    options={'edit_family':treatment,'hypothesis':'independent exploratory compiler mechanism'})
+                if revision.source_sha256!=expected_sha:
+                    raise ValueError('Retained source differs from declared candidate')
+                for member in members:
+                    remaining=datetime.fromisoformat(intent['target_admission_cutoff_utc']).timestamp()-time.time()
+                    if remaining<1000:
+                        raise TimeoutError('No new 900-second job fits before fixed admission cutoff')
+                    policy.validate_search_inputs()
+                    progress('submit_'+treatment,revision=revision.public_record(),member=list(member))
+                    job=pool.submit(revision.revision_id,kind=FAST.SELECTED_KIND,
+                                    selected_members=(member,),timeout_s=900)
+                    jobs.append((treatment,revision,member,job['job_id']))
+                    progress('queued_parallel_candidates',jobs=[
+                        {'treatment':t,'member':list(m),'job_id':j}for t,_r,m,j in jobs])
+            outcomes=[]
+            pending={row[3]:row for row in jobs}
+            results={}
+            while pending:
+                changed=False
+                for job_id,(treatment,revision,member,_) in list(pending.items()):
+                    row=pool.status(job_id)
+                    if row['state'] not in {'completed','refused','cancelled'}:
+                        continue
+                    changed=True
+                    name=treatment+'-'+member[1]
+                    write(OUT/(name+'-job-terminal.json'),row)
+                    complete=False
+                    if row['state']=='completed':
+                        result=row['result']
+                        FAST.validate_feedback(result,policy=policy,revision=revision,kind=FAST.SELECTED_KIND)
+                        write(OUT/(name+'-diagnostic-feedback.json'),result)
+                        decision=decide(result,owner=native,required_members=(member,))
+                        write(OUT/(name+'-native-development-decision.json'),decision)
+                        advice=advise(result,required_members=(member,),minimum_improvement=settings.minimum_improvement)
+                        write(OUT/(name+'-exploratory-next-parent.json'),advice)
+                        selected=[cell for cell in result['cells']if (cell['family'],cell['capsule'])==member]
+                        complete=len(selected)==1 and all(
+                            selected[0][arm].get('functional_status')=='PASS'
+                            and selected[0][arm].get('compiled',{}).get('status')=='observed'
+                            for arm in ('baseline','candidate'))
+                        results[(treatment,member)]=(result,selected[0])
+                    outcomes.append({'treatment':treatment,'member':list(member),'job_id':job_id,
+                        'queue_state':row['state'],'refusal':row.get('refusal'),
+                        'complete_functional_and_compiled':complete,'source_sha256':revision.source_sha256})
+                    del pending[job_id]
+                    write(OUT/'outcomes.json',{'schema':'phase2.original_parallel_candidate_outcomes.v1',
+                        'outcomes':outcomes,'promotion_authority':'NONE','old_refusals_relabelled':False})
+                progress('parallel_candidate_feedback',pending=[
+                    {'treatment':t,'member':list(m),'job_id':j}for t,_r,m,j in pending.values()],outcomes=outcomes)
+                if pending:
+                    time.sleep(5)
+            # The objective roster is fixed before any result. A missing/failed
+            # member remains a failure, never a smaller winning aggregate.
+            for treatment,_,_sha in treatments:
+                if all((treatment,m)in results for m in members):
+                    merged={'selected_members':[list(m)for m in members],
+                            'cells':[results[(treatment,m)][1]for m in members]}
+                    write(OUT/(treatment+'-paired-objective-exploratory-next-parent.json'),
+                          advise(merged,required_members=members,minimum_improvement=settings.minimum_improvement))
+            progress('completed_parallel_independent_mechanisms',outcomes=outcomes,
+                     promotion_authority='NONE',full_cohort_admitted=False)
+            if not all(row['complete_functional_and_compiled']for row in outcomes):
+                raise ValueError('Parallel diagnostic completed with preserved functional or queue refusals')
+        finally:
+            pool.close()
+
+except BaseException as error:
+    progress('precise_launch_or_author_refusal',exception=type(error).__name__,reason=str(error),
+             traceback=traceback.format_exc())
+    raise

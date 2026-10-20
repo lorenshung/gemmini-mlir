@@ -1,0 +1,157 @@
+"""Prospective explicit multi-contraction runtime constructor; no compile, trace or queue.
+
+prepare_runtime(freshroot) returns live original owners. Its JSON evidence is
+not a means of restoring those owners or approving any emitted program.
+"""
+from __future__ import annotations
+
+import copy
+import hashlib
+import inspect
+import json
+import os
+import resource
+import shutil
+import sys
+import time
+import traceback
+from pathlib import Path
+
+ROOT = Path('/work/merlin/tasks/phase2-el4-explore-20261018')
+C = Path('/work/merlin/tasks/phase2-target-adapters-20261019')
+OLD_PLAN = C / 'out/artifacts/target-adapters/gemmini/native-finite-normal-queue-v1/plan.private.json'
+DESCRIPTOR = Path('/work/merlin/tasks/phase1-harness-v2/.sub/agent-a754baf87337521b4/merlin/out/artifacts/protocols/gemmini/phase0-closure-20261019-v26/payload/experiment/target_experiment.yaml')
+DESCRIPTOR_SHA = '7b3a28319b3e0f6e6d873238f706e2ab9461ff3c95144f2a0dd5ae1aaf651320'
+LIBRARY_SHA = '82c7b18ad2df3704e864340275398a56bf811101b3f5d7b22a5c9979ae2ca8db'
+
+
+def pin(path):
+    path = Path(path)
+    if path.is_symlink() or path.resolve(strict=True) != path or not path.is_file():
+        raise ValueError('Expected an original canonical regular leaf')
+    return {'path': str(path), 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+
+
+def selected_path(path):
+    """New host source selection, never repinning an old factory receipt."""
+    path = Path(path)
+    if path.is_relative_to(C / 'merlin'):
+        return ROOT / 'merlin' / path.relative_to(C / 'merlin')
+    if path.is_relative_to(C / 'gemmini-mlir'):
+        return ROOT / 'gemmini-mlir' / path.relative_to(C / 'gemmini-mlir')
+    raise ValueError('Old source roster contains an unexpected namespace')
+
+
+def prepare_runtime(freshroot):
+    from merlin.common.cpu_pool import current_thread_owns_cpu_lease, shared_compute_pool
+    from merlin.targetgen.checked_source_model_diagnostic import POINTER_PROTOCOL, select_checked_source_diagnostic
+    from merlin.targetgen.common_transforms import CommonTransformService
+    from merlin.targetgen.compiler_pass_selection import CompilerPassSelection
+    from merlin.targetgen.target_experiment import load_target_experiment
+    from merlin_experiments.phase2.compiler_library_state import restore_selection
+    from merlin_experiments.phase2.public_diagnostic_launch import require_current_native_contract
+    import gemmini_generated_source_factory as F
+    from gemmini_generated_source_diagnostic import _STATE
+
+    root = Path(os.environ['TASK_DIR'])
+    freshroot = Path(freshroot)
+    if root.resolve(strict=True) != root or freshroot.resolve() != freshroot or not freshroot.is_relative_to(root):
+        raise ValueError('Runtime preparation requires a canonical fresh output under actual TASK_DIR')
+    if freshroot.exists() or freshroot.is_symlink() or current_thread_owns_cpu_lease():
+        raise ValueError('Runtime preparation requires fresh output and no parent-held CPU lease')
+    freshroot.mkdir(parents=True)
+    state = {'schema': 'merlin.current_original_multicontraction_runtime_preparation.v2', 'target_jobs': 0, 'queue_submissions': 0, 'native_count_jobs': 0, 'timing': 'UNKNOWN', 'promotion_authority': 'NONE', 'stages': []}
+
+    def stage(name):
+        state['stage'] = name
+        (freshroot / 'progress.json').write_text(json.dumps(state, indent=2, sort_keys=True) + '\n')
+
+    with shared_compute_pool(timeout_s=60):
+        stage('original_library_profile_and_current_source_factory_selection')
+        if pin(DESCRIPTOR)['sha256'] != DESCRIPTOR_SHA:
+            raise ValueError('Original capsule-qualified target descriptor changed')
+        old = json.loads(OLD_PLAN.read_bytes())
+        inputs = copy.deepcopy(old['factory']['inputs'])
+        # Explicit new source/effect owner; no old record or verdict is repinned.
+        inputs['source_binding_protocol'] = 'gemmini.pointer_source_contractions.v1'
+        inputs['source_accumulator_effects_protocol'] = 'gemmini.accumulator_first_product_overwrite.v2'
+        inputs['software_spec'] = str(selected_path(inputs['software_spec']))
+        target = load_target_experiment(DESCRIPTOR, source_root=ROOT / 'merlin')
+        inputs['execution_contract'] = str(Path(target.declared_contract))
+        os.environ['MERLIN_RTL_FACTS'] = inputs['facts']
+        os.environ['MERLIN_TARGET_CONTRACT'] = inputs['execution_contract']
+        os.environ['MERLIN_TARGET_EXPERIMENT'] = str(DESCRIPTOR)
+        state['current_native_contract'] = require_current_native_contract(target.target, pin(inputs['execution_contract']))
+        library_pin = old['library_selection']
+        if pin(library_pin['path']) != library_pin:
+            raise ValueError('Original reviewed library selection changed')
+        library = restore_selection(json.loads(Path(library_pin['path']).read_bytes())['selection'])
+        if library.contract.sha256 != LIBRARY_SHA:
+            raise ValueError('Original source-binding library identity differs')
+        profile = old['profile']
+        if pin(profile['archive']['path']) != profile['archive']:
+            raise ValueError('Original V6 profile archive changed')
+        service = CommonTransformService(workspace=Path(profile['workspace']), bundle_manifest=Path(profile['archive']['path']), repo=Path(profile['repo']))
+        service._verify()
+        if (service.profile['sha256'], service.snapshot_digest) != (profile['profile_sha256'], profile['snapshot_sha256']):
+            raise ValueError('Original V6 profile/snapshot differs')
+        paths = tuple(dict.fromkeys(selected_path(row['path']) for row in old['factory']['sources']))
+        factory = F.original_factory(inputs, sources=paths)
+        state['factory'] = factory.record()
+        state['profile'] = profile
+        state['library'] = library.record()
+        state['input_pins'] = {key: pin(inputs[key]) for key in ('facts', 'observed_contract', 'software_spec', 'execution_contract', 'library_selection', 'nm')}
+        state['selected_runtime'] = {'root': inputs['runtime'], 'spike': pin(Path(inputs['runtime']) / 'bin/spike'), 'functional_extension': pin(Path(inputs['runtime']) / 'lib/libgemmini.so')}
+        state['original_factory_inputs_reference'] = pin(OLD_PLAN)
+        state['current_descriptor'] = pin(DESCRIPTOR)
+        state['stages'].append('original_library_and_V6_profile_freshly_verified')
+    # Original factory restoration may own nested child work in other versions.
+    # Never hold a parent leaf across this original API boundary.
+    stage('original_generated_source_factory_create')
+    registry = factory.create(work_root=freshroot / 'original-source-registry')
+    with shared_compute_pool(timeout_s=60):
+        caps = [cap for cap in registry._capabilities if cap.mechanism == 'source_execution_diagnostic']
+        if len(caps) != 1:
+            raise ValueError('Original finite factory requires one source diagnostic capability')
+        capability = caps[0]
+        if _STATE(capability.owner)['library'].record() != library.record() or capability.binding.library != LIBRARY_SHA:
+            raise ValueError('Original source issuer and selected library differ')
+        passes = CompilerPassSelection(registry, capability.binding, mechanisms=('source_execution_diagnostic',), factory=factory)
+        checked = select_checked_source_diagnostic(passes, target=target.target, rtl_facts=Path(inputs['facts']), board_config=old['board_config'], native_execution_protocol=POINTER_PROTOCOL)
+        with passes.metadata_operation():
+            state['source_passes'] = passes.record()
+            state['checked_source_diagnostic'] = checked.record()
+            service._verify()
+            factory.revalidate()
+        state['status'] = 'ORIGINAL_CURRENT_RUNTIME_OWNERS_PASS'
+        state['scope'] = 'Fresh original metadata owners only; every future source/native/program check remains mandatory'
+        state['stages'].append('fresh_generated_registry_multicontraction_source_capability_and_pointer_selector')
+        state['constructor_sources'] = [pin(Path(inspect.getsourcefile(obj)).resolve()) for obj in (F.original_factory, CommonTransformService, select_checked_source_diagnostic)]
+    stage('complete_metadata_only')
+    owners = {'library': library, 'service': service, 'factory': factory, 'registry': registry, 'source_capability': capability, 'compiler_pass_selection': passes, 'checked_source_diagnostic': checked, 'target_experiment': target}
+    return owners, state
+
+
+def main():
+    resource.setrlimit(resource.RLIMIT_CPU, (60, 60))
+    resource.setrlimit(resource.RLIMIT_AS, (1 << 30, 1 << 30))
+    resource.setrlimit(resource.RLIMIT_FSIZE, (64 << 20, 64 << 20))
+    output = Path(sys.argv[1])
+    if output.exists() or output.is_symlink() or output.resolve() != output or not output.is_relative_to(Path(os.environ['TASK_DIR'])):
+        raise ValueError('Expected fresh canonical output in actual TASK_DIR')
+    output.mkdir(parents=True)
+    shutil.copyfile(__file__, output / 'operator.tested.py')
+    start, cpu = time.monotonic(), time.process_time()
+    try:
+        owners, report = prepare_runtime(output / 'runtime')
+        report['live_owners_returned'] = sorted(owners)
+    except BaseException as error:
+        report = {'status': 'PRECISE_ORIGINAL_RUNTIME_METADATA_REFUSAL', 'error': type(error).__name__, 'detail': str(error), 'traceback': traceback.format_exc(), 'target_jobs': 0, 'queue_submissions': 0, 'native_count_jobs': 0}
+    report.update(cpu_seconds=time.process_time() - cpu, wall_seconds=time.monotonic() - start)
+    (output / 'report.json').write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
+    print(json.dumps({key: value for key, value in report.items() if key not in {'factory', 'library', 'source_passes', 'preparation_selection'}}, sort_keys=True))
+    return 0 if report['status'].endswith('_PASS') else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

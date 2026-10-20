@@ -1,0 +1,36 @@
+{
+  "schema": "phase2.el4.post_merge_verification.v1",
+  "results": [
+    {
+      "repo": "merlin",
+      "counts": {
+        "tests": 195,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "report_path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/integration/el4-publication-20261020-v2/merlin/report.json",
+      "report_sha256": "b51176f562356496b38060dc13076aa6b03d7260150b612d9dd721ac06872809",
+      "junit_path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/integration/el4-publication-20261020-v2/merlin/tests.xml",
+      "junit_sha256": "635dd85520c9ec011599fec8593f87768760ba316046f6ba02f6591b84c382d2"
+    },
+    {
+      "repo": "gemmini-mlir",
+      "counts": {
+        "tests": 138,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      "report_path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/integration/el4-publication-20261020-v2/gemmini-mlir/report.json",
+      "report_sha256": "e7c0a30eb6d4fa28993ab00fb7589f627857eb26c183c2831cb7d7f9c4d0c45a",
+      "junit_path": "/work/merlin/tasks/phase2-el4-explore-20261018/out/artifacts/integration/el4-publication-20261020-v2/gemmini-mlir/tests.xml",
+      "junit_sha256": "d2470498aa4a67979d045995ce3b79d4110b0ff01951cf327854ed655b9e5d1c"
+    }
+  ],
+  "total_tests": 333,
+  "protected_packages": "All21 V23 and16 V26 original files SHA256-identical to before integration",
+  "scope": "Host regression/static sourceeffect/emitter tests; no target simulation or timing qualification",
+  "initial_failure": "One dispatch test inherited ambient capture configuration; fixture now explicitly selects a local sealed-source fixture, original gate unchanged",
+  "merlin_integrated_head": "1a2631a24cdd17e9576aaeb9fb321892a3c20561"
+}

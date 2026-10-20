@@ -1,0 +1,959 @@
+From 42d1618db3867e956f76ea006f6cdf141cdb4f6f Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Mon, 19 Oct 2026 01:40:28 +0000
+Subject: [PATCH] feat(timing): separate complete counts from event pricing
+
+---
+ examples/gemmini/timing/bridge.cpp            |  18 +++
+ examples/gemmini/timing/tests/bridge_test.cpp |   5 +
+ riscv/annotated_timing.cc                     | 147 +++++++++++++-----
+ timing/README.md                              |  24 ++-
+ timing/counter_taint.hpp                      |  51 ++++++
+ timing/cpu_decode.hpp                         |  66 +++++++-
+ timing/provider.hpp                           |   9 ++
+ timing/tests/run_native.py                    |  71 +++++++--
+ timing/tests/run_unit.py                      |   1 +
+ timing/tests/test_counter_taint.cpp           |  25 +++
+ timing/tests/test_cpu_decode.cpp              |  21 +++
+ 11 files changed, 387 insertions(+), 51 deletions(-)
+ create mode 100644 timing/counter_taint.hpp
+ create mode 100644 timing/tests/test_counter_taint.cpp
+
+diff --git a/examples/gemmini/timing/bridge.cpp b/examples/gemmini/timing/bridge.cpp
+index 45ad22e..9db9d8d 100644
+--- a/examples/gemmini/timing/bridge.cpp
++++ b/examples/gemmini/timing/bridge.cpp
+@@ -106,6 +106,7 @@ public:
+   merlin_timing::Result command(std::uint64_t pc, std::uint64_t bits, std::uint64_t rs1,
+                                 std::uint64_t rs2, merlin_timing::Cycle earliest) override {
+     if ((bits & opcode_mask_) != opcode_) {
++      count_errors_.insert("foreign_custom_opcode");
+       services_.unresolved("foreign_custom_opcode");
+       services_.feature("target.foreign_custom_opcode", 1);
+       merlin_timing::Event unknown;
+@@ -119,6 +120,7 @@ public:
+     // The functional extension supplies a dummy/random custom counter return.
+     // It cannot qualify control/data that depends on a hardware counter result.
+     if (((bits >> 25) & 127) == 126 && (bits & (1ull << 14))) {
++      count_errors_.insert("custom_counter_result_not_hardware_equivalent");
+       services_.unresolved("custom_counter_result_not_hardware_equivalent");
+       services_.feature("target.custom_counter_result_unknown", 1);
+       merlin_timing::Event unknown;
+@@ -133,6 +135,13 @@ public:
+     observer_.observe_fence(earliest);
+     features();
+   }
++  spike_timing::FeatureObservationStatus feature_status() const {
++    auto reasons = count_errors_;
++    for (const auto &entry : observer_.unknown_semantics()) reasons.insert("target:" + entry.first);
++    if (observer_.counters().accounting_overflow) reasons.insert("target_counter_overflow");
++    if (observer_.counters().illegal_events) reasons.insert("target_illegal_events");
++    return {reasons.empty(), {reasons.begin(), reasons.end()}};
++  }
+ 
+ private:
+   Services services_; // Own callback closures for the complete provider lifetime.
+@@ -141,6 +150,7 @@ private:
+   G::Counters previous_{};
+   std::map<std::string, std::uint64_t> previous_classes_;
+   std::set<std::string> reported_unknowns_;
++  std::set<std::string> count_errors_;
+ 
+   void features() {
+     const auto &now = observer_.counters();
+@@ -151,6 +161,7 @@ private:
+       feature(counter.name, now.*counter.member, previous_.*counter.member);
+     for (const auto &entry : observer_.primitive_classes()) {
+       if (!G::registered_primitive_class(entry.first)) {
++        count_errors_.insert("unregistered_target_primitive_class");
+         services_.unresolved("unregistered_target_primitive_class");
+         continue;
+       }
+@@ -182,3 +193,10 @@ extern "C" spike_timing::TargetProvider *spike_timing_create_provider_v1(spike_t
+     return nullptr;
+   }
+ }
++
++extern "C" spike_timing::FeatureObservationStatus
++spike_timing_provider_feature_observation_v1(const spike_timing::TargetProvider *provider) {
++  const auto selected = dynamic_cast<const Provider *>(provider);
++  if (!selected) return {false, {"feature observation belongs to a different provider"}};
++  return selected->feature_status();
++}
+diff --git a/examples/gemmini/timing/tests/bridge_test.cpp b/examples/gemmini/timing/tests/bridge_test.cpp
+index a88abd2..e4c586e 100644
+--- a/examples/gemmini/timing/tests/bridge_test.cpp
++++ b/examples/gemmini/timing/tests/bridge_test.cpp
+@@ -5,6 +5,8 @@
+ #include <set>
+ 
+ extern "C" spike_timing::TargetProvider *spike_timing_create_provider_v1(spike_timing::Services *);
++extern "C" spike_timing::FeatureObservationStatus
++spike_timing_provider_feature_observation_v1(const spike_timing::TargetProvider *);
+ 
+ int main() {
+   merlin_timing::Engine engine(128, {{0, 1, 4}, {1, 1, 4}, {2, 1, 4}, {3, 1, 4}, {4, 1, 4}, {5, 1, 4}});
+@@ -82,6 +84,7 @@ int main() {
+   assert(provider->command(16, 3ull << 25 | enabled, 0x2000, packet, 3).ready);
+   provider->fence(4);
+   assert(memory_calls == 2 && engine.report().complete && unresolved.empty());
++  assert(spike_timing_provider_feature_observation_v1(provider.get()).complete);
+   assert(features["target.commands"] == 4 && features["target.fences"] == 1);
+   assert(features["target.requested_read_bytes"] == 8 && features["target.requested_write_bytes"] == 8);
+   assert(features["target.class.load"] == 1 && features["target.class.store"] == 1);
+@@ -92,6 +95,8 @@ int main() {
+   assert(!provider->command(19, 126ull << 25 | enabled | 1ull << 14, 0, 0, 4).ready);
+   assert(features["target.custom_counter_result_unknown"] == 1);
+   assert(unresolved.back() == "custom_counter_result_not_hardware_equivalent");
++  assert(!spike_timing_provider_feature_observation_v1(provider.get()).complete);
++  assert(!spike_timing_provider_feature_observation_v1(nullptr).complete);
+   assert(provider->command(20, 2ull << 25 | 123 | 1ull << 12, 0, 1ull << 32 | 1ull << 48, 5).ready);
+   assert(memory_calls == 3); // disabled xs1 selects all-ones, not raw XPR zero
+   assert(!provider->command(24, 2ull << 25 | 123 | 1ull << 13, 0, packet, 6).ready);
+diff --git a/riscv/annotated_timing.cc b/riscv/annotated_timing.cc
+index 19c3616..d367d4c 100644
+--- a/riscv/annotated_timing.cc
++++ b/riscv/annotated_timing.cc
+@@ -2,6 +2,7 @@
+ #include "cpu_decode.hpp"
+ #include "memory.hpp"
+ #include "model.hpp"
++#include "counter_taint.hpp"
+ #include "processor.h"
+ #include <dlfcn.h>
+ #include <array>
+@@ -45,6 +46,7 @@ struct CounterWindow {
+   std::map<std::string, std::uint64_t> features;
+   std::set<std::string> unresolved;
+   bool timing_complete;
++  std::set<std::string> count_unresolved;
+ };
+ } // namespace
+ 
+@@ -62,9 +64,12 @@ public:
+   std::string report_path, elf_digest, input_digest;
+   std::map<std::string, std::uint64_t> features;
+   std::set<std::string> unresolved;
++  std::set<std::string> count_unresolved;
++  CounterMemoryTaint counter_memory;
+   std::unique_ptr<MemorySystem> memory;
+   std::unique_ptr<Services> services;
+   std::unique_ptr<TargetProvider> target;
++  ObserveProviderFeatures target_features = nullptr;
+   ValueId next_token = 67;
+   std::optional<Cycle> pending_flags = Cycle{0};
+   std::array<bool,64> time_dependent{};
+@@ -88,7 +93,8 @@ public:
+        std::function<unsigned(std::uint64_t, std::size_t)> classify,
+        const std::string &scope_binding)
+       : model(path), engine(model.max_values, model.resources), report_path(output),
+-        elf_digest(sha256_file(elf)), input_digest(input), memory_kind(std::move(classify)) {
++        elf_digest(sha256_file(elf)), input_digest(input), counter_memory(model.max_memory_entries),
++        memory_kind(std::move(classify)) {
+     model.bind_scope(scope_binding, elf_digest, input_digest);
+     for (const auto *name : cpu_feature_classes) {
+       add_feature(name, 0);
+@@ -102,10 +108,10 @@ public:
+     issue_cost = model.cycles("cpu.issue_cycles");
+     branch_taken = model.cycles("cpu.branch.taken_penalty_cycles");
+     branch_not_taken = model.cycles("cpu.branch.not_taken_penalty_cycles");
+-    if (input_digest.empty()) unknown("external input identity is unspecified");
++    if (input_digest.empty()) unsafe("external input identity is unspecified");
+     else if (!is_digest(input_digest)) throw std::invalid_argument("invalid input SHA-256");
+     if (model.domain.at("feature_engine_sha256") != SPIKE_TIMING_SOURCE_SHA256)
+-      unknown("feature engine source identity differs from selected profile");
++      unsafe("feature engine source identity differs from selected profile");
+     for (const auto &library : libraries) library_digests.push_back(sha256_file(library));
+     std::vector<std::string> expected_libraries;
+     if (const auto expected = model.document.get_child_optional("libraries"))
+@@ -114,7 +120,7 @@ public:
+         expected_libraries.push_back(entry.second.data());
+       }
+     if (library_digests != expected_libraries)
+-      unknown("loaded functional or timing libraries differ from selected profile");
++      unsafe("loaded functional or timing libraries differ from selected profile");
+     auto allocate = [this](std::size_t count) { return allocate_tokens(count); };
+     auto feature = [this](const std::string &name, std::uint64_t count) { add_feature(name, count); };
+     auto missing = [this](const std::string &reason) { unknown(reason); };
+@@ -134,7 +140,12 @@ public:
+       }, allocate,
+       [this](const std::vector<MemoryEffect> &effects) {
+         for (const auto &effect : effects) if (effect.bytes && memory_kind(effect.address, effect.bytes) != 1) {
+-          unknown("device transfer outside stable RAM is unsupported"); return SharedEffects{};
++          unsafe("device transfer outside stable RAM is unsupported"); return SharedEffects{};
++        }
++        for (const auto &effect : effects) {
++          if (!effect.write && counter_memory.read(effect.address, effect.bytes))
++            unsafe("device input depends on architectural counters");
++          if (effect.write) counter_memory.write(effect.address, effect.bytes, false);
+         }
+         return memory->access(effects, "device");
+       },
+@@ -144,6 +155,8 @@ public:
+     if (factory) {
+       target.reset(factory(services.get()));
+       if (!target) throw std::runtime_error("timing provider factory returned no provider");
++      target_features = reinterpret_cast<ObserveProviderFeatures>(
++          dlsym(RTLD_DEFAULT, "spike_timing_provider_feature_observation_v1"));
+     }
+     accesses.reserve(std::min<std::size_t>(model.max_accesses_per_instruction, 64));
+     namespace fs = std::filesystem;
+@@ -153,11 +166,13 @@ public:
+         throw std::invalid_argument("timing output conflicts with an input or nonregular file");
+       std::ifstream old(report_path); std::array<char,128> prefix{};
+       old.read(prefix.data(),prefix.size());
+-      if (std::string(prefix.data(),old.gcount()).find("merlin.annotated_spike_report.v1") == std::string::npos)
++      const std::string previous(prefix.data(), old.gcount());
++      if (previous.find("merlin.annotated_spike_report.v1") == std::string::npos &&
++          previous.find("merlin.annotated_spike_report.v2") == std::string::npos)
+         throw std::invalid_argument("timing output would replace a nonreport file");
+     }
+     std::ofstream pending(report_path, std::ios::binary | std::ios::trunc);
+-    if (!pending || !(pending << "{\"schema\":\"merlin.annotated_spike_report.v1\",\"timing_complete\":false,\"status\":\"running\"}\n"))
++    if (!pending || !(pending << "{\"schema\":\"merlin.annotated_spike_report.v2\",\"timing_complete\":false,\"status\":\"running\"}\n"))
+       throw std::runtime_error("cannot initialize incomplete timing output");
+   }
+   CpuCost cpu_cost(const std::string &priced, const std::string &kind) {
+@@ -184,12 +199,28 @@ public:
+       throw std::runtime_error("timing diagnostic budget exceeded");
+     unresolved.insert(reason);
+   }
++  void unsafe(const std::string &reason) {
++    unknown(reason);
++    count_unresolved.insert(reason);
++  }
++  std::set<std::string> feature_reasons() const {
++    auto reasons = count_unresolved;
++    if (target) {
++      if (!target_features) reasons.insert("target provider has no feature observation interface");
++      else {
++        const auto status = target_features(target.get());
++        reasons.insert(status.unresolved.begin(), status.unresolved.end());
++        if (!status.complete) reasons.insert("target feature observation is incomplete");
++      }
++    }
++    return reasons;
++  }
+   void add_feature(const std::string &name, std::uint64_t amount) {
+     if (features.size() >= 512 && !features.count(name))
+       throw std::runtime_error("timing feature budget exceeded");
+     auto &value = features[name];
+     if (amount > std::numeric_limits<std::uint64_t>::max() - value) {
+-      unknown("feature counter overflow"); return;
++      unsafe("feature counter overflow"); return;
+     }
+     value += amount;
+   }
+@@ -209,23 +240,27 @@ public:
+       const auto isa = processor->get_isa().get_isa_string();
+       const auto split = isa.find('_');
+       const auto base = isa.substr(4, split == std::string::npos ? split : split - 4);
+-      bool supported = isa.compare(0, 4, "rv64") == 0 && !base.empty() && base.find_first_not_of("imafdc") == std::string::npos;
++      bool supported = isa.compare(0, 4, "rv64") == 0 && !base.empty() && base.find_first_not_of("imafdcb") == std::string::npos;
+       std::istringstream extensions(split == std::string::npos ? "" : isa.substr(split + 1));
+       std::string extension;
+       while (std::getline(extensions, extension, '_'))
+-        if (extension != "zicsr" && extension != "zifencei" && extension != "zicntr" && extension != "zihpm") supported = false;
+-      if (!supported) unknown("architectural extensions are outside the supported scalar timing domain");
++        if (extension != "zicsr" && extension != "zifencei" && extension != "zicntr" && extension != "zihpm" &&
++            extension != "zba" && extension != "zbb" && extension != "zbs" && extension != "zfh") supported = false;
++      // Enabled-but-unused half precision does not invalidate a scalar S/D
++      // trace. Executed half forms still refuse in decode_cpu; B instructions
++      // require exact encodings/operands and a separately priced class.
++      if (!supported) unsafe("architectural extensions are outside the supported scalar timing domain");
+       if (model.document.get<std::string>("cpu.isa", "") != isa)
+-        unknown("architectural ISA differs from selected timing profile");
++        unsafe("architectural ISA differs from selected timing profile");
+     }
+     if (decoded.floating_register_operands &&
+         (processor->get_isa().extension_enabled(EXT_ZFINX) ||
+          processor->get_isa().extension_enabled(EXT_ZDINX)))
+-      unknown("floating operands in integer registers are outside this timing domain");
++      unsafe("floating operands in integer registers are outside this timing domain");
+     if (processor->get_state()->mstatus->read() & MSTATUS_MPRV)
+-      unknown("effective data privilege translation is outside the baremetal timing domain");
++      unsafe("effective data privilege translation is outside the baremetal timing domain");
+     if (processor->get_xlen() != 64 || processor->get_state()->prv != 3)
+-      unknown("timing profile currently requires single-hart RV64 baremetal execution");
++      unsafe("timing profile currently requires single-hart RV64 baremetal execution");
+   }
+   void record_memory(std::uint64_t address, std::size_t bytes, access_type type) {
+     if (!in_instruction || accelerator_depth || type == FETCH) return;
+@@ -234,7 +269,7 @@ public:
+     }
+     const auto kind = memory_kind(address, bytes);
+     if (!kind || (kind == 2 && type == STORE)) {
+-      unknown("unmodeled MMIO or nonstable memory access"); access_overflow = true; return;
++      unsafe("unmodeled MMIO or nonstable memory access"); access_overflow = true; return;
+     }
+     accesses.push_back({address, bytes, type == STORE, kind == 2});
+   }
+@@ -266,22 +301,32 @@ public:
+     bool temporal = clock_csr;
+     const auto csr_mode = (bits >> 12) & 7;
+     if (clock_csr && (csr_mode == 1 || csr_mode == 5 || ((bits >> 15) & 31)))
+-      unknown("writes to architectural performance counters are outside the timing trace contract");
++      unsafe("writes to architectural performance counters are outside the timing trace contract");
+     for (unsigned i=0; i<decoded.read_count; ++i) temporal = temporal || time_dependent[decoded.reads[i]];
++    for (const auto &access : accesses)
++      if (!access.write) temporal = temporal || counter_memory.read(access.address, access.bytes);
+     if (decoded.reads_rounding_mode) temporal = temporal || temporal_rounding;
+     if (decoded.reads_fflags) temporal = temporal || temporal_flags;
+     if (decoded.writes_rounding_mode) temporal_rounding = temporal;
+     if (decoded.writes_fflags) temporal_flags = temporal;
+     if (decoded.accumulates_fflags) temporal_flags = temporal_flags || temporal;
+     if (temporal && (bits & 127) == 0x73 && !clock_csr && csr_address > 3)
+-      unknown("counter-derived architectural state is outside the timing trace contract");
+-    if (temporal && (decoded.branch || !accesses.empty() || decoded.custom))
+-      unknown("counter-derived control, address or stored data is outside the timing trace contract");
++      unsafe("counter-derived architectural state is outside the timing trace contract");
++    if (time_dependent[decoded.memory_address_register] && !accesses.empty())
++      unsafe("counter-derived memory address is outside the timing trace contract");
++    if (temporal && (decoded.branch || decoded.custom))
++      unsafe("counter-derived control or accelerator operand is outside the timing trace contract");
++    // A harness may spill its opening cycle value for subtraction after the
++    // window. Track those actual bytes instead of rejecting every such spill.
++    // Loads propagate labels; control, address, device input and state uses
++    // still refuse. Unlabelled overwrites remove only the bytes they replace.
++    for (const auto &access : accesses)
++      if (access.write) counter_memory.write(access.address, access.bytes, temporal);
+     for (unsigned i=0; i<decoded.write_count; ++i) time_dependent[decoded.writes[i]] = temporal;
+-    if (!decoded.known) unknown("unsupported CPU instruction semantics");
+-    if (access_overflow) unknown("instruction memory observation budget exceeded");
++    if (!decoded.known) unsafe("unsupported CPU instruction semantics");
++    if (access_overflow) unsafe("instruction memory observation budget exceeded");
+     if (accelerator_depth && !(decoded.custom && accelerator_depth == 1)) {
+-      unknown("accelerator observation begin/end is incomplete"); accelerator_depth = 0;
++      unsafe("accelerator observation begin/end is incomplete"); accelerator_depth = 0;
+     }
+     accelerator_depth = 0;
+     if (decoded.fence) {
+@@ -292,7 +337,7 @@ public:
+     const auto instruction_bytes = (bits & 3) == 3 ? 4u : 2u;
+     const auto instruction_space = memory_kind(pc, instruction_bytes);
+     SharedEffects fetch;
+-    if (!instruction_space) unknown("instruction fetch outside stable memory is unsupported");
++    if (!instruction_space) unsafe("instruction fetch outside stable memory is unsupported");
+     else fetch = memory->access({MemoryEffect{pc, instruction_bytes, false, instruction_space == 2}}, "cpu_fetch");
+     const ValueId fetch_token = 64;
+     fetch.writes.push_back(fetch_token);
+@@ -343,7 +388,7 @@ public:
+           std::optional<Cycle>{std::max(*pending_flags, *cpu.ready)} : std::nullopt;
+     if (decoded.writes_fflags) pending_flags = cpu.ready;
+     if (decoded.custom) {
+-      if (!target || !command_pending) unknown("custom instruction has no successful target observation");
++      if (!target || !command_pending) unsafe("custom instruction has no successful target observation");
+       else {
+         if (command[0] != pc || command[1] != bits)
+           throw std::logic_error("target command does not match committed instruction");
+@@ -354,16 +399,16 @@ public:
+           else unknown("asynchronous result has unknown command admission");
+         }
+       }
+-    } else if (command_pending) unknown("target command was attached to a non-custom instruction");
++    } else if (command_pending) unsafe("target command was attached to a non-custom instruction");
+     if (decoded.counter_read && (!model.scope_pc_pair || pc == model.scope_begin_pc || pc == model.scope_end_pc)) {
+       const bool opening = model.scope_pc_pair ? pc == model.scope_begin_pc : !counter_pending;
+       if (opening) {
+-        if (counter_pending) unknown("counter scope opened again before completion");
++        if (counter_pending) unsafe("counter scope opened again before completion");
+         counter_pending = true; first_counter = cpu.start;
+         first_counter_pc = pc; first_counter_instruction = instructions;
+         first_counter_features = features;
+       } else {
+-        if (!counter_pending) { unknown("counter scope closed without its opening boundary"); return; }
++        if (!counter_pending) { unsafe("counter scope closed without its opening boundary"); return; }
+         if (windows.size() >= model.max_counter_windows)
+           throw std::runtime_error("counter-window observation budget exceeded");
+         std::optional<Cycle> elapsed;
+@@ -377,7 +422,8 @@ public:
+           scoped.emplace(feature.first, delta);
+         }
+         windows.push_back({first_counter_pc, pc, instructions - first_counter_instruction, elapsed, std::move(scoped),
+-                           selected ? unresolved : std::set<std::string>{}, engine.report().complete && !trapped});
++                           selected ? unresolved : std::set<std::string>{}, engine.report().complete && !trapped,
++                           selected ? feature_reasons() : std::set<std::string>{}});
+         counter_pending = false;
+       }
+     }
+@@ -385,27 +431,40 @@ public:
+   void write_report(int exit_code, bool completed) {
+     if (finished) throw std::logic_error("timing report already finalized");
+     finished = true;
+-    if (in_instruction) unknown("instruction observation is unfinished");
+-    if (trapped) unknown("trapping instruction timing and exception transition are unsupported");
++    if (in_instruction) unsafe("instruction observation is unfinished");
++    if (trapped) unsafe("trapping instruction timing and exception transition are unsupported");
+     const auto observed = engine.report();
+-    if (counter_pending) unknown("unmatched cycle counter boundary");
++    if (counter_pending) unsafe("unmatched cycle counter boundary");
+     std::optional<Cycle> estimate = observed.modeled_makespan;
+     const auto scope_kind = model.document.get<std::string>("scope.kind");
+     if (scope_kind == "counter_pair" || scope_kind == "counter_pc_pair") {
+       const auto index = model.scope_window;
+-      if (index >= windows.size()) { unknown("selected counter window was not executed"); estimate.reset(); }
++      if (index >= windows.size()) { unsafe("selected counter window was not executed"); estimate.reset(); }
+       else estimate = windows[index].cycles;
+     } else if (scope_kind != "whole_program") {
+-      unknown("unsupported measurement boundary"); estimate.reset();
++      unsafe("unsupported measurement boundary"); estimate.reset();
+     }
+     const bool scoped = scope_kind != "whole_program" && model.scope_window < windows.size();
+     const auto scope_features = scoped ? &windows[model.scope_window].features : &features;
+     const auto &scope_reasons = scoped ? windows[model.scope_window].unresolved : unresolved;
+     const bool event_complete = scoped ? windows[model.scope_window].timing_complete : observed.complete;
++    auto count_reasons = scoped ? windows[model.scope_window].count_unresolved : feature_reasons();
++    const auto counted_instructions = scoped ? windows[model.scope_window].instructions : instructions;
++    std::uint64_t cpu_total = 0;
++    for (const auto *name : cpu_feature_classes) {
++      const auto found = scope_features->find(name);
++      if (found == scope_features->end() || found->second > std::numeric_limits<std::uint64_t>::max() - cpu_total)
++        count_reasons.insert("primary CPU feature coverage is incomplete or overflows");
++      else cpu_total += found->second;
++    }
++    if (cpu_total != counted_instructions) count_reasons.insert("CPU class counts do not cover every scoped instruction");
++    if (!completed || exit_code != 0 || (!scoped && scope_kind != "whole_program") || trapped)
++      count_reasons.insert("functional execution or selected observation scope is incomplete");
++    const bool counts_complete = count_reasons.empty();
+     const bool complete = completed && event_complete && scope_reasons.empty() && exit_code == 0 && estimate.has_value();
+     const std::string estimated_json = complete ? std::to_string(estimate.value_or(0)) : "null";
+     std::ostringstream out;
+-    out << "{\"schema\":\"merlin.annotated_spike_report.v1\",\"profile\":" << json_string(model.profile)
++    out << "{\"schema\":\"merlin.annotated_spike_report.v2\",\"profile\":" << json_string(model.profile)
+         << ",\"device_sha256\":" << json_string(model.device)
+         << ",\"domain_sha256\":" << json_string(sha256_bytes(model.domain_json()))
+         << ",\"domain\":" << model.domain_json()
+@@ -423,9 +482,25 @@ public:
+         << ",\"engine_qualification\":\"not_established\""
+         << ",\"uncertainty\":{\"status\":\"unqualified\",\"interval_cycles\":null}"
+         << ",\"instructions\":" << instructions << ",\"aborted_instructions\":" << aborted_instructions
++        << ",\"feature_observation\":{\"schema\":\"merlin.spike_feature_observation.v1\",\"complete\":"
++        << (counts_complete ? "true" : "false") << ",\"scope_instructions\":" << counted_instructions
++        << ",\"counted_cpu_instructions\":" << cpu_total << ",\"scope_kind\":" << json_string(scope_kind)
++        << ",\"window_index\":" << (scoped ? std::to_string(model.scope_window) : "null")
++        << ",\"primary_cpu_features\":[";
++    bool first = true;
++    for (const auto *name : cpu_feature_classes) {
++      if (!first) out << ',';
++      first = false; out << json_string(name);
++    }
++    out << "],\"unresolved\":["; first = true;
++    for (const auto &reason : count_reasons) {
++      if (!first) out << ',';
++      first = false; out << json_string(reason);
++    }
++    out << "],\"qualification\":\"not_established\"}"
+         << ",\"memory_dependency_entries\":" << memory->pending_tokens()
+         << ",\"feature_counts\":{";
+-    bool first = true;
++    first = true;
+     for (const auto &feature : *scope_features) {
+       if (!first) out << ',';
+       first = false;
+diff --git a/timing/README.md b/timing/README.md
+index 44f534f..8da6387 100644
+--- a/timing/README.md
++++ b/timing/README.md
+@@ -99,8 +99,28 @@ instructions after the opening observation through the closing observation.
+ The selected window freezes timing eligibility at its closing boundary; later
+ logging does not alter that window. `instructions` and `cycle_breakdown` describe
+ the whole executed trace; selected `feature_counts` and `estimated_cycles`
+-describe the selected scope. Counter-derived control, addresses, stored data or
+-unmodeled architectural state inside/before the selected scope refuse timing.
++describe the selected scope. Counter-derived control, addresses, accelerator
++operands or unmodeled architectural state inside/before the selected scope
++refuse timing and count portability. Ordinary counter-value spills propagate
++sparse byte taint through actual loads/stores; partial overwrites retain the
++remaining taint. A counter spill alone is not a refusal. Device input reads
++must be independent of those counter values.
++
++Fresh reports use `merlin.annotated_spike_report.v2`. The independent
++`feature_observation` contract (`merlin.spike_feature_observation.v1`) records
++count completeness, exact scope, primary instruction vocabulary and coverage,
++and unresolved count semantics. Complete counts do not imply complete native
++timing, hardware qualification or independent output equivalence. Missing
++prices/resources can leave counts usable while native cycles remain unknown.
++Target providers may export `spike_timing_provider_feature_observation_v1`
++without changing the original provider ABI. Missing provider status refuses
++count completeness; it cannot silently clear unknown semantics.
++
++Configured scalar Zba/Zbb/Zbs instructions require exact simulator-defined
++encodings and actual register dependencies. They have a separate bit-manipulation
++price class. Enabled but unused Zfh does not invalidate an otherwise supported
++trace; executed half-precision forms still refuse. Other integer-extension
++encodings sharing a major opcode remain unknown.
+ The model never substitutes estimated cycles into the guest counter.
+ 
+ For a capsule kernel-call label, an internal counter read must not become a
+diff --git a/timing/counter_taint.hpp b/timing/counter_taint.hpp
+new file mode 100644
+index 0000000..b8f8af5
+--- /dev/null
++++ b/timing/counter_taint.hpp
+@@ -0,0 +1,51 @@
++#ifndef SPIKE_TIMING_COUNTER_TAINT_HPP
++#define SPIKE_TIMING_COUNTER_TAINT_HPP
++
++#include <cstddef>
++#include <cstdint>
++#include <limits>
++#include <set>
++#include <stdexcept>
++
++namespace spike_timing {
++
++// Only counter-dependent bytes need entries. Ordinary writes erase stale
++// labels; aliases and partial loads use actual committed byte addresses.
++class CounterMemoryTaint {
++public:
++  explicit CounterMemoryTaint(std::size_t limit) : limit_(limit) {
++    if (!limit) throw std::invalid_argument("counter taint requires a positive byte budget");
++  }
++  bool read(std::uint64_t address, std::uint64_t bytes) const {
++    bounds(address, bytes);
++    const auto found = bytes_.lower_bound(address);
++    return found != bytes_.end() && *found - address < bytes;
++  }
++  void write(std::uint64_t address, std::uint64_t bytes, bool tainted) {
++    bounds(address, bytes);
++    if (!tainted) {
++      auto first = bytes_.lower_bound(address), last = first;
++      while (last != bytes_.end() && *last - address < bytes) ++last;
++      bytes_.erase(first, last);
++      return;
++    }
++    // Check before mutation; no prefix can be mistaken for complete tracking.
++    std::size_t existing = 0;
++    for (auto it = bytes_.lower_bound(address); it != bytes_.end() && *it - address < bytes; ++it) ++existing;
++    if (bytes > limit_ || bytes - existing > limit_ - bytes_.size())
++      throw std::length_error("counter-dependent memory byte budget exceeded");
++    for (std::uint64_t i = 0; i < bytes; ++i) bytes_.insert(address + i);
++  }
++  std::size_t size() const { return bytes_.size(); }
++
++private:
++  std::size_t limit_;
++  std::set<std::uint64_t> bytes_;
++  static void bounds(std::uint64_t address, std::uint64_t bytes) {
++    if (bytes && bytes - 1 > std::numeric_limits<std::uint64_t>::max() - address)
++      throw std::overflow_error("counter-dependent memory interval wraps");
++  }
++};
++
++} // namespace spike_timing
++#endif
+diff --git a/timing/cpu_decode.hpp b/timing/cpu_decode.hpp
+index f7728eb..00176b2 100644
+--- a/timing/cpu_decode.hpp
++++ b/timing/cpu_decode.hpp
+@@ -3,12 +3,14 @@
+ 
+ #include <array>
+ #include <cstdint>
++#include "../riscv/encoding.h"
+ 
+ namespace spike_timing {
+ 
+ // One vocabulary supplies both decoder spellings and explicit zero counts.
+ #define SPIKE_TIMING_CPU_CLASSES(X) \
+   X(atomic) \
++  X(bitmanip) \
+   X(branch) \
+   X(csr) \
+   X(custom) \
+@@ -49,12 +51,59 @@ inline constexpr const char *cpu_feature_classes[] = {
+ };
+ #undef SPIKE_TIMING_CPU_CLASSES
+ 
++struct ScalarEncoding { std::uint64_t match, mask; };
++// Use this simulator's independently maintained ISA definitions. Enabling an
++// extension is not permission to classify arbitrary instructions by opcode.
++inline constexpr ScalarEncoding integer_encodings[] = {
++#define TIMING_ENCODING(name) {MATCH_##name, MASK_##name},
++  TIMING_ENCODING(ADDI) TIMING_ENCODING(ADDIW)
++  TIMING_ENCODING(SLTI) TIMING_ENCODING(SLTIU)
++  TIMING_ENCODING(XORI) TIMING_ENCODING(ORI) TIMING_ENCODING(ANDI)
++  TIMING_ENCODING(SLLI) TIMING_ENCODING(SRLI) TIMING_ENCODING(SRAI)
++  TIMING_ENCODING(SLLIW) TIMING_ENCODING(SRLIW) TIMING_ENCODING(SRAIW)
++  TIMING_ENCODING(ADD) TIMING_ENCODING(SUB) TIMING_ENCODING(SLL)
++  TIMING_ENCODING(SLT) TIMING_ENCODING(SLTU) TIMING_ENCODING(XOR)
++  TIMING_ENCODING(SRL) TIMING_ENCODING(SRA) TIMING_ENCODING(OR) TIMING_ENCODING(AND)
++  TIMING_ENCODING(ADDW) TIMING_ENCODING(SUBW) TIMING_ENCODING(SLLW)
++  TIMING_ENCODING(SRLW) TIMING_ENCODING(SRAW)
++  TIMING_ENCODING(MUL) TIMING_ENCODING(MULH) TIMING_ENCODING(MULHSU) TIMING_ENCODING(MULHU)
++  TIMING_ENCODING(DIV) TIMING_ENCODING(DIVU) TIMING_ENCODING(REM) TIMING_ENCODING(REMU)
++  TIMING_ENCODING(MULW) TIMING_ENCODING(DIVW) TIMING_ENCODING(DIVUW)
++  TIMING_ENCODING(REMW) TIMING_ENCODING(REMUW)
++};
++inline constexpr ScalarEncoding bitmanip_encodings[] = {
++  TIMING_ENCODING(SH1ADD) TIMING_ENCODING(SH2ADD) TIMING_ENCODING(SH3ADD)
++  TIMING_ENCODING(SH1ADD_UW) TIMING_ENCODING(SH2ADD_UW) TIMING_ENCODING(SH3ADD_UW)
++  TIMING_ENCODING(ADD_UW) TIMING_ENCODING(SLLI_UW)
++  TIMING_ENCODING(ANDN) TIMING_ENCODING(ORN) TIMING_ENCODING(XNOR)
++  TIMING_ENCODING(CLZ) TIMING_ENCODING(CTZ) TIMING_ENCODING(CPOP)
++  TIMING_ENCODING(CLZW) TIMING_ENCODING(CTZW) TIMING_ENCODING(CPOPW)
++  TIMING_ENCODING(MIN) TIMING_ENCODING(MINU) TIMING_ENCODING(MAX) TIMING_ENCODING(MAXU)
++  TIMING_ENCODING(SEXT_B) TIMING_ENCODING(SEXT_H)
++  TIMING_ENCODING(ROL) TIMING_ENCODING(ROR) TIMING_ENCODING(RORI)
++  TIMING_ENCODING(ROLW) TIMING_ENCODING(RORW) TIMING_ENCODING(RORIW)
++  TIMING_ENCODING(BCLR) TIMING_ENCODING(BCLRI) TIMING_ENCODING(BEXT) TIMING_ENCODING(BEXTI)
++  TIMING_ENCODING(BINV) TIMING_ENCODING(BINVI) TIMING_ENCODING(BSET) TIMING_ENCODING(BSETI)
++  // The simulator defines these Zbb aliases through restricted older forms.
++  {MATCH_GORCI | (7u << 20), MASK_GORCI | (63u << 20)},
++  {MATCH_GREVI | (56u << 20), MASK_GREVI | (63u << 20)},
++  {MATCH_PACKW, MASK_PACKW | (31u << 20)},
++#undef TIMING_ENCODING
++};
++template <std::size_t N>
++inline bool matches_scalar(std::uint64_t bits, const ScalarEncoding (&encodings)[N]) {
++  for (const auto &encoding : encodings)
++    if ((bits & encoding.mask) == encoding.match) return true;
++  return false;
++}
++
+ // ISA operand classification only. Latencies and microarchitecture are data.
+ struct CpuInstruction {
+   const char *kind = CpuKinds::unknown;
+   std::array<std::uint64_t, 4> reads{};
+   std::array<std::uint64_t, 2> writes{};
+   unsigned read_count = 0, write_count = 0;
++  unsigned memory_address_register = 0; // x0 is an explicitly untainted base.
+   bool known = true, branch = false, fence = false, custom = false;
+   bool counter_read = false, icache_fence = false;
+   bool floating_register_operands = false;
+@@ -86,10 +135,12 @@ inline CpuInstruction decode_cpu(std::uint64_t bits) {
+     if (q == 0) {
+       if (f == 0) { d.read(2); d.write(b); }
+       else if (f == 1 || f == 2 || f == 3) {
++        d.memory_address_register = a;
+         d.kind = f == 1 ? CpuKinds::fp_load : CpuKinds::load;
+         d.read(a); d.write(b, f == 1);
+         if (f == 1) d.fp_width = 64;
+       } else if (f == 5 || f == 6 || f == 7) {
++        d.memory_address_register = a;
+         d.kind = f == 5 ? CpuKinds::fp_store : CpuKinds::store;
+         d.read(a); d.read(b, f == 5);
+         if (f == 5) d.fp_width = 64;
+@@ -108,6 +159,7 @@ inline CpuInstruction decode_cpu(std::uint64_t bits) {
+     } else if (q == 2) {
+       if (f == 0) { d.read(rd); d.write(rd); }
+       else if (f == 1 || f == 2 || f == 3) {
++        d.memory_address_register = 2;
+         d.kind = f == 1 ? CpuKinds::fp_load : CpuKinds::load;
+         d.read(2); d.write(rd, f == 1);
+         if (f == 1) d.fp_width = 64;
+@@ -123,6 +175,7 @@ inline CpuInstruction decode_cpu(std::uint64_t bits) {
+           d.read(r); d.write(rd);
+         }
+       } else if (f == 5 || f == 6 || f == 7) {
++        d.memory_address_register = 2;
+         d.kind = f == 5 ? CpuKinds::fp_store : CpuKinds::store;
+         d.read(2); d.read(r, f == 5);
+         if (f == 5) d.fp_width = 64;
+@@ -135,19 +188,27 @@ inline CpuInstruction decode_cpu(std::uint64_t bits) {
+   switch (op) {
+   case 0x37: case 0x17: d.kind = CpuKinds::integer; d.write(rd); break;
+   case 0x13: case 0x1b:
+-    d.kind = CpuKinds::integer; d.read(r1); d.write(rd); break;
++    d.known = matches_scalar(bits, integer_encodings) || matches_scalar(bits, bitmanip_encodings);
++    d.kind = matches_scalar(bits, bitmanip_encodings) ? CpuKinds::bitmanip : CpuKinds::integer;
++    d.read(r1); d.write(rd); break;
+   case 0x33: case 0x3b:
+-    d.kind = f7 == 1 ? (f3 < 4 ? CpuKinds::multiply : CpuKinds::divide) : CpuKinds::integer;
++    d.known = matches_scalar(bits, integer_encodings) || matches_scalar(bits, bitmanip_encodings);
++    d.kind = f7 == 1 ? (f3 < 4 ? CpuKinds::multiply : CpuKinds::divide) :
++             matches_scalar(bits, bitmanip_encodings) ? CpuKinds::bitmanip : CpuKinds::integer;
+     d.read(r1); d.read(r2); d.write(rd); break;
+   case 0x03:
++    d.memory_address_register = r1;
+     d.kind = CpuKinds::load; d.read(r1); d.write(rd); break;
+   case 0x07:
++    d.memory_address_register = r1;
+     if (f3 != 2 && f3 != 3) { d.known = false; break; }
+     d.kind = CpuKinds::fp_load; d.fp_width = f3 == 2 ? 32 : 64;
+     d.read(r1); d.write(rd, true); break;
+   case 0x23:
++    d.memory_address_register = r1;
+     d.kind = CpuKinds::store; d.read(r1); d.read(r2); break;
+   case 0x27:
++    d.memory_address_register = r1;
+     if (f3 != 2 && f3 != 3) { d.known = false; break; }
+     d.kind = CpuKinds::fp_store; d.fp_width = f3 == 2 ? 32 : 64;
+     d.read(r1); d.read(r2, true); break;
+@@ -237,6 +298,7 @@ inline CpuInstruction decode_cpu(std::uint64_t bits) {
+     break;
+   }
+   case 0x2f:
++    d.memory_address_register = r1;
+     d.kind = CpuKinds::atomic; d.read(r1); d.read(r2); d.write(rd); break;
+   case 0x0b: case 0x2b: case 0x5b: case 0x7b:
+     d.kind = CpuKinds::custom; d.custom = true;
+diff --git a/timing/provider.hpp b/timing/provider.hpp
+index 650243e..a1351d0 100644
+--- a/timing/provider.hpp
++++ b/timing/provider.hpp
+@@ -43,6 +43,15 @@ public:
+ };
+ using CreateProvider = TargetProvider *(*)(Services *);
+ 
++// Optional separate ABI: v1 factories/providers remain binary compatible.
++// Missing timing prices/resources need not invalidate exact feature counts;
++// unsupported effects, illegal commands and accounting gaps do.
++struct FeatureObservationStatus {
++  bool complete = false;
++  std::vector<std::string> unresolved;
++};
++using ObserveProviderFeatures = FeatureObservationStatus (*)(const TargetProvider *);
++
+ } // namespace spike_timing
+ 
+ #endif
+diff --git a/timing/tests/run_native.py b/timing/tests/run_native.py
+index c34fa1b..43aabdb 100755
+--- a/timing/tests/run_native.py
++++ b/timing/tests/run_native.py
+@@ -97,19 +97,23 @@ def main():
+     ap = argparse.ArgumentParser(description=__doc__)
+     ap.add_argument("--build-dir", required=True, type=Path)
+     ap.add_argument("--baseline", type=Path)
++    ap.add_argument("--clang", default="clang")
++    ap.add_argument("--linker", default="lld", help="linker name or absolute executable path")
+     args = ap.parse_args()
++    compiler = args.clang
++    linker = "--ld-path=" + args.linker if Path(args.linker).is_absolute() else "-fuse-ld=" + args.linker
+     build = args.build_dir.absolute()
+     elf = build / "native-cpu.elf"
+     profile = build / "native-test-model.json"
+     output = build / "native-test-report.json"
+     run(
+         [
+-            "clang",
++            compiler,
+             "--target=riscv64-unknown-elf",
+             "-march=rv64gc",
+             "-mabi=lp64d",
+             "-nostdlib",
+-            "-fuse-ld=lld",
++            linker,
+             "-Wl,-T," + str(ROOT / "timing/tests/elf/link.ld"),
+             ROOT / "timing/tests/elf/cpu.S",
+             "-o",
+@@ -133,7 +137,8 @@ def main():
+         execution = run(
+             [
+                 build / "spike",
+-                *base_args,
++                "--isa=" + changed["cpu"]["isa"],
++                *base_args[1:],
+                 "--timing-model=" + str(profile),
+                 "--timing-report=" + str(output),
+                 "--timing-input-sha256=" + hashlib.sha256(b"").hexdigest(),
+@@ -146,6 +151,9 @@ def main():
+     annotated, report = observe(model)
+     assert baseline.stdout == annotated.stdout, (baseline.stdout, annotated.stdout)
+     assert report["functional_status"] == "PASS"
++    assert report["schema"] == "merlin.annotated_spike_report.v2"
++    assert report["feature_observation"]["complete"] is True
++    assert report["feature_observation"]["counted_cpu_instructions"] == report["counter_windows"][0]["instructions"]
+     assert report["timing_complete"], report["unresolved"]
+     assert report["estimated_cycles"] > 0
+     assert report["engine_qualification"] == "not_established"
+@@ -158,14 +166,35 @@ def main():
+     assert report["aborted_instructions"] == 0
+     (build / "native-complete-report.json").write_text(json.dumps(report))
+     (build / "native-complete-model.json").write_text(json.dumps(model))
++    bit_source, bit_elf = build / "native-bitmanip.S", build / "native-bitmanip.elf"
++    bit_source.write_text((ROOT / "timing/tests/elf/cpu.S").read_text().replace(
++        "  li t0, 7",
++        "  li t0, 3\n  li t1, 5\n  sh2add t2, t0, t1\n  li t3, 17\n  bne t2, t3, fail\n"
++        "  cpop t2, t2\n  li t3, 2\n  bne t2, t3, fail\n  bseti t2, t2, 4\n"
++        "  li t3, 18\n  bne t2, t3, fail\n  li t0, 7", 1).replace(
++            "rdcycle s0", "csrr s0, mcycle").replace("rdcycle s1", "csrr s1, mcycle"))
++    run([compiler, "--target=riscv64-unknown-elf", "-march=rv64gc_zba_zbb_zbs", "-mabi=lp64d",
++         "-nostdlib", linker, "-Wl,-T," + str(ROOT / "timing/tests/elf/link.ld"), bit_source, "-o", bit_elf])
++    bit_model = json.loads(json.dumps(model))
++    bit_model["cpu"]["isa"] = "rv64imafdcb_zicsr_zifencei_zihpm_zfh_zba_zbb_zbs"
++    plain = run([args.baseline or build / "spike", "--isa=" + bit_model["cpu"]["isa"], *base_args[1:], bit_elf])
++    execution, observed_bits = observe(bit_model, bit_elf)
++    assert execution.stdout == plain.stdout
++    assert observed_bits["feature_observation"]["complete"] is True, observed_bits["feature_observation"]
++    assert observed_bits["timing_complete"] is True, observed_bits["unresolved"]
++    assert observed_bits["feature_counts"]["cpu.bitmanip"] == 3
++    bit_model["parameters"].pop("cpu.bitmanip.latency_cycles")
++    _, unpriced_bits = observe(bit_model, bit_elf)
++    assert unpriced_bits["feature_observation"]["complete"] is True
++    assert unpriced_bits["timing_complete"] is False
+     # Kernels can read counters internally; selected call boundaries must not
+     # silently become consecutive internal reads. No guest counter is replaced.
+     inner_source = build / "native-inner-counters.S"
+     inner_source.write_text((ROOT / "timing/tests/elf/cpu.S").read_text().replace(
+         "  li t0, 7", "  rdcycle zero\n  rdcycle zero\n  li t0, 7", 1))
+     inner_elf = build / "native-inner-counters.elf"
+-    run(["clang", "--target=riscv64-unknown-elf", "-march=rv64gc", "-mabi=lp64d",
+-         "-nostdlib", "-fuse-ld=lld", "-Wl,-T," + str(ROOT / "timing/tests/elf/link.ld"),
++    run([compiler, "--target=riscv64-unknown-elf", "-march=rv64gc", "-mabi=lp64d",
++         "-nostdlib", linker, "-Wl,-T," + str(ROOT / "timing/tests/elf/link.ld"),
+          inner_source, "-o", inner_elf])
+     _, adjacent = observe(model, inner_elf)
+     binding = {
+@@ -241,15 +270,35 @@ def main():
+         _, refusal = observe(changed)
+         assert not refusal["timing_complete"] and refusal["estimated_cycles"] is None
+         assert any(reason in value for value in refusal["unresolved"]), refusal
++        assert refusal["feature_observation"]["complete"] is (reason == "event timing")
++
++    # A cycle-value spill is safe for count portability until data reaches a
++    # timing-sensitive control/address/device use. Exercise actual store/load
++    # aliasing and overwrites, not just register-to-register propagation.
++    for name, injected, complete in (
++        ("spill", "sd s0, -8(sp)\n  ld t6, -8(sp)", True),
++        ("spill-branch", "sd s0, -8(sp)\n  ld t6, -8(sp)\n  beqz t6, spill_target\nspill_target:", False),
++        ("spill-overwritten", "sd s0, -8(sp)\n  sd zero, -8(sp)\n  ld t6, -8(sp)\n  beqz t6, spill_target\nspill_target:", True),
++        ("spill-partial", "sd s0, -8(sp)\n  sw zero, -8(sp)\n  ld t6, -8(sp)\n  beqz t6, spill_target\nspill_target:", False),
++    ):
++        source, executable = build / (name + ".S"), build / (name + ".elf")
++        source.write_text((ROOT / "timing/tests/elf/cpu.S").read_text().replace("  li t0, 7", "  " + injected + "\n  li t0, 7", 1))
++        run([compiler, "--target=riscv64-unknown-elf", "-march=rv64gc", "-mabi=lp64d",
++             "-nostdlib", linker, "-Wl,-T," + str(ROOT / "timing/tests/elf/link.ld"), source, "-o", executable])
++        plain = run([args.baseline or build / "spike", *base_args, executable])
++        execution, observation = observe(model, executable)
++        assert plain.stdout == execution.stdout
++        assert observation["feature_observation"]["complete"] is complete, observation
++        assert observation["timing_complete"] is complete, observation["unresolved"]
+     trap_elf = build / "native-trap.elf"
+     run(
+         [
+-            "clang",
++            compiler,
+             "--target=riscv64-unknown-elf",
+             "-march=rv64gc",
+             "-mabi=lp64d",
+             "-nostdlib",
+-            "-fuse-ld=lld",
++            linker,
+             "-Wl,-T," + str(ROOT / "timing/tests/elf/link.ld"),
+             ROOT / "timing/tests/elf/trap.S",
+             "-o",
+@@ -268,12 +317,12 @@ def main():
+     tainted_elf = build / "native-tainted.elf"
+     run(
+         [
+-            "clang",
++            compiler,
+             "--target=riscv64-unknown-elf",
+             "-march=rv64gc",
+             "-mabi=lp64d",
+             "-nostdlib",
+-            "-fuse-ld=lld",
++            linker,
+             "-Wl,-T," + str(ROOT / "timing/tests/elf/link.ld"),
+             tainted_source,
+             "-o",
+@@ -292,12 +341,12 @@ def main():
+     mmio_elf = build / "native-mmio.elf"
+     run(
+         [
+-            "clang",
++            compiler,
+             "--target=riscv64-unknown-elf",
+             "-march=rv64gc",
+             "-mabi=lp64d",
+             "-nostdlib",
+-            "-fuse-ld=lld",
++            linker,
+             "-Wl,-T," + str(ROOT / "timing/tests/elf/link.ld"),
+             mmio_source,
+             "-o",
+diff --git a/timing/tests/run_unit.py b/timing/tests/run_unit.py
+index 2098171..42ecf0e 100755
+--- a/timing/tests/run_unit.py
++++ b/timing/tests/run_unit.py
+@@ -52,6 +52,7 @@ def main():
+     cases = [
+         ("engine", [ROOT / "timing/core/tests/test_engine.cpp"], []),
+         ("decode", [ROOT / "timing/tests/test_cpu_decode.cpp"], []),
++        ("counter-taint", [ROOT / "timing/tests/test_counter_taint.cpp"], []),
+         (
+             "memory",
+             [
+diff --git a/timing/tests/test_counter_taint.cpp b/timing/tests/test_counter_taint.cpp
+new file mode 100644
+index 0000000..7bdf4fa
+--- /dev/null
++++ b/timing/tests/test_counter_taint.cpp
+@@ -0,0 +1,25 @@
++#include "counter_taint.hpp"
++#include <cassert>
++#include <limits>
++
++int main() {
++  spike_timing::CounterMemoryTaint labels(8);
++  assert(!labels.read(100, 8));
++  labels.write(100, 8, true);
++  assert(labels.read(99, 2) && labels.read(107, 1));
++  assert(!labels.read(108, 8));
++  labels.write(102, 4, false);
++  assert(labels.size() == 4 && !labels.read(102, 4));
++  assert(labels.read(101, 2) && labels.read(105, 2));
++  labels.write(100, 8, false);
++  assert(labels.size() == 0);
++  labels.write(100, 8, true);
++  bool limited = false;
++  try { labels.write(99, 2, true); } catch (const std::length_error &) { limited = true; }
++  assert(limited && labels.size() == 8 && !labels.read(99, 1));
++  bool wrapped = false;
++  try { labels.read(std::numeric_limits<std::uint64_t>::max(), 2); }
++  catch (const std::overflow_error &) { wrapped = true; }
++  assert(wrapped);
++  labels.write(std::numeric_limits<std::uint64_t>::max(), 1, false);
++}
+diff --git a/timing/tests/test_cpu_decode.cpp b/timing/tests/test_cpu_decode.cpp
+index 6bee456..3993a5e 100644
+--- a/timing/tests/test_cpu_decode.cpp
++++ b/timing/tests/test_cpu_decode.cpp
+@@ -12,15 +12,31 @@ static std::uint64_t csr(unsigned address,unsigned f3,unsigned rd,unsigned rs1)
+ }
+ int main() {
+   using spike_timing::decode_cpu;
++  for (const auto &encoding : spike_timing::bitmanip_encodings) {
++    const auto bits = encoding.match | (2u << 7) | (3u << 15);
++    const auto decoded = decode_cpu(bits);
++    check(decoded.known && std::string(decoded.kind)=="cpu.bitmanip", "known Zba/Zbb/Zbs encoding needs a distinct price class");
++    check(decoded.read_count>=1 && decoded.reads[0]==3 && decoded.write_count==1 && decoded.writes[0]==2,
++          "bitmanip must retain its actual input and output registers");
++  }
++  const auto unary=decode_cpu(MATCH_CPOP | (2u<<7) | (3u<<15));
++  check(unary.read_count==1,"encoded bitmanip function must not become a spurious input register");
++  const auto binary=decode_cpu(MATCH_SH2ADD | (2u<<7) | (3u<<15) | (4u<<20));
++  check(binary.read_count==2 && binary.reads[1]==4,"binary bitmanip needs both inputs");
++  check(!decode_cpu(MATCH_CLMUL | (2u<<7) | (3u<<15)).known,
++        "an unimplemented extension sharing the integer opcode must refuse");
++  check(!decode_cpu(0xfe00101bu).known,"reserved word-immediate encoding must refuse");
+   for(unsigned format: {2u,3u}) {
+     auto load=decode_cpu((3u<<15)|(format<<12)|0x07u);
+     check(load.known && load.read_count==1 && load.reads[0]==3 && load.write_count==1 && load.writes[0]==32,
+           "scalar FLW/FLD must write f0 rather than discard it as x0");
+     check(load.fp_width==(format==2 ? 32u : 64u),"scalar load precision must match its width encoding");
+     check(load.floating_register_operands,"scalar FP bank must be explicit for execution-domain checks");
++    check(load.memory_address_register==3,"load address must be distinct from loaded data");
+     auto store=decode_cpu((4u<<20)|(3u<<15)|(format<<12)|0x27u);
+     check(store.fp_width==(format==2 ? 32u : 64u),"scalar store precision must match its width encoding");
+     check(store.known && store.read_count==2 && store.reads[1]==36,"scalar FSW/FSD must read FPR input");
++    check(store.memory_address_register==3,"store address must be distinct from stored data");
+   }
+   for(unsigned format: {0u,1u,4u,5u,6u,7u}) {
+     check(!decode_cpu((1u<<25)|(3u<<15)|(format<<12)|0x07u).known,"non-scalar-S/D load must be unknown");
+@@ -89,5 +105,10 @@ int main() {
+   check(clear.reads_fflags && clear.writes_fflags && !clear.accumulates_fflags,"CSR flag updates are destructive rather than sticky updates");
+   check(!decode_cpu(csr(3,4,1,1)).known,"reserved CSR opcode must refuse");
+   check(decode_cpu(csr(0xc00,2,1,0)).counter_read,"counter boundary detection must remain compatible");
++  check(decode_cpu((7u<<20)|0x23u).memory_address_register==0,
++        "x0-based store must not use its data register as an address dependency");
++  check(decode_cpu((5u<<15)|0x2fu).memory_address_register==5,"atomic address must be explicit");
++  check(decode_cpu((5u<<13)|(3u<<2)|2u).memory_address_register==2,
++        "compressed stack store must retain the stack address dependency");
+   std::cout<<"scalar FP/FCSR decoder controls passed\n";
+ }
+-- 
+2.34.1
+

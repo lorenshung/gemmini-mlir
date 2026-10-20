@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "public_upstream_commit": "806ec0adda2242597b253ebf17adfaa5cdb395e3",
+  "public_branch": "feat/annotated-spike-model",
+  "profile_prerequisite_patches": 2,
+  "phase2_timing_patches": 8,
+  "actual_tree": "0dbe447588a44fe569ee134eab0860f923926ed6",
+  "expected_tree": "0dbe447588a44fe569ee134eab0860f923926ed6",
+  "method": "Apply2 profile prerequisite patches and8 timing patches to public upstream in separate Git index; compare entire tree"
+}

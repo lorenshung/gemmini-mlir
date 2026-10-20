@@ -1,0 +1,481 @@
+From b113394ce7fcbae6b2796ed26ab80e50aa2d6f9b Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Mon, 19 Oct 2026 04:31:59 +0000
+Subject: [PATCH] Execute explicitly selected staged target timing semantics
+
+---
+ examples/gemmini/timing/bridge.cpp            |  46 +++++-
+ examples/gemmini/timing/provider.hpp          |  25 ++-
+ examples/gemmini/timing/staged.hpp            | 148 ++++++++++++++++++
+ examples/gemmini/timing/tests/run_native.py   |  13 ++
+ examples/gemmini/timing/tests/run_tests.py    |   1 +
+ examples/gemmini/timing/tests/staged_test.cpp |  75 +++++++++
+ 6 files changed, 299 insertions(+), 9 deletions(-)
+ create mode 100644 examples/gemmini/timing/staged.hpp
+ create mode 100644 examples/gemmini/timing/tests/staged_test.cpp
+
+diff --git a/examples/gemmini/timing/bridge.cpp b/examples/gemmini/timing/bridge.cpp
+index 9db9d8d..3f067f7 100644
+--- a/examples/gemmini/timing/bridge.cpp
++++ b/examples/gemmini/timing/bridge.cpp
+@@ -1,6 +1,7 @@
+ // Optional adapter to the generic Spike timing plugin ABI. This translation
+ // unit can be loaded separately beside the unchanged functional extension.
+ #include "provider.hpp"
++#include "staged.hpp"
+ #include <timing/provider.hpp>
+ 
+ #include <memory>
+@@ -61,6 +62,7 @@ G::Parameters parameters(Services &s) {
+ }
+ 
+ G::ResourceBindings resources(Services &s) {
++  if (s.number("target.scheduling.version") == std::optional<double>{2}) return {};
+   const auto selected = [&](const std::string &name) -> std::optional<merlin_timing::ResourceId> {
+     try { return s.resource("accelerator." + name); }
+     catch (const std::exception &) {
+@@ -79,12 +81,47 @@ struct Inputs {
+   G::ResourceBindings resources;
+   merlin_timing::ValueId tokens;
+   std::uint32_t opcode, opcode_mask;
++  std::optional<G::StagedConfig> staged;
+ };
+ 
++std::optional<G::StagedConfig> staged_config(Services &services) {
++  const auto version = services.number("target.scheduling.version");
++  if (!version) return {};
++  if (*version != 2) throw std::invalid_argument("unsupported target scheduling version");
++  G::StagedConfig result;
++  const auto count = [&](const std::string &key) {
++    const auto value = services.number("target.scheduling." + key);
++    if (!value || !std::isfinite(*value) || *value < 1 || *value > 65536 || std::floor(*value) != *value)
++      throw std::invalid_argument("missing selected staged capacity: " + key);
++    return static_cast<std::size_t>(*value);
++  };
++  const auto price = [&](const std::string &key) -> std::optional<merlin_timing::Cycle> {
++    const auto value = services.number("target.scheduling." + key);
++    if (!value) { services.unresolved("missing_staged_price:" + key); return {}; }
++    if (!std::isfinite(*value) || *value < 0 || std::floor(*value) != *value || *value >= std::ldexp(1., 64))
++      throw std::invalid_argument("invalid staged price: " + key);
++    return static_cast<merlin_timing::Cycle>(*value);
++  };
++  std::size_t i = 0;
++  for (const auto *name : {"load", "execute", "store"}) {
++    result.reservations[i] = count(std::string("reservations.") + name);
++    result.controller_entries[i] = count(std::string("controller_entries.") + name);
++    result.issue_resources[i] = services.resource(std::string("accelerator.issue.") + name);
++    result.controller_resources[i] = services.resource(std::string("accelerator.controller.") + name);
++    ++i;
++  }
++  result.dma_commands = {count("dma_commands.load"), count("dma_commands.store")};
++  result.issue_latency = price("issue_latency_cycles");
++  result.issue_occupancy = price("issue_occupancy_cycles");
++  return result;
++}
++
+ class Provider final : public spike_timing::TargetProvider {
+ public:
+   Provider(Services services, Inputs inputs)
+       : services_(std::move(services)), opcode_(inputs.opcode), opcode_mask_(inputs.opcode_mask),
++        staged_(inputs.staged ? std::make_unique<G::StagedObserver>(services_.engine, *inputs.staged,
++          inputs.tokens + inputs.hardware.scratchpad_rows + inputs.hardware.accumulator_rows + 4) : nullptr),
+         observer_(services_.engine, inputs.hardware, std::move(inputs.parameters),
+           inputs.resources, inputs.tokens, [this](merlin_timing::View<G::Transfer> transfers) {
+             std::vector<spike_timing::MemoryEffect> rows;
+@@ -95,7 +132,10 @@ public:
+             }
+             const auto effects = services_.memory(rows);
+             return G::TransferEffects{effects.reads, effects.writes, effects.demands, effects.latency};
+-          }) {
++          }, staged_ ? G::SubmitHook{[this](const auto &kind, const auto &event, auto occupancy,
++                                          auto funct, auto rs1, auto rs2) {
++            return staged_->submit(kind, event, occupancy, funct, rs1, rs2);
++          }} : G::SubmitHook{}) {
+     for (const auto &counter : counter_features) services_.feature(std::string("target.") + counter.name, 0);
+     services_.feature("target.foreign_custom_opcode", 0);
+     services_.feature("target.custom_counter_result_unknown", 0);
+@@ -146,6 +186,7 @@ public:
+ private:
+   Services services_; // Own callback closures for the complete provider lifetime.
+   std::uint32_t opcode_, opcode_mask_;
++  std::unique_ptr<G::StagedObserver> staged_;
+   G::TargetObserver observer_;
+   G::Counters previous_{};
+   std::map<std::string, std::uint64_t> previous_classes_;
+@@ -186,7 +227,8 @@ extern "C" spike_timing::TargetProvider *spike_timing_create_provider_v1(spike_t
+     const auto mask = integer(*services, "custom_opcode_mask");
+     if (!mask || mask > 127 || (opcode & ~mask)) throw std::invalid_argument("invalid target custom opcode fact");
+     Inputs inputs{h, parameters(*services), resources(*services),
+-                  services->allocate_tokens(G::TargetObserver::required_tokens(h)), opcode, mask};
++                  services->allocate_tokens(G::TargetObserver::required_tokens(h)), opcode, mask,
++                  staged_config(*services)};
+     return new Provider(*services, std::move(inputs));
+   } catch (const std::exception &error) {
+     services->unresolved(std::string("target_provider_configuration:") + error.what());
+diff --git a/examples/gemmini/timing/provider.hpp b/examples/gemmini/timing/provider.hpp
+index 64f0e88..4fafafa 100644
+--- a/examples/gemmini/timing/provider.hpp
++++ b/examples/gemmini/timing/provider.hpp
+@@ -66,6 +66,9 @@ struct TransferEffects {
+   std::optional<Cycle> minimum_latency;
+ };
+ using TransferHook = std::function<TransferEffects(View<Transfer>)>;
++// Explicit v2 timing-only hook; the v1 functional/count path stays unchanged.
++using SubmitHook = std::function<Result(const std::string &, const Event &,
++    std::optional<Cycle>, std::uint32_t, std::uint64_t, std::uint64_t)>;
+ 
+ struct Counters {
+   std::array<std::uint64_t, 128> commands{};
+@@ -95,9 +98,9 @@ public:
+ 
+   TargetObserver(Engine &engine, HardwareConfig hardware, Parameters parameters,
+                  ResourceBindings resources, ValueId token_base = 0,
+-                 TransferHook transfer_hook = {})
++                 TransferHook transfer_hook = {}, SubmitHook submit_hook = {})
+       : engine_(engine), h_(hardware), parameters_(std::move(parameters)), resources_(resources),
+-        base_(token_base), transfer_hook_(std::move(transfer_hook)),
++        base_(token_base), transfer_hook_(std::move(transfer_hook)), submit_hook_(std::move(submit_hook)),
+         accumulator_activation_(h_.reset_accumulator_activation),
+         accumulator_not_softmax_(accumulator_activation_ && *accumulator_activation_ != 4) {
+     if (required_tokens(h_) - 1 > std::numeric_limits<ValueId>::max() - base_)
+@@ -109,6 +112,7 @@ public:
+   Result observe_command(std::uint64_t pc, std::uint32_t funct, std::uint64_t rs1,
+                          std::uint64_t rs2, Cycle earliest = 0) {
+     begin(pc, earliest);
++    funct_ = funct; rs1_ = rs1; rs2_ = rs2;
+     add(counters_.commands_total, 1);
+     if (funct < counters_.commands.size()) add(counters_.commands[funct], 1);
+     if ((funct >= 8 && funct <= 13) || (funct >= 15 && funct <= 21)) {
+@@ -182,6 +186,9 @@ private:
+   ResourceBindings resources_;
+   ValueId base_;
+   TransferHook transfer_hook_;
++  SubmitHook submit_hook_;
++  std::uint32_t funct_ = 127;
++  std::uint64_t rs1_ = 0, rs2_ = 0;
+   std::array<LoadState, 3> loads_{};
+   ExecuteState execute_;
+   StoreState store_;
+@@ -216,6 +223,7 @@ private:
+   }
+   void begin(std::uint64_t pc, Cycle earliest) {
+     pc_ = pc; earliest_ = earliest;
++    funct_ = 127; rs1_ = rs2_ = 0;
+     reads_.clear(); writes_.clear(); demands_.clear(); transfers_.clear();
+     event_reads_ = event_writes_ = 0;
+     semantic_known_ = legal_ = timing_known_ = true;
+@@ -312,7 +320,8 @@ private:
+                 std::uint64_t bytes, std::uint64_t macs) {
+     add(primitive_classes_[kind], 1);
+     auto latency = priced(kind + ".latency", bytes, macs);
+-    demand(resource, priced(kind + ".occupancy", bytes, macs));
++    const auto occupancy = priced(kind + ".occupancy", bytes, macs);
++    if (!submit_hook_) demand(resource, occupancy);
+     if (!transfers_.empty() && transfer_hook_) {
+       auto effects = transfer_hook_({transfers_.data(), transfers_.size()});
+       reads_.insert(reads_.end(), effects.reads.begin(), effects.reads.end());
+@@ -341,7 +350,7 @@ private:
+     Event event{earliest_, {reads_.data(), reads_.size()}, {writes_.data(), writes_.size()},
+                 {demands_.data(), demands_.size()}, latency};
+     event.hold_reads_until_ready = true;
+-    return engine_.submit(event);
++    return submit_hook_ ? submit_hook_(kind, event, occupancy, funct_, rs1_, rs2_) : engine_.submit(event);
+   }
+   Result configure(std::uint64_t rs1, std::uint64_t rs2) {
+     const auto kind = rs1 & 3;
+@@ -587,9 +596,11 @@ private:
+   }
+   Result fence() {
+     add(counters_.fences, 1);
+-    const auto barrier = engine_.barrier();
+-    if (barrier) earliest_ = std::max(earliest_, *barrier);
+-    else missing("prior_work_unknown_at_fence");
++    if (!submit_hook_) {
++      const auto barrier = engine_.barrier();
++      if (barrier) earliest_ = std::max(earliest_, *barrier);
++      else missing("prior_work_unknown_at_fence");
++    }
+     return submit("fence", resources_.config, 0, 0);
+   }
+ };
+diff --git a/examples/gemmini/timing/staged.hpp b/examples/gemmini/timing/staged.hpp
+new file mode 100644
+index 0000000..63c5cc0
+--- /dev/null
++++ b/examples/gemmini/timing/staged.hpp
+@@ -0,0 +1,148 @@
++#ifndef GEMMINI_STAGED_TIMING_V2_HPP
++#define GEMMINI_STAGED_TIMING_V2_HPP
++
++#include "provider.hpp"
++#include <merlin_timing/reservations.hpp>
++#include <memory>
++
++namespace gemmini_annotated_spike {
++
++struct StagedConfig {
++  std::array<std::size_t, 3> reservations, controller_entries;
++  std::array<std::size_t, 2> dma_commands;
++  std::array<ResourceId, 3> issue_resources, controller_resources;
++  std::optional<Cycle> issue_latency, issue_occupancy;
++};
++
++// Version 2 explicitly distinguishes CPU admission, reservation issue, FIFO
++// consumption and final effects. It schedules the actual typed v1-observed row
++// and memory effects, not a separate decorative plan. Prices remain external.
++class StagedObserver {
++public:
++  StagedObserver(Engine &engine, StagedConfig config, ValueId execute_configuration)
++      : engine_(engine), config_(config), execute_configuration_(execute_configuration) {
++    for (std::size_t i = 0; i < 3; ++i) {
++      reservations_[i] = std::make_unique<merlin_timing::ReservationWindow>(config.reservations[i]);
++      controllers_[i] = std::make_unique<merlin_timing::ReservationWindow>(config.controller_entries[i]);
++    }
++    for (std::size_t i = 0; i < 2; ++i)
++      dma_[i] = std::make_unique<merlin_timing::ReservationWindow>(config.dma_commands[i]);
++  }
++
++  Result submit(const std::string &kind, const Event &source, std::optional<Cycle> occupancy,
++                std::uint32_t funct, std::uint64_t rs1, std::uint64_t rs2) {
++    if (kind == "fence") {
++      // A pending PRELOAD has no following execute command yet. It retains its
++      // reservation/descriptor/configuration dependency while other work drains.
++      const auto drained = engine_.barrier();
++      Event event = source;
++      if (drained) event.earliest = std::max(event.earliest, *drained);
++      else event.latency.reset();
++      return engine_.submit(event);
++    }
++    // Selected Controller routes these directly before reservation allocation.
++    // Their explicit primitive prices still remain separate from CPU issue.
++    if (funct == 7 || funct == 126) return engine_.submit_detached(source);
++    const bool config = funct == 0;
++    const auto subtype = config ? rs1 & 3 : 0;
++    const std::size_t group = config ? (subtype == 1 ? 0 : subtype >= 2 ? 2 : 1) :
++        (funct == 1 || funct == 2 || funct == 14) ? 0 : funct == 3 ? 2 : 1;
++    auto ticket = reservations_[group]->allocate(source.earliest);
++    if (!ticket) return unknown(source);
++    engine_.advance_issue(ticket->admitted);
++    if (group == 1 && pending_) {
++      // Lookahead is the next actual execute command, not the next CPU or DMA
++      // command. This is the selected cmd.valid(1) PRELOAD start dependency.
++      auto pending = std::move(pending_);
++      pending->earliest = std::max(pending->earliest, ticket->admitted);
++      schedule(*pending);
++    }
++    auto command = std::make_unique<Command>(kind, source, occupancy, *ticket, group, config, subtype);
++    command->earliest = ticket->admitted;
++    if (funct == 6) {
++      command->reads.push_back(execute_configuration_);
++      pending_ = std::move(command);
++      return {ticket->admitted, ticket->admitted, ticket->admitted, merlin_timing::UnknownReason::none};
++    }
++    (void)rs2;
++    return schedule(*command);
++  }
++
++  bool pending_preload() const { return bool(pending_); }
++
++private:
++  using Window = merlin_timing::ReservationWindow;
++  struct Command {
++    std::string kind;
++    std::vector<ValueId> reads, writes, retained;
++    std::vector<Demand> demands;
++    std::optional<Cycle> latency, occupancy;
++    Window::Ticket ticket;
++    std::size_t group;
++    bool config;
++    std::uint64_t subtype;
++    Cycle earliest;
++    Command(const std::string &name, const Event &event, std::optional<Cycle> busy,
++            Window::Ticket reservation, std::size_t selected, bool configuration, std::uint64_t type)
++        : kind(name), reads(copy(event.reads)), writes(copy(event.writes)), retained(copy(event.retained_reads)),
++          demands(copy(event.demands)), latency(event.latency), occupancy(busy), ticket(reservation),
++          group(selected), config(configuration), subtype(type), earliest(event.earliest) {}
++    template <class T> static std::vector<T> copy(View<T> view) {
++      return view.size ? std::vector<T>(view.data, view.data + view.size) : std::vector<T>{};
++    }
++  };
++  Engine &engine_;
++  StagedConfig config_;
++  ValueId execute_configuration_;
++  std::array<std::unique_ptr<Window>, 3> reservations_, controllers_;
++  std::array<std::unique_ptr<Window>, 2> dma_;
++  std::unique_ptr<Command> pending_;
++
++  static bool extend(Cycle &earliest, std::optional<Cycle> value) {
++    if (!value) return false;
++    earliest = std::max(earliest, *value); return true;
++  }
++  Result unknown(const Event &source) {
++    Event event = source; event.latency.reset();
++    const auto result = engine_.submit_detached(event);
++    engine_.advance_issue({});
++    return result;
++  }
++  Result schedule(Command &command) {
++    auto &rs = *reservations_[command.group];
++    Cycle earliest = command.earliest;
++    bool known = true;
++    for (const auto value : command.reads) known = extend(earliest, engine_.ready(value)) && known;
++    for (const auto value : command.writes) known = extend(earliest, engine_.last_use(value)) && known;
++    if (command.config && command.subtype == 0)
++      known = extend(earliest, rs.drained(earliest, command.ticket)) && known;
++    auto queue = controllers_[command.group]->allocate(earliest);
++    known = bool(queue) && known;
++    if (queue) earliest = std::max(earliest, queue->admitted);
++    const Demand issue_demand{config_.issue_resources[command.group], 1, config_.issue_occupancy};
++    Event issue{earliest, {}, {}, {&issue_demand, 1}, known ? config_.issue_latency : std::nullopt};
++    const auto issued = engine_.submit_detached(issue);
++    if (command.config && command.subtype != 0) rs.release(command.ticket, issued.ready);
++
++    std::optional<Window::Ticket> dma_ticket;
++    std::size_t dma_index = command.group == 2 ? 1 : 0;
++    Cycle consume = issued.ready.value_or(earliest);
++    known = bool(issued.ready) && known;
++    if (!command.config && command.group != 1) {
++      dma_ticket = dma_[dma_index]->allocate(consume);
++      known = bool(dma_ticket) && known;
++      if (dma_ticket) consume = std::max(consume, dma_ticket->admitted);
++    }
++    command.demands.push_back({config_.controller_resources[command.group], 1, command.occupancy});
++    Event effect{consume, {command.reads.data(), command.reads.size()},
++        {command.writes.data(), command.writes.size()}, {command.demands.data(), command.demands.size()},
++        known ? command.latency : std::nullopt, true, {command.retained.data(), command.retained.size()}};
++    const auto result = engine_.submit_detached(effect);
++    if (queue) controllers_[command.group]->release(*queue, result.start);
++    if (dma_ticket) dma_[dma_index]->release(*dma_ticket, result.ready);
++    if (!command.config || command.subtype == 0) rs.release(command.ticket, result.ready);
++    return {command.ticket.admitted, result.start, result.ready, result.unknown};
++  }
++};
++} // namespace gemmini_annotated_spike
++#endif
+diff --git a/examples/gemmini/timing/tests/run_native.py b/examples/gemmini/timing/tests/run_native.py
+index fcb7534..e4f8548 100644
+--- a/examples/gemmini/timing/tests/run_native.py
++++ b/examples/gemmini/timing/tests/run_native.py
+@@ -29,6 +29,7 @@ def main():
+     parser.add_argument("--timing-provider", type=Path, required=True)
+     parser.add_argument("--build-dir", type=Path, required=True)
+     parser.add_argument("--clang", default="clang")
++    parser.add_argument("--staged", action="store_true", help="exercise separately selected v2 scheduling with synthetic prices")
+     args = parser.parse_args()
+     root = Path(__file__).resolve().parent.parent
+     build = args.build_dir.absolute()
+@@ -59,6 +60,18 @@ def main():
+     for index, name in enumerate(("config", "load", "store", "execute"), start=3):
+         model["resources"].append({"id": index, "name": "accelerator." + name,
+                                    "capacity": 1, "queue_capacity": 2})
++    if args.staged:
++        model["target"]["scheduling"] = {
++            "version": 2,
++            "reservations": {"load": 2, "execute": 4, "store": 2},
++            "controller_entries": {"load": 2, "execute": 2, "store": 2},
++            "dma_commands": {"load": 2, "store": 2},
++            "issue_latency_cycles": 1, "issue_occupancy_cycles": 1,
++        }
++        for index, name in enumerate(
++                (f"accelerator.{stage}.{group}" for stage in ("issue", "controller")
++                 for group in ("load", "execute", "store")), start=7):
++            model["resources"].append({"id": index, "name": name, "capacity": 1, "queue_capacity": 0})
+     extensions = [args.functional_extension.absolute(), args.timing_provider.absolute()]
+     model["libraries"] = [digest(library) for library in extensions]
+     profile, report_path = build / "synthetic-model.json", build / "report.json"
+diff --git a/examples/gemmini/timing/tests/run_tests.py b/examples/gemmini/timing/tests/run_tests.py
+index f7b8dfc..5d5d9a0 100644
+--- a/examples/gemmini/timing/tests/run_tests.py
++++ b/examples/gemmini/timing/tests/run_tests.py
+@@ -29,6 +29,7 @@ def main():
+              "-I", str(root), "-I", str(args.engine_include), "-I", str(args.spike_root)]
+     queried_prices = set()
+     for name, sources in (("provider_test", [root / "tests/provider_test.cpp"]),
++                          ("staged_test", [root / "tests/staged_test.cpp"]),
+                           ("bridge_test", [root / "bridge.cpp", root / "tests/bridge_test.cpp"])):
+         output = args.build_dir / name
+         subprocess.run([*flags, *(str(source) for source in sources), "-o", str(output)],
+diff --git a/examples/gemmini/timing/tests/staged_test.cpp b/examples/gemmini/timing/tests/staged_test.cpp
+new file mode 100644
+index 0000000..9e72076
+--- /dev/null
++++ b/examples/gemmini/timing/tests/staged_test.cpp
+@@ -0,0 +1,75 @@
++#include "staged.hpp"
++#include <cassert>
++
++using namespace merlin_timing;
++using namespace gemmini_annotated_spike;
++
++static StagedConfig config() {
++  return {{2, 4, 2}, {2, 2, 2}, {2, 2}, {0, 1, 2}, {3, 4, 5}, 1, 1};
++}
++static std::vector<ResourceSpec> resources() {
++  return {{0, 1, 0}, {1, 1, 0}, {2, 1, 0}, {3, 1, 0}, {4, 1, 0}, {5, 1, 0}};
++}
++
++int main() {
++  // Isolated PRELOAD survives a fence, then actually schedules with the next
++  // execute command. The old descriptor is not dropped or declared retired.
++  {
++    Engine engine(8, resources()); StagedObserver scheduler(engine, config(), 4);
++    const ValueId descriptor = 5;
++    Event preload{2, {}, {&descriptor, 1}, {}, 7};
++    assert(scheduler.submit("preload", preload, 3, 6, 0, 0).issue == 2);
++    assert(scheduler.pending_preload() && engine.report().events == 0);
++    Event fence{3, {}, {}, {}, 0};
++    assert(scheduler.submit("fence", fence, 0, 127, 0, 0).ready == 3);
++    assert(scheduler.pending_preload() && engine.ready(descriptor) == 0);
++    Event compute{10, {&descriptor, 1}, {}, {}, 20};
++    const auto executed = scheduler.submit("compute_ws", compute, 4, 4, 0, 0);
++    assert(!scheduler.pending_preload() && engine.ready(descriptor) >= 18);
++    assert(executed.ready && *executed.ready >= 39);
++    assert(engine.issue_frontier() == 10); // effects do not stall CPU through completion
++  }
++  // The exception never skips prior unfinished DMA. A later config consumes in
++  // controller FIFO service order but releases its RS entry at controller issue.
++  {
++    Engine engine(8, resources()); StagedObserver scheduler(engine, config(), 4);
++    const ValueId local = 0, load_config = 1, descriptor = 5;
++    Event load{0, {}, {&local, 1}, {}, 50};
++    const auto dma = scheduler.submit("load", load, 10, 2, 0, 0);
++    assert(dma.ready == 51);
++    Event set_config{1, {}, {&load_config, 1}, {}, 1};
++    const auto configured = scheduler.submit("config", set_config, 1, 0, 1, 0);
++    assert(configured.start == 11 && configured.ready == 12);
++    Event preload{2, {}, {&descriptor, 1}, {}, 2};
++    scheduler.submit("preload", preload, 1, 6, 0, 0);
++    Event fence{3, {}, {}, {}, 0};
++    assert(scheduler.submit("fence", fence, 0, 127, 0, 0).ready == 51);
++    assert(scheduler.pending_preload());
++  }
++  // Ordinary entries remain owned until actual effects complete, not until
++  // service starts or the controller queue dequeues.
++  {
++    auto selected = config(); selected.reservations[0] = 1;
++    Engine engine(8, resources()); StagedObserver scheduler(engine, selected, 4);
++    Event first{0, {}, {}, {}, 50}, second{1, {}, {}, {}, 2};
++    assert(scheduler.submit("load", first, 1, 2, 0, 0).ready == 51);
++    assert(scheduler.submit("load", second, 1, 2, 0, 0).issue == 51);
++  }
++  // EX config waits all prior execute completion. ST config uses ST's path.
++  {
++    Engine engine(8, resources()); StagedObserver scheduler(engine, config(), 4);
++    Event compute{0, {}, {}, {}, 40}, set_config{1, {}, {}, {}, 1};
++    assert(scheduler.submit("compute_ws", compute, 2, 4, 0, 0).ready == 41);
++    assert(scheduler.submit("config", set_config, 1, 0, 0, 0).start == 42);
++    const auto store = scheduler.submit("config", set_config, 1, 0, 2, 0);
++    assert(store.start == 2); // independent controller can overlap
++  }
++  // Missing timing never turns into an implicit zero or a released reservation.
++  {
++    Engine engine(8, resources()); auto selected = config(); selected.issue_latency.reset();
++    StagedObserver scheduler(engine, selected, 4);
++    Event load{0, {}, {}, {}, 5};
++    assert(!scheduler.submit("load", load, 1, 2, 0, 0).ready);
++    assert(!engine.report().complete && !engine.barrier());
++  }
++}
+-- 
+2.34.1
+

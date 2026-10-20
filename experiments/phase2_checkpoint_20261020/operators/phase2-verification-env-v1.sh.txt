@@ -1,0 +1,3 @@
+source /work/merlin/tasks/phase2-el4-explore-20261018/.tmp/env.sh
+export PATH=/work/merlin/tasks/phase1-harness-v2/merlin/.venv/bin:$PATH
+export PYTHONPATH="$PYTHONPATH:$TASK_DIR/merlin/packages/merlin-timing/src:$TASK_DIR/merlin/packages/merlin-experiments/tests:$TASK_DIR/merlin/packages/merlin-timing/tests:$TASK_DIR/merlin/merlin/tests/targetgen:$TASK_DIR/merlin/merlin/tests/infra:$TASK_DIR/out/build/v6-python-deps"

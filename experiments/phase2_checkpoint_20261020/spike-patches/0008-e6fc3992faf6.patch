@@ -1,0 +1,476 @@
+From e6fc3992faf6a30558f7f382a69ac12daa46d672 Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Mon, 19 Oct 2026 06:51:05 +0000
+Subject: [PATCH] Add separately selected source-derived execute input service
+ evaluator
+
+---
+ examples/gemmini/timing/EXECUTE_SERVICE_V1.md |  26 ++++
+ examples/gemmini/timing/execute_service.hpp   | 115 ++++++++++++++++++
+ .../gemmini/timing/export_execute_service.py  |  81 ++++++++++++
+ .../timing/tests/execute_service_test.cpp     | 109 +++++++++++++++++
+ examples/gemmini/timing/tests/run_tests.py    |   2 +
+ .../tests/test_execute_service_bundle.py      |  72 +++++++++++
+ 6 files changed, 405 insertions(+)
+ create mode 100644 examples/gemmini/timing/EXECUTE_SERVICE_V1.md
+ create mode 100644 examples/gemmini/timing/execute_service.hpp
+ create mode 100644 examples/gemmini/timing/export_execute_service.py
+ create mode 100644 examples/gemmini/timing/tests/execute_service_test.cpp
+ create mode 100644 examples/gemmini/timing/tests/test_execute_service_bundle.py
+
+diff --git a/examples/gemmini/timing/EXECUTE_SERVICE_V1.md b/examples/gemmini/timing/EXECUTE_SERVICE_V1.md
+new file mode 100644
+index 0000000..8b91f05
+--- /dev/null
++++ b/examples/gemmini/timing/EXECUTE_SERVICE_V1.md
+@@ -0,0 +1,26 @@
++# Explicit input-service evaluator
++
++`export_execute_service.py` creates a distinct closed provider bundle from the
++exact retained bridge release. It preserves the old provider, staging engine,
++functional extension and feature counts. The legacy evaluator remains usable.
++Select the new library and `target.execution_service.version=1` together.
++
++The model consumes explicitly selected array extent, minimum input rows and the
++control-case mask from an independent source proof. Each mask bit encodes
++`dataflow<<4 | d_garbage<<3 | a_transposer<<2 | b_transposer<<1 | d_transposer`.
++Current admission is fenced, conservative weight-stationary single-MUL only.
++PRELOAD descriptor retirement, reservations and local-store conflict handling
++remain delegated to the retained staging implementation. Unsupported phases and
++unknown original prices remain unknown.
++
++For admitted COMPUTE, input occupancy is the selected number of rows at one row
++per cycle. Latency adds a separately fitted nonnegative propagation cost. The
++row rule is independent of the nominal padded-MAC counter; that original counter
++is deliberately unchanged. A row-service proof does not prove mesh completion,
++reachable states, output service, bank stalls or packet-level cycle equivalence.
++
++This source release and its synthetic tests issue no timing qualification.
++Training must retain original source-group splits, and a frozen model needs its
++own live source owner and unchanged held calibration gates. Missing capacity or
++attention labels still leave those domains UNKNOWN. Never replace the incumbent
++from training error alone.
+diff --git a/examples/gemmini/timing/execute_service.hpp b/examples/gemmini/timing/execute_service.hpp
+new file mode 100644
+index 0000000..a8a4adf
+--- /dev/null
++++ b/examples/gemmini/timing/execute_service.hpp
+@@ -0,0 +1,115 @@
++#ifndef GEMMINI_EXECUTE_INPUT_SERVICE_V1_HPP
++#define GEMMINI_EXECUTE_INPUT_SERVICE_V1_HPP
++
++#include "staged.hpp"
++#include <timing/provider.hpp>
++
++namespace gemmini_annotated_spike {
++
++// Explicitly selected source-derived input service plus separately fitted mesh
++// propagation. Nothing here changes functional state or the original counters.
++struct ExecuteInputService {
++  std::uint32_t dimension, minimum_rows, reduction_guard_mask;
++  double pipeline_cycles, cycles_per_row;
++};
++
++inline void validate_execute_input_service(const ExecuteInputService &value) {
++  if (!value.dimension || value.dimension > 64 || !value.minimum_rows ||
++      value.minimum_rows > value.dimension || value.cycles_per_row != 1 ||
++      !std::isfinite(value.pipeline_cycles) || value.pipeline_cycles < 0)
++    throw std::invalid_argument("execute input service needs independently checked extent and scalar row service");
++}
++
++inline ExecuteInputService read_execute_input_service(spike_timing::Services &services) {
++  const auto number = [&](const char *name) {
++    const auto value = services.number(std::string("target.execution_service.") + name);
++    if (!value || !std::isfinite(*value) || *value < 0)
++      throw std::invalid_argument(std::string("missing/invalid execute input service: ") + name);
++    return *value;
++  };
++  const auto integer = [&](const char *name) {
++    const auto value = number(name);
++    if (std::floor(value) != value || value > std::numeric_limits<std::uint32_t>::max())
++      throw std::invalid_argument("execute input service requires bounded integers");
++    return static_cast<std::uint32_t>(value);
++  };
++  if (integer("version") != 1)
++    throw std::invalid_argument("unsupported execute input service release");
++  ExecuteInputService result{integer("dimension"), integer("minimum_rows"), integer("reduction_guard_mask"),
++                             number("pipeline_cycles"), number("cycles_per_row")};
++  validate_execute_input_service(result);
++  return result;
++}
++
++class ExecuteServiceObserver {
++public:
++  ExecuteServiceObserver(ExecuteInputService pricing, merlin_timing::Engine &engine,
++                        StagedConfig config, ValueId state_base,
++                        std::function<void(const std::string &)> unresolved = {},
++                        ValueId local_base = 0, std::uint32_t scratchpad_rows = 0,
++                        std::uint32_t dimension = 0, std::uint32_t accumulator_rows = 0)
++      : pricing_(pricing), unresolved_(std::move(unresolved)),
++        staged_(engine, config, state_base, unresolved_, local_base, scratchpad_rows,
++                dimension, accumulator_rows) {
++    validate_execute_input_service(pricing_);
++    if (pricing_.dimension != dimension || !config.require_fenced_phases ||
++        !config.conservative_local_store_holds)
++      throw std::invalid_argument("row service requires selected fenced single-MUL conservative resource semantics");
++  }
++
++  Result submit(const std::string &kind, const Event &source, std::optional<Cycle> occupancy,
++                std::uint32_t funct, std::uint64_t rs1, std::uint64_t rs2) {
++    if (funct == 0 && (rs1 & 3) == 0 && !(rs1 & 128)) {
++      ws_ = (rs1 >> 2) & 1;
++      a_transpose_ = (rs1 >> 8) & 1;
++      b_transpose_ = (rs1 >> 9) & 1;
++      configured_ = true;
++    }
++    auto selected = source;
++    if (kind == "compute_ws") {
++      last_input_rows_.reset();
++      // require_fenced_phases refuses a following PRELOAD before completion.
++      // The admitted compute is single-MUL: D is inactive. A/B transposer
++      // predicates follow the selected execute configuration.
++      if (!configured_ || !ws_) {
++        selected.latency.reset();
++        occupancy.reset();
++        if (unresolved_) unresolved_("execute_service:missing_selected_execute_state");
++      } else if (source.latency && occupancy) {
++        const auto index = (std::uint32_t(ws_) << 4) | (1u << 3) |
++                           (std::uint32_t(a_transpose_) << 2) | std::uint32_t(b_transpose_);
++        auto rows = pricing_.dimension;
++        if (pricing_.reduction_guard_mask & (1u << index)) {
++          const auto a = std::uint32_t(rs1) == 0xffffffffu || a_transpose_ ? 1u :
++              std::min<std::uint32_t>(rs1 >> 48, pricing_.dimension);
++          const auto b = std::uint32_t(rs2) == 0xffffffffu ? 1u :
++              std::min<std::uint32_t>(rs2 >> 48, pricing_.dimension);
++          rows = std::max({a, b, pricing_.minimum_rows});
++        }
++        last_input_rows_ = rows;
++        const long double service = static_cast<long double>(rows) * pricing_.cycles_per_row;
++        const long double latency = std::ceil(service + pricing_.pipeline_cycles);
++        if (latency >= std::ldexp(1.0L, 64)) {
++          selected.latency.reset(); occupancy.reset();
++          if (unresolved_) unresolved_("execute_service:cycle_overflow");
++        } else {
++          selected.latency = static_cast<Cycle>(latency);
++          occupancy = static_cast<Cycle>(std::ceil(service));
++        }
++      }
++    }
++    return staged_.submit(kind, selected, occupancy, funct, rs1, rs2);
++  }
++
++  bool pending_preload() const { return staged_.pending_preload(); }
++  std::optional<std::uint32_t> last_input_rows() const { return last_input_rows_; }
++
++private:
++  ExecuteInputService pricing_;
++  std::function<void(const std::string &)> unresolved_;
++  StagedObserver staged_;
++  bool configured_ = false, ws_ = false, a_transpose_ = false, b_transpose_ = false;
++  std::optional<std::uint32_t> last_input_rows_;
++};
++} // namespace gemmini_annotated_spike
++#endif
+diff --git a/examples/gemmini/timing/export_execute_service.py b/examples/gemmini/timing/export_execute_service.py
+new file mode 100644
+index 0000000..a1150b2
+--- /dev/null
++++ b/examples/gemmini/timing/export_execute_service.py
+@@ -0,0 +1,81 @@
++"""Export a distinct row-service evaluator, preserving the retained legacy release."""
++
++from __future__ import annotations
++
++import argparse
++import hashlib
++import json
++from pathlib import Path
++
++from merlin_timing import provider_bundle as B
++
++LEGACY_BRIDGE = "fc4f69d6fbfc70790efd686ad4001d96712cb547f6a47cc3e3a54d50180e55e5"
++
++
++def specialize_bridge(raw):
++    if hashlib.sha256(raw).hexdigest() != LEGACY_BRIDGE:
++        raise ValueError(
++            "row-service specialization requires the exact reviewed legacy bridge"
++        )
++    text = raw.decode()
++    substitutions = (
++        (
++            '#include "staged.hpp"',
++            '#include "staged.hpp"\n#include "execute_service.hpp"',
++        ),
++        (
++            "std::make_unique<G::StagedObserver>(services_.engine, *inputs.staged,",
++            "std::make_unique<G::ExecuteServiceObserver>(G::read_execute_input_service(services_), services_.engine, *inputs.staged,",
++        ),
++        (
++            "std::unique_ptr<G::StagedObserver> staged_;",
++            "std::unique_ptr<G::ExecuteServiceObserver> staged_;",
++        ),
++    )
++    for before, after in substitutions:
++        if text.count(before) != 1:
++            raise ValueError("row-service bridge specialization is ambiguous")
++        text = text.replace(before, after)
++    return text.encode()
++
++
++def export(legacy_bundle, destination):
++    legacy_bundle, destination = Path(legacy_bundle), Path(destination)
++    receipt = B.verify_bundle(legacy_bundle)
++    root = Path(__file__).resolve().parent
++    payloads = {
++        name: (legacy_bundle / name).read_bytes()
++        for name in ("provider.hpp", "staged.hpp", "README.md")
++    }
++    original = (legacy_bundle / "bridge.cpp").read_bytes()
++    payloads["legacy_bridge.cpp"] = original
++    payloads["bridge.cpp"] = specialize_bridge(original)
++    payloads["execute_service.hpp"] = (root / "execute_service.hpp").read_bytes()
++    metadata = {
++        "schema": "gemmini.execute_service_export.v1",
++        "legacy_bundle_manifest_sha256": receipt["manifest_sha256"],
++        "legacy_bridge_sha256": LEGACY_BRIDGE,
++        "exporter_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
++        "scope": "Explicit operand-sensitive WS input rows; legacy counts/dependencies, whole-command resource holds and other prices preserved. No qualification issued.",
++    }
++    payloads["execute-service-export.json"] = (
++        json.dumps(metadata, sort_keys=True, indent=2) + "\n"
++    ).encode()
++    return B.export_bundle(
++        payloads,
++        destination,
++        entrypoint="bridge.cpp",
++        runtime_headers=tuple(receipt["runtime_headers"]),
++    )
++
++
++def main():
++    parser = argparse.ArgumentParser(description=__doc__)
++    parser.add_argument("--legacy-bundle", required=True, type=Path)
++    parser.add_argument("--output", required=True, type=Path)
++    args = parser.parse_args()
++    print(json.dumps(export(args.legacy_bundle, args.output), indent=2, sort_keys=True))
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/examples/gemmini/timing/tests/execute_service_test.cpp b/examples/gemmini/timing/tests/execute_service_test.cpp
+new file mode 100644
+index 0000000..50c2130
+--- /dev/null
++++ b/examples/gemmini/timing/tests/execute_service_test.cpp
+@@ -0,0 +1,109 @@
++#include "execute_service.hpp"
++#include <cassert>
++
++using namespace merlin_timing;
++using namespace gemmini_annotated_spike;
++
++static StagedConfig config() {
++  StagedConfig c;
++  c.reservations = {2, 4, 2}; c.controller_entries = {2, 2, 2}; c.dma_commands = {2, 2};
++  c.issue_resources = {0, 1, 2}; c.controller_resources = {3, 4, 5};
++  c.issue_latency = 1; c.issue_occupancy = 1; c.require_fenced_phases = true;
++  c.conservative_local_store_holds = true; c.scratchpad_bank_rows = 16;
++  c.scratchpad_bank_resources = {6, 7, 8, 9}; c.accumulator_storage_resource = 10;
++  return c;
++}
++static std::vector<ResourceSpec> resources() {
++  std::vector<ResourceSpec> result;
++  for (unsigned i = 0; i < 11; ++i) result.push_back({i, 1, 0});
++  return result;
++}
++static std::uint64_t packet(std::uint32_t address, unsigned rows) {
++  return address | (4ull << 32) | (std::uint64_t(rows) << 48);
++}
++
++int main() {
++  const ExecuteInputService pricing{8, 2, 1u << 24, 5, 1};
++  for (const unsigned rows : {0u, 1u, 2u, 3u, 7u, 8u}) {
++    Engine engine(256, resources());
++    ExecuteServiceObserver target(pricing, engine, config(), 100, {}, 0, 64, 8, 32);
++    Event set{0, {}, {}, {}, 1}; target.submit("config", set, 1, 0, 4, 0);
++    Event compute{1, {}, {}, {}, 100};
++    const auto result = target.submit("compute_ws", compute, 8, 4, packet(0, rows), 0xffffffffu);
++    const auto expected = std::max(rows, 2u);
++    assert(target.last_input_rows() == expected);
++    assert(result.ready && result.start && *result.ready - *result.start == expected + 5);
++  }
++  // Actual B rows, garbage A, and persistent transpose/stride-only state are
++  // independent controls. Geometry and minimum service are selected data.
++  {
++    Engine engine(256, resources());
++    ExecuteServiceObserver target(pricing, engine, config(), 100, {}, 0, 64, 8, 32);
++    Event set{0, {}, {}, {}, 1}, event{1, {}, {}, {}, 100};
++    target.submit("config", set, 1, 0, 4, 0);
++    target.submit("compute_ws", event, 8, 4, 0xffffffffu, packet(16, 7));
++    assert(target.last_input_rows() == 7);
++  }
++  {
++    Engine engine(256, resources());
++    ExecuteServiceObserver target(pricing, engine, config(), 100, {}, 0, 64, 8, 32);
++    Event set{0, {}, {}, {}, 1}, event{1, {}, {}, {}, 100};
++    target.submit("config", set, 1, 0, 4 | (1u << 8), 0);
++    target.submit("config", set, 1, 0, 128, 0); // preserve transpose
++    target.submit("compute_ws", event, 8, 4, packet(0, 1), 0xffffffffu);
++    assert(target.last_input_rows() == 8);
++  }
++  // Unknown original prices or configuration remain unknown, never replaced
++  // with a known geometry-derived value.
++  for (const bool configure : {false, true}) {
++    Engine engine(256, resources()); std::vector<std::string> reasons;
++    ExecuteServiceObserver target(pricing, engine, config(), 100,
++      [&](const auto &reason) { reasons.push_back(reason); }, 0, 64, 8, 32);
++    Event event{0, {}, {}, {}, 1};
++    if (configure) target.submit("config", event, 1, 0, 4, 0);
++    event.latency.reset();
++    assert(!target.submit("compute_ws", event, 8, 4, packet(0, 1), 0xffffffffu).ready);
++    assert(!engine.report().complete);
++    if (!configure) assert(reasons[0] == "execute_service:missing_selected_execute_state");
++  }
++  // The old pending-descriptor/fence semantics remain delegated intact.
++  {
++    Engine engine(256, resources());
++    ExecuteServiceObserver target(pricing, engine, config(), 100, {}, 0, 64, 8, 32);
++    Event event{0, {}, {}, {}, 1};
++    target.submit("config", event, 1, 0, 4, 0);
++    target.submit("preload", event, 8, 6, packet(16, 8), 0x80000000u);
++    target.submit("fence", event, 0, 127, 0, 0);
++    assert(target.pending_preload());
++    target.submit("compute_ws", event, 8, 4, packet(0, 1), 0xffffffffu);
++    assert(!target.pending_preload());
++  }
++  {
++    Engine engine(256, resources()); auto c = config(); c.require_fenced_phases = false;
++    bool refused = false;
++    try { ExecuteServiceObserver target(pricing, engine, c, 100, {}, 0, 64, 8, 32); }
++    catch (const std::invalid_argument &) { refused = true; }
++    assert(refused);
++  }
++  for (const unsigned field : {0u, 1u, 2u, 3u, 4u}) {
++    Engine engine(256, resources()); auto invalid = pricing;
++    if (field == 0) invalid.dimension = 65;
++    if (field == 1) invalid.minimum_rows = 0;
++    if (field == 2) invalid.minimum_rows = 9;
++    if (field == 3) invalid.pipeline_cycles = std::numeric_limits<double>::infinity();
++    if (field == 4) invalid.cycles_per_row = 0.5;
++    bool refused = false;
++    try { ExecuteServiceObserver target(invalid, engine, config(), 100, {}, 0, 64, 8, 32); }
++    catch (const std::invalid_argument &) { refused = true; }
++    assert(refused);
++  }
++  {
++    Engine engine(256, resources()); auto overflow = pricing;
++    overflow.pipeline_cycles = std::ldexp(1.0, 64);
++    ExecuteServiceObserver target(overflow, engine, config(), 100, {}, 0, 64, 8, 32);
++    Event event{0, {}, {}, {}, 1};
++    target.submit("config", event, 1, 0, 4, 0);
++    assert(!target.submit("compute_ws", event, 8, 4, packet(0, 1), 0xffffffffu).ready);
++    assert(!engine.report().complete);
++  }
++}
+diff --git a/examples/gemmini/timing/tests/run_tests.py b/examples/gemmini/timing/tests/run_tests.py
+index 5d5d9a0..ced5e87 100644
+--- a/examples/gemmini/timing/tests/run_tests.py
++++ b/examples/gemmini/timing/tests/run_tests.py
+@@ -30,6 +30,7 @@ def main():
+     queried_prices = set()
+     for name, sources in (("provider_test", [root / "tests/provider_test.cpp"]),
+                           ("staged_test", [root / "tests/staged_test.cpp"]),
++                          ("execute_service_test", [root / "tests/execute_service_test.cpp"]),
+                           ("bridge_test", [root / "bridge.cpp", root / "tests/bridge_test.cpp"])):
+         output = args.build_dir / name
+         subprocess.run([*flags, *(str(source) for source in sources), "-o", str(output)],
+@@ -65,6 +66,7 @@ def main():
+         raise AssertionError("changed public parameter source was accepted")
+     print("export: reproducible; changed pin refused; no invented prices/queues", flush=True)
+     subprocess.run([sys.executable, str(root / "tests/test_bundle.py")], check=True, timeout=15, env=env)
++    subprocess.run([sys.executable, str(root / "tests/test_execute_service_bundle.py")], check=True, timeout=15, env=env)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/examples/gemmini/timing/tests/test_execute_service_bundle.py b/examples/gemmini/timing/tests/test_execute_service_bundle.py
+new file mode 100644
+index 0000000..533e725
+--- /dev/null
++++ b/examples/gemmini/timing/tests/test_execute_service_bundle.py
+@@ -0,0 +1,72 @@
++"""Distinct evaluator release keeps its reviewed legacy substrate unchanged."""
++
++from __future__ import annotations
++
++import hashlib
++import importlib.util
++import os
++import tempfile
++import unittest
++from pathlib import Path
++
++from merlin_timing import provider_bundle as B
++
++ROOT = Path(__file__).resolve().parent.parent
++spec = importlib.util.spec_from_file_location(
++    "execute_service_export", ROOT / "export_execute_service.py"
++)
++E = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(E)
++
++
++class ExecuteServiceBundleTests(unittest.TestCase):
++    def test_distinct_closed_bundle(self):
++        with tempfile.TemporaryDirectory(dir=os.environ["TMPDIR"]) as folder:
++            base = Path(folder)
++            legacy = base / "legacy"
++            B.export_bundle(
++                {
++                    name: (ROOT / name).read_bytes()
++                    for name in (
++                        "bridge.cpp",
++                        "provider.hpp",
++                        "staged.hpp",
++                        "README.md",
++                    )
++                },
++                legacy,
++                entrypoint="bridge.cpp",
++                runtime_headers=B.RUNTIME_HEADERS,
++            )
++            selected = base / "selected"
++            receipt = E.export(legacy, selected)
++            self.assertEqual(receipt, B.verify_bundle(selected))
++            self.assertEqual(
++                (selected / "legacy_bridge.cpp").read_bytes(),
++                (legacy / "bridge.cpp").read_bytes(),
++            )
++            for name in ("provider.hpp", "staged.hpp", "README.md"):
++                self.assertEqual(
++                    (selected / name).read_bytes(), (legacy / name).read_bytes()
++                )
++            self.assertEqual(
++                (selected / "bridge.cpp").read_bytes(),
++                E.specialize_bridge((legacy / "bridge.cpp").read_bytes()),
++            )
++            self.assertNotEqual(
++                hashlib.sha256((selected / "bridge.cpp").read_bytes()).digest(),
++                hashlib.sha256((legacy / "bridge.cpp").read_bytes()).digest(),
++            )
++            with self.assertRaises(ValueError):
++                E.export(legacy, selected)
++            (selected / "execute_service.hpp").write_bytes(b"mutated")
++            with self.assertRaises(ValueError):
++                B.verify_bundle(selected)
++
++    def test_changed_legacy_bridge_refused(self):
++        with self.assertRaisesRegex(ValueError, "exact reviewed legacy bridge"):
++            E.specialize_bridge((ROOT / "bridge.cpp").read_bytes() + b"\n")
++
++
++if __name__ == "__main__":
++    unittest.main()
+-- 
+2.34.1
+

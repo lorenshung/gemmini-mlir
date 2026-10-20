@@ -1,0 +1,388 @@
+From e8205a161a1c2e07413a596239573bebd34fcf33 Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Mon, 19 Oct 2026 05:15:48 +0000
+Subject: [PATCH] Execute explicit conservative local-store resource holds with
+ closed source custody
+
+---
+ examples/gemmini/timing/README.md             | 29 +++++++
+ examples/gemmini/timing/bridge.cpp            | 11 +++
+ examples/gemmini/timing/export_config.py      |  7 +-
+ examples/gemmini/timing/staged.hpp            | 80 +++++++++++++++++--
+ examples/gemmini/timing/tests/run_native.py   | 12 +++
+ examples/gemmini/timing/tests/staged_test.cpp | 52 +++++++++++-
+ examples/gemmini/timing/tests/test_bundle.py  |  7 ++
+ 7 files changed, 187 insertions(+), 11 deletions(-)
+
+diff --git a/examples/gemmini/timing/README.md b/examples/gemmini/timing/README.md
+index 743d9e9..64d498a 100644
+--- a/examples/gemmini/timing/README.md
++++ b/examples/gemmini/timing/README.md
+@@ -158,6 +158,35 @@ execute-controller drain and output-tag logic. This checked subset still
+ refuses independent work sharing unmodeled banks or packet resources. A
+ successful ancestry check alone supplies no price or held-out qualification.
+ 
++`allow_disjoint_scratchpad_banks = 1` can also admit EX/DMA phases using
++separate physical scratchpad banks. The caller must bind the selected
++`scratchpad_bank_rows`. Independent rows within one bank do not qualify. LD/ST
++still share external DMA paths; all accumulator aliases remain one conservative
++conflict class rather than inferred independent ports.
++
++`conservative_local_store_holds = 1` selects a broader explicit reservation
++abstraction. It requires `scratchpad_bank_count`, `scratchpad_bank_rows`, one
++`accelerator.storage.scratchpad.<index>` resource per selected bank and an
++`accelerator.storage.accumulator.all` resource. Actual local read/write tokens,
++including PRELOAD's B feed, reserve each touched store through
++`max(effect_latency, occupancy)`. Unknown terms keep these holds unknown.
++PRELOAD descriptor readiness still does not retire its output tag.
++
++Whole-command holds deliberately serialize port use during some intervals when
++the RTL could overlap work. Accumulator ports/aliases collapse into one
++conservative conflict class; this does not claim the hardware has one port.
++The external-memory model similarly uses an explicitly selected aggregate
++shared resource and approximate cache/coherence policy. Future reservations
++can conservatively postpone independent earlier requests. These are declared
++model approximations, not exact packet or bank arbitration. Unchanged held-out
++error, ordering, family and coverage gates decide their usable timing domain.
++Command payload counts and modeled cache-line traffic remain distinct.
++
++The closed provider bundle includes `staged.hpp`. Its version-2 source manifest
++declares `reservations.hpp` as an additional generic runtime header, and the
++builder pins it alongside the original ABI/engine headers before and after
++compilation. This provides source custody, not timing qualification.
++
+ These mechanisms and the synthetic tests do not establish accelerator timing
+ qualification. The selected source/fact correspondence, supported semantic
+ subset, all prices and held-out timing gates require separate review. Resource
+diff --git a/examples/gemmini/timing/bridge.cpp b/examples/gemmini/timing/bridge.cpp
+index 79642e5..80035e0 100644
+--- a/examples/gemmini/timing/bridge.cpp
++++ b/examples/gemmini/timing/bridge.cpp
+@@ -115,6 +115,17 @@ std::optional<G::StagedConfig> staged_config(Services &services) {
+   result.issue_occupancy = price("issue_occupancy_cycles");
+   result.require_fenced_phases = services.number("target.scheduling.require_fenced_phases") == std::optional<double>{1};
+   result.allow_dependency_ordered_phases = services.number("target.scheduling.allow_dependency_ordered_phases") == std::optional<double>{1};
++  result.allow_disjoint_scratchpad_banks = services.number("target.scheduling.allow_disjoint_scratchpad_banks") == std::optional<double>{1};
++  result.conservative_local_store_holds = services.number("target.scheduling.conservative_local_store_holds") == std::optional<double>{1};
++  if (result.allow_disjoint_scratchpad_banks || result.conservative_local_store_holds)
++    result.scratchpad_bank_rows = count("scratchpad_bank_rows");
++  if (result.conservative_local_store_holds) {
++    const auto banks = count("scratchpad_bank_count");
++    if (banks > 128) throw std::invalid_argument("local store resource count exceeds bound");
++    for (std::size_t bank = 0; bank < banks; ++bank)
++      result.scratchpad_bank_resources.push_back(services.resource("accelerator.storage.scratchpad." + std::to_string(bank)));
++    result.accumulator_storage_resource = services.resource("accelerator.storage.accumulator.all");
++  }
+   return result;
+ }
+ 
+diff --git a/examples/gemmini/timing/export_config.py b/examples/gemmini/timing/export_config.py
+index 848d2e0..4ee4509 100644
+--- a/examples/gemmini/timing/export_config.py
++++ b/examples/gemmini/timing/export_config.py
+@@ -123,11 +123,11 @@ def export(public_library: Path, rocc_header: Path, profile: str = "stock_u250")
+ 
+ 
+ def export_bundle(document: dict, destination: Path, profile: str = "stock_u250"):
+-    from merlin_timing.provider_bundle import export_bundle as export_sources
++    from merlin_timing.provider_bundle import RUNTIME_HEADERS, export_bundle as export_sources
+ 
+     root = Path(__file__).absolute().parent
+     payloads = {}
+-    for name in ("README.md", "bridge.cpp", "provider.hpp"):
++    for name in ("README.md", "bridge.cpp", "provider.hpp", "staged.hpp"):
+         path = root / name
+         if path.is_symlink() or any(parent.is_symlink() for parent in path.parents):
+             raise ValueError("provider sources must not be symlinks")
+@@ -136,7 +136,8 @@ def export_bundle(document: dict, destination: Path, profile: str = "stock_u250"
+         with path.open("rb") as stream:
+             payloads[name] = stream.read(1024 * 1024 + 1)
+     payloads[profile + ".json"] = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
+-    return export_sources(payloads, destination, entrypoint="bridge.cpp")
++    return export_sources(payloads, destination, entrypoint="bridge.cpp", runtime_headers=(
++        *RUNTIME_HEADERS, "timing/core/include/merlin_timing/reservations.hpp"))
+ 
+ 
+ def main():
+diff --git a/examples/gemmini/timing/staged.hpp b/examples/gemmini/timing/staged.hpp
+index 8c6a1e2..564313d 100644
+--- a/examples/gemmini/timing/staged.hpp
++++ b/examples/gemmini/timing/staged.hpp
+@@ -15,6 +15,11 @@ struct StagedConfig {
+   std::optional<Cycle> issue_latency, issue_occupancy;
+   bool require_fenced_phases = false;
+   bool allow_dependency_ordered_phases = false;
++  bool allow_disjoint_scratchpad_banks = false;
++  std::uint32_t scratchpad_bank_rows = 0;
++  bool conservative_local_store_holds = false;
++  std::vector<ResourceId> scratchpad_bank_resources;
++  std::optional<ResourceId> accumulator_storage_resource;
+ };
+ 
+ // Exact cross-controller RS completion ancestry, independent of event prices.
+@@ -24,8 +29,11 @@ class DependencyPhases {
+ public:
+   using Ids = std::set<std::uint64_t>;
+   using Rows = std::set<ValueId>;
++  using Independence = std::function<bool(std::size_t, const Rows &, std::size_t, const Rows &)>;
++  explicit DependencyPhases(Independence independent = {}) : independent_(std::move(independent)) {}
+   bool observe(std::size_t group, const Rows &reads, const Rows &writes,
+-               bool preload = false, bool compute = false, bool execute_config = false) {
++               bool preload = false, bool compute = false, bool execute_config = false,
++               const Rows *physical = nullptr) {
+     if (execute_config) {
+       for (const auto &entry : nodes_) if (entry.second.group == 1) execute_drain_.insert(entry.first);
+       return true;
+@@ -45,10 +53,13 @@ public:
+       dependencies.insert(nodes_.at(*last_preload_).parents.begin(), nodes_.at(*last_preload_).parents.end());
+     const auto ancestors = closure(dependencies);
+     bool ordered = true;
++    Rows local = reads; local.insert(writes.begin(), writes.end());
++    const auto &selected_physical = physical ? *physical : local;
+     for (const auto &entry : nodes_)
+-      if (entry.second.group != group && !ancestors.count(entry.first)) ordered = false;
++      if (entry.second.group != group && !ancestors.count(entry.first) &&
++          !(independent_ && independent_(group, selected_physical, entry.second.group, entry.second.physical))) ordered = false;
+     const auto identity = ++sequence_;
+-    nodes_.emplace(identity, Node{group, reads, writes, dependencies});
++    nodes_.emplace(identity, Node{group, reads, writes, selected_physical, dependencies});
+     if (compute && last_preload_ && nodes_.count(*last_preload_))
+       nodes_.at(*last_preload_).parents.insert(identity);
+     if (preload) last_preload_ = identity;
+@@ -62,11 +73,12 @@ public:
+     else last_preload_.reset();
+   }
+ private:
+-  struct Node { std::size_t group; Rows reads, writes; Ids parents; };
++  struct Node { std::size_t group; Rows reads, writes, physical; Ids parents; };
+   std::map<std::uint64_t, Node> nodes_;
+   Ids execute_drain_;
+   std::uint64_t sequence_ = 0;
+   std::optional<std::uint64_t> last_preload_;
++  Independence independent_;
+   static bool overlap(const Rows &a, const Rows &b) {
+     auto left = a.begin(), right = b.begin();
+     while (left != a.end() && right != b.end()) {
+@@ -96,7 +108,16 @@ public:
+       std::function<void(const std::string &)> unresolved = {},
+       ValueId local_base = 0, std::uint32_t scratchpad_rows = 0, std::uint32_t dim = 0, std::uint32_t accumulator_rows = 0)
+       : engine_(engine), config_(config), execute_configuration_(execute_configuration),
+-        unresolved_(std::move(unresolved)), local_base_(local_base), scratchpad_rows_(scratchpad_rows), dim_(dim), accumulator_rows_(accumulator_rows) {
++        phases_([this](auto group, const auto &rows, auto other, const auto &prior) {
++          return independent_banks(group, rows, other, prior);
++        }), unresolved_(std::move(unresolved)), local_base_(local_base), scratchpad_rows_(scratchpad_rows), dim_(dim), accumulator_rows_(accumulator_rows) {
++    if (config_.allow_disjoint_scratchpad_banks && (!config_.scratchpad_bank_rows ||
++        !scratchpad_rows_ || scratchpad_rows_ % config_.scratchpad_bank_rows))
++      throw std::invalid_argument("selected scratchpad bank geometry is inconsistent");
++    if (config_.conservative_local_store_holds && (!config_.scratchpad_bank_rows ||
++        std::uint64_t(config_.scratchpad_bank_resources.size()) * config_.scratchpad_bank_rows != scratchpad_rows_ ||
++        !config_.accumulator_storage_resource))
++      throw std::invalid_argument("conservative local-store resource mapping is incomplete");
+     for (std::size_t i = 0; i < 3; ++i) {
+       reservations_[i] = std::make_unique<merlin_timing::ReservationWindow>(config.reservations[i]);
+       controllers_[i] = std::make_unique<merlin_timing::ReservationWindow>(config.controller_entries[i]);
+@@ -171,8 +192,14 @@ public:
+       range(rs1, ((rs1 >> (a_transpose_ ? 32 : 48)) & 31) * a_stride_, rs_reads);
+       range(rs2, (rs2 >> 48) & 31, rs_reads);
+     }
++    DependencyPhases::Rows physical_rows;
++    for (const auto rows : {source.reads, source.writes})
++      for (std::size_t i = 0; i < rows.size; ++i) if (local(rows[i])) physical_rows.insert(rows[i]);
++    if (funct == 6) { // Includes the retained destination tag conservatively.
++      physical_rows.insert(rs_reads.begin(), rs_reads.end()); physical_rows.insert(rs_writes.begin(), rs_writes.end());
++    }
+     const bool dependency_ordered = config ? (subtype != 0 || phases_.observe(group, {}, {}, false, false, true)) :
+-        phases_.observe(group, rs_reads, rs_writes, funct == 6, funct == 4 || funct == 5);
++        phases_.observe(group, rs_reads, rs_writes, funct == 6, funct == 4 || funct == 5, false, &physical_rows);
+     // Audit actual command order independently of priced Engine progress. An
+     // unpriced first event must not hide unsupported later commands.
+     if (config_.require_fenced_phases && group == 1) {
+@@ -192,7 +219,7 @@ public:
+       }
+     }
+     if (!config && config_.require_fenced_phases && (config_.allow_dependency_ordered_phases || (last_data_group_ && *last_data_group_ != group))) {
+-      if (!config_.allow_dependency_ordered_phases || !dependency_ordered) {
++      if (!config_.conservative_local_store_holds && (!config_.allow_dependency_ordered_phases || !dependency_ordered)) {
+         missing("staged:cross_controller_phase_without_completion_dependency");
+         semantic_scope_known_ = false;
+       }
+@@ -265,6 +292,26 @@ private:
+ 
+   void missing(const std::string &reason) { if (unresolved_) unresolved_(reason); }
+ 
++  bool independent_banks(std::size_t group, const DependencyPhases::Rows &rows,
++                         std::size_t other, const DependencyPhases::Rows &prior) const {
++    // DMA directions share external paths even when their SRAM banks differ.
++    // ACC aliases/shared adder structure are not claimed independent: every
++    // accumulator row maps to one conservative physical conflict class.
++    if (!config_.allow_disjoint_scratchpad_banks || (group != 1 && other != 1)) return false;
++    const auto banks = [&](const DependencyPhases::Rows &selected) {
++      std::set<std::uint64_t> result;
++      for (const auto value : selected) {
++        const auto offset = value - local_base_;
++        result.insert(offset < scratchpad_rows_ ? offset / config_.scratchpad_bank_rows :
++                      scratchpad_rows_ / config_.scratchpad_bank_rows);
++      }
++      return result;
++    };
++    const auto left = banks(rows), right = banks(prior);
++    for (const auto bank : left) if (right.count(bank)) return false;
++    return true;
++  }
++
+   static bool extend(Cycle &earliest, std::optional<Cycle> value) {
+     if (!value) return false;
+     earliest = std::max(earliest, *value); return true;
+@@ -301,6 +348,25 @@ private:
+       if (dma_ticket) consume = std::max(consume, dma_ticket->admitted);
+     }
+     command.demands.push_back({config_.controller_resources[command.group], 1, command.occupancy});
++    if (config_.conservative_local_store_holds) {
++      // A declared conservative abstraction: hold every touched local store
++      // through the whole effect, including gaps during DMA/mesh service. This
++      // admits less overlap than the RTL and never invents a second SP port.
++      // ACC aliases/ports collapse to one explicit conservative conflict class.
++      std::set<ResourceId> stores;
++      for (const auto *tokens : {&command.reads, &command.writes})
++        for (const auto value : *tokens) {
++          if (value < local_base_) continue;
++          const auto row = value - local_base_;
++          if (row < scratchpad_rows_)
++            stores.insert(config_.scratchpad_bank_resources[row / config_.scratchpad_bank_rows]);
++          else if (row - scratchpad_rows_ < accumulator_rows_)
++            stores.insert(*config_.accumulator_storage_resource);
++        }
++      const auto hold = command.latency && command.occupancy ?
++          std::optional<Cycle>{std::max(*command.latency, *command.occupancy)} : std::nullopt;
++      for (const auto store : stores) command.demands.push_back({store, 1, hold});
++    }
+     Event effect{consume, {command.reads.data(), command.reads.size()},
+         {command.writes.data(), command.writes.size()}, {command.demands.data(), command.demands.size()},
+         known ? command.latency : std::nullopt, true, {command.retained.data(), command.retained.size()}};
+diff --git a/examples/gemmini/timing/tests/run_native.py b/examples/gemmini/timing/tests/run_native.py
+index 369bcc8..89cdc28 100644
+--- a/examples/gemmini/timing/tests/run_native.py
++++ b/examples/gemmini/timing/tests/run_native.py
+@@ -31,7 +31,10 @@ def main():
+     parser.add_argument("--clang", default="clang")
+     parser.add_argument("--linker", default="lld", help="linker name or absolute executable path")
+     parser.add_argument("--staged", action="store_true", help="exercise separately selected v2 scheduling with synthetic prices")
++    parser.add_argument("--conservative-local-holds", action="store_true", help="exercise explicit conservative storage-resource holds")
+     args = parser.parse_args()
++    if args.conservative_local_holds and not args.staged:
++        parser.error("--conservative-local-holds requires --staged")
+     root = Path(__file__).resolve().parent.parent
+     build = args.build_dir.absolute()
+     build.mkdir(parents=True, exist_ok=False)
+@@ -74,6 +77,15 @@ def main():
+                 (f"accelerator.{stage}.{group}" for stage in ("issue", "controller")
+                  for group in ("load", "execute", "store")), start=7):
+             model["resources"].append({"id": index, "name": name, "capacity": 1, "queue_capacity": 0})
++        if args.conservative_local_holds:
++            model["target"]["scheduling"].update(
++                require_fenced_phases=1, allow_dependency_ordered_phases=1,
++                conservative_local_store_holds=1, scratchpad_bank_count=4,
++                scratchpad_bank_rows=model["target"]["hardware"]["scratchpad_rows"] // 4)
++            for name in [*(f"accelerator.storage.scratchpad.{i}" for i in range(4)),
++                         "accelerator.storage.accumulator.all"]:
++                model["resources"].append({"id": len(model["resources"]), "name": name,
++                                           "capacity": 1, "queue_capacity": 0})
+     extensions = [args.functional_extension.absolute(), args.timing_provider.absolute()]
+     model["libraries"] = [digest(library) for library in extensions]
+     profile, report_path = build / "synthetic-model.json", build / "report.json"
+diff --git a/examples/gemmini/timing/tests/staged_test.cpp b/examples/gemmini/timing/tests/staged_test.cpp
+index 070a4c7..0556f7e 100644
+--- a/examples/gemmini/timing/tests/staged_test.cpp
++++ b/examples/gemmini/timing/tests/staged_test.cpp
+@@ -5,7 +5,10 @@ using namespace merlin_timing;
+ using namespace gemmini_annotated_spike;
+ 
+ static StagedConfig config() {
+-  return {{2, 4, 2}, {2, 2, 2}, {2, 2}, {0, 1, 2}, {3, 4, 5}, 1, 1};
++  StagedConfig result;
++  result.reservations={2,4,2}; result.controller_entries={2,2,2}; result.dma_commands={2,2};
++  result.issue_resources={0,1,2}; result.controller_resources={3,4,5};
++  result.issue_latency=1; result.issue_occupancy=1; return result;
+ }
+ static std::vector<ResourceSpec> resources() {
+   return {{0, 1, 0}, {1, 1, 0}, {2, 1, 0}, {3, 1, 0}, {4, 1, 0}, {5, 1, 0}};
+@@ -146,4 +149,51 @@ int main() {
+     phases.observe(1, {1}, {});
+     assert(!phases.observe(2, {}, {}));
+   }
++  // The original owner supplies independently established physical resources;
++  // arrival order or distinct row addresses alone never imply independence.
++  {
++    DependencyPhases phases([](auto group, const auto &rows, auto other, const auto &prior) {
++      return (group == 1 || other == 1) && !rows.empty() && !prior.empty() && *rows.begin()/16 != *prior.begin()/16;
++    });
++    phases.observe(0, {}, {0});
++    assert(phases.observe(1, {16}, {32}));
++    assert(!phases.observe(2, {48}, {})); // DMA paths still shared
++  }
++  for (const auto rhs : {16u, 1u}) {
++    auto selected=config(); selected.require_fenced_phases=true; selected.allow_dependency_ordered_phases=true;
++    selected.allow_disjoint_scratchpad_banks=true; selected.scratchpad_bank_rows=16;
++    selected.issue_latency.reset();
++    std::vector<std::string> missing;
++    Engine engine(128, resources());
++    StagedObserver scheduler(engine, selected, 100, [&](const auto &reason) { missing.push_back(reason); },0,64,4,32);
++    Event configured{0, {}, {}, {}, 1};
++    scheduler.submit("config",configured,1,0,1ull<<16,1ull<<48);
++    const ValueId a=0,descriptor=101;
++    Event load{1, {}, {&a,1}, {}, 10};
++    scheduler.submit("load",load,1,2,0,0);
++    Event preload{2, {}, {&descriptor,1}, {}, 4};
++    scheduler.submit("preload",preload,1,6,rhs | 1ull<<32 | 1ull<<48,0x80000000ull | 1ull<<32 | 1ull<<48);
++    assert(missing.empty() == (rhs == 16)); // row-disjoint in one bank is insufficient
++  }
++  // The explicit conservative policy serializes independent rows sharing one
++  // physical SP bank, while preserving overlap in a different physical bank.
++  // Its full-latency holding interval is visible in resource accounting.
++  for (const auto rhs : {16u, 1u}) {
++    auto selected=config(); selected.require_fenced_phases=true; selected.allow_dependency_ordered_phases=true;
++    selected.conservative_local_store_holds=true; selected.scratchpad_bank_rows=16;
++    selected.scratchpad_bank_resources={6,7,8,9}; selected.accumulator_storage_resource=10;
++    auto available=resources();
++    for (unsigned id=6;id<=10;++id) available.push_back({id,1,0});
++    Engine engine(128,available); std::vector<std::string> missing;
++    StagedObserver scheduler(engine,selected,100,[&](const auto &s){missing.push_back(s);},0,64,4,32);
++    const ValueId a=0,b=rhs;
++    Event load{0,{}, {&a,1},{},50};
++    assert(scheduler.submit("load",load,1,2,0,0).ready==51);
++    Event compute{1,{&b,1},{},{},10};
++    const auto result=scheduler.submit("compute_ws",compute,1,4,rhs | 1ull<<32 | 1ull<<48,0xffffffffu);
++    assert(result.start==(rhs==16 ? 2 : 51));
++    assert(missing.empty());
++    const auto stats=engine.report();
++    assert(stats.resources[6].busy_unit_cycles==(rhs==16 ? 50 : 60));
++  }
+ }
+diff --git a/examples/gemmini/timing/tests/test_bundle.py b/examples/gemmini/timing/tests/test_bundle.py
+index 7466cf1..cfaf650 100644
+--- a/examples/gemmini/timing/tests/test_bundle.py
++++ b/examples/gemmini/timing/tests/test_bundle.py
+@@ -41,6 +41,7 @@ class BundleTests(unittest.TestCase):
+         second = self.base / "second"
+         self.assertEqual(self.receipt, EXPORT.export_bundle(self.document, second))
+         self.assertEqual(json.loads((second / "stock_u250.json").read_bytes()), self.document)
++        self.assertEqual((second / "staged.hpp").read_bytes(), (ROOT / "staged.hpp").read_bytes())
+         self.assertEqual({path.name for path in second.iterdir()},
+                          {*(row["path"] for row in self.receipt["members"]), BUILD.MANIFEST})
+         # Exported tooling must work without Merlin installed or importable.
+@@ -54,6 +55,12 @@ class BundleTests(unittest.TestCase):
+         with self.assertRaisesRegex(ValueError, "identity differs"):
+             BUILD.verify_bundle(self.bundle)
+ 
++    def test_changed_staged_member(self):
++        source = self.bundle / "staged.hpp"
++        source.write_bytes(source.read_bytes() + b"\n// mutation\n")
++        with self.assertRaisesRegex(ValueError, "identity differs"):
++            BUILD.verify_bundle(self.bundle)
++
+     def test_missing_member(self):
+         (self.bundle / "bridge.cpp").unlink()
+         with self.assertRaisesRegex(ValueError, "missing, repeated or additional"):
+-- 
+2.34.1
+

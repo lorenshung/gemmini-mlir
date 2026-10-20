@@ -1,0 +1,899 @@
+From 8aa62f2a609713f197ab4f57446f517956b127ba Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Fri, 16 Oct 2026 00:23:25 +0000
+Subject: [PATCH] Add FireSim 30 MHz Gemmini Spike target profile and runtime
+ packaging
+
+---
+ examples/gemmini/README.md                    |  15 +-
+ .../gemmini/functional_baseline/README.md     |  40 ++-
+ examples/gemmini/functional_baseline/build.py |  63 +++-
+ .../gemmini/functional_baseline/export.py     |  41 ++-
+ .../profile_fire_aligned_30mhz.json           |  62 ++++
+ examples/gemmini/timing/README.md             |  22 +-
+ examples/gemmini/timing/export_config.py      |  54 +++-
+ .../gemmini/timing/fire_aligned_30mhz.json    | 272 ++++++++++++++++++
+ examples/gemmini/timing/provider.hpp          |   2 +-
+ 9 files changed, 511 insertions(+), 60 deletions(-)
+ create mode 100644 examples/gemmini/functional_baseline/profile_fire_aligned_30mhz.json
+ create mode 100644 examples/gemmini/timing/fire_aligned_30mhz.json
+
+diff --git a/examples/gemmini/README.md b/examples/gemmini/README.md
+index fca392e..def3310 100644
+--- a/examples/gemmini/README.md
++++ b/examples/gemmini/README.md
+@@ -12,9 +12,11 @@ See [the baseline instructions](functional_baseline/README.md),
+ [the observer instructions](timing/README.md), and
+ [the generic timing API](../../timing/README.md).
+ 
+-The accelerator's original functional semantics come from public `libgemmini`
+-revision `ea8f7ed7afd68e001fb06ddccad9a023c990961d`. Source packaging verifies that
+-revision and its parameter/header bytes; it does not maintain another receiver.
++The functional receiver follows the selected board: public `libgemmini`
++`ea8f7ed7afd68e001fb06ddccad9a023c990961d` for the stock U250 archive, or
++`5b1254a7dc72f757442280e7f28ef30542c78533` for the 30 MHz archive. Source
++packaging verifies the selected revision and parameter/header bytes; it does
++not maintain another receiver.
+ The Spike base `9c190a07c6838f6392bafa4ad83acea462c7f759` is Chipyard's pinned
+ Spike revision. The newer Chipyard checkout also selects this public extension;
+ the older 30 MHz checkout selects `5b1254a7dc72f757442280e7f28ef30542c78533`
+@@ -36,6 +38,7 @@ second maintained simulator branch. Existing build/execute receipts retain their
+ original source and binary identities when this packaging moves.
+ 
+ `stock_u250.json` names the stock build whose bitstream archive starts with
+-`a9a190b9`. The separately audited 30 MHz archive starting with `0af6f26e` needs its
+-own device/provenance binding. Profile names and compatible software headers do
+-not establish timing equivalence. Neither profile has qualified timing prices.
++`a9a190b9`. `fire_aligned_30mhz.json` separately pins the selected 30 MHz
++archive starting with `0af6f26e` and its different `libgemmini` receiver at
++`5b1254a7`. Profile names and compatible software headers do not establish
++timing equivalence. Neither profile has qualified timing prices.
+diff --git a/examples/gemmini/functional_baseline/README.md b/examples/gemmini/functional_baseline/README.md
+index 4ff563e..bda6799 100644
+--- a/examples/gemmini/functional_baseline/README.md
++++ b/examples/gemmini/functional_baseline/README.md
+@@ -1,6 +1,6 @@
+-# Stock functional Spike baseline
++# Functional Spike baseline
+ 
+-This standalone package builds pristine public Spike and its stock Gemmini
++This standalone package builds pristine public Spike and a selected Gemmini
+ functional extension. It carries no timing observer, timing provider, compiler
+ or kernel implementation. No compiler checkout or network access is needed to
+ build the exported package.
+@@ -10,18 +10,22 @@ build the exported package.
+ | Component | Public revision |
+ | --- | --- |
+ | Spike | `9c190a07c6838f6392bafa4ad83acea462c7f759` |
+-| libgemmini | `ea8f7ed7afd68e001fb06ddccad9a023c990961d` |
++| libgemmini for stock U250 `a9a190b9` | `ea8f7ed7afd68e001fb06ddccad9a023c990961d` |
++| libgemmini for 30 MHz U250 `0af6f26e` | `5b1254a7dc72f757442280e7f28ef30542c78533` |
+ 
+-`sources.json` pins both original source archives and the Gemmini receiver,
+-parameter header and public RoCC header. `profile.json` records the software ABI
+-associated with the stock U250 `FireSimGemminiRocketConfig`: DIM 16, 16,384
++`sources.json` pins both original source archives and the selected Gemmini
++receiver, parameter header and public RoCC header. `profile.json` records the
++software ABI associated with `FireSimGemminiRocketConfig`: DIM 16, 16,384
+ scratchpad rows, 1,024 accumulator rows, int8 elements, int32 accumulators,
+ custom opcode `0x7b`, full accumulator readout and first-layer optimizations.
+ The builder checks these facts against the pinned header before compiling.
+ Every extracted source file and symlink is checked against a complete public
+ source roster before and after building; extra instrumentation is rejected.
+ 
+-The exact RTL elaboration lineage of the archived bitstream is unrecovered.
++The 30 MHz profile records exact Chipyard, Gemmini and receiver source revisions
++from the U250 handoff; the complete historical dirty FireSim overlay and matched
++FPGA execution remain unproven. The stock profile retains its original source
++limitations.
+ These source pins establish a functional ABI baseline, not physical deployment
+ equivalence. Rocket caches, accelerator queues, memory bandwidth and cycle
+ counts are not modeled or inferred. The explicit launch ISA is an executable
+@@ -47,13 +51,19 @@ The original functional source and Makefile are unmodified. The installation
+ contains `bin/spike`, `lib/libgemmini.so`, upstream headers and `deployment.json`
+ with source, binary, compiler and build-command receipts. Its initial status is
+ `built_not_executed`; building does not establish numerical or RTL correctness.
+-The separate `runtime/` deployment contains only the executable, compiled
+-functional library and receipts. Move it by rename to the stable task `out/`
++The separate `runtime/` deployment contains the executable, compiled
++functional library, receipts and, when a staged Boost root was selected, the
++exact Boost regex shared library. Move it by rename to the stable task `out/`
+ directory as shown above. The build's `sources/` and `install/include/` remain
+ trusted operator build material in `.tmp/`, outside candidate grants. Historical
+ execution receipts retain their original argv when a deployment moves; a current
+ deployment location record identifies the relocated endpoints.
+ 
++When Boost is staged outside system paths, pass both `--boost-root` and
++`--boost-libdir`. Those exact dependency paths and the version-header hash enter
++the deployment receipt. Set `LD_LIBRARY_PATH` to `runtime/lib` when using a
++staged Boost build; this selects the packaged regex library and Gemmini receiver.
++
+ ## Functional launch
+ 
+ Choose memory capacity explicitly for the current ELF. This does not assert
+@@ -63,13 +73,16 @@ Additional host extensions require independent deployment justification and an
+ explicit launch choice.
+ 
+ ```sh
+-/your/task/out/runtime/bin/spike \
+-  --isa=rv64gc_zicntr_zihpm --priv=m -p1 -m256 \
+-  --extlib=/your/task/out/runtime/lib/libgemmini.so \
++LD_LIBRARY_PATH=/your/task/out/runtime/lib /your/task/out/runtime/bin/spike \
++  --isa=rv64imafdcb_zicsr_zifencei_zihpm_zfh_zba_zbb_zbs \
++  --priv=m -p1 -m0x80000000:0x400000000 \
++  --extlib=libgemmini.so \
+   --extension=gemmini /path/to/program.elf
+ ```
+ 
+-Only this baseline library should be loaded. No annotated extension is needed.
++The 16 GiB launch span above is for the 30 MHz profile; select the declared
++span of each other board explicitly. Only the selected baseline library should
++be loaded. No annotated extension is needed.
+ The receiver implements its original public instruction set, including hardware
+ loop instructions. The experiment's no-FSM instruction constraint remains an
+ independent compiler/grader policy; this baseline does not silently change the
+@@ -93,6 +106,7 @@ so no timing code reaches the functional runtime. It imports no OOT compiler.
+ 
+ ```sh
+ python3 examples/gemmini/functional_baseline/export.py \
++  --profile fire_aligned_30mhz \
+   --spike-repo /path/to/riscv-isa-sim \
+   --libgemmini-repo /path/to/public/libgemmini \
+   --output /path/to/new/task-temporary-package
+diff --git a/examples/gemmini/functional_baseline/build.py b/examples/gemmini/functional_baseline/build.py
+index d70417a..3fdab45 100644
+--- a/examples/gemmini/functional_baseline/build.py
++++ b/examples/gemmini/functional_baseline/build.py
+@@ -153,9 +153,14 @@ def verify_sources(sources: Path, manifest: dict, *, built: bool = False) -> Non
+                 )
+ 
+ 
+-def build(package: Path, work: Path, jobs: int) -> dict:
++def build(
++    package: Path, work: Path, jobs: int,
++    *, boost_root: Path | None = None, boost_libdir: Path | None = None,
++) -> dict:
+     manifest = verify_package(package)
+     profile = json.loads((package / "profile.json").read_text())
++    if profile.get("target_profile", "stock_u250") != manifest.get("target_profile", "stock_u250"):
++        raise ValueError("functional profile differs from the selected source package")
+     if not 1 <= jobs <= 2:
+         raise ValueError("choose one or two build jobs")
+     # A fresh build directory avoids foreign configured source roots or libraries.
+@@ -169,6 +174,12 @@ def build(package: Path, work: Path, jobs: int) -> dict:
+         unpack(package / entry["archive"], sources / name)
+     verify_sources(sources, manifest)
+     verify_abi(sources / "libgemmini", profile)
++    if (boost_root is None) != (boost_libdir is None):
++        raise ValueError("select both Boost root and library directory")
++    if boost_root is not None:
++        boost_root, boost_libdir = boost_root.resolve(strict=True), boost_libdir.resolve(strict=True)
++        if not (boost_root / "include/boost/version.hpp").is_file() or not boost_libdir.is_dir():
++            raise ValueError("selected Boost headers or libraries are absent")
+     env = dict(
+         os.environ,
+         TMPDIR=str(temporary),
+@@ -176,10 +187,17 @@ def build(package: Path, work: Path, jobs: int) -> dict:
+         CXX="g++",
+         CFLAGS="-O2 -g0",
+         CXXFLAGS="-O2 -g0",
+-        LDFLAGS="",
++        LDFLAGS=("-L" + str(boost_libdir)) if boost_libdir is not None else "",
+     )
++    if boost_root is not None:
++        env["CPPFLAGS"] = "-I" + str(boost_root / "include")
++        env["BOOST_ROOT"] = str(boost_root)
++        env["LD_LIBRARY_PATH"] = str(boost_libdir) + ":" + env.get("LD_LIBRARY_PATH", "")
++    configure = [str(sources / "spike/configure"), "--prefix=" + str(prefix)]
++    if boost_root is not None:
++        configure += ["--with-boost=" + str(boost_root), "--with-boost-libdir=" + str(boost_libdir)]
+     commands = [
+-        ([str(sources / "spike/configure"), "--prefix=" + str(prefix)], objects),
++        (configure, objects),
+         (
+             ["make", "-j" + str(jobs), "spike", "install-hdrs", "install-config-hdrs"],
+             objects,
+@@ -193,6 +211,19 @@ def build(package: Path, work: Path, jobs: int) -> dict:
+     (prefix / "lib").mkdir(exist_ok=True)
+     shutil.copy2(objects / "spike", prefix / "bin/spike")
+     shutil.copy2(sources / "libgemmini/libgemmini.so", prefix / "lib/libgemmini.so")
++    runtime_members = ["bin/spike", "lib/libgemmini.so"]
++    regex_library_name = None
++    if boost_libdir is not None:
++        regex_libraries = [
++            path for path in boost_libdir.glob("libboost_regex.so.*")
++            if path.is_file() and not path.is_symlink()
++        ]
++        if len(regex_libraries) != 1:
++            raise ValueError("expected one selected Boost regex runtime library")
++        regex_library = regex_libraries[0]
++        regex_library_name = regex_library.name
++        shutil.copy2(regex_library, prefix / "lib" / regex_library.name)
++        runtime_members.append("lib/" + regex_library.name)
+     verify_sources(sources, manifest, built=True)
+     verify_package(package)
+     receipt = {
+@@ -213,12 +244,18 @@ def build(package: Path, work: Path, jobs: int) -> dict:
+         "build_flags": {
+             key: env[key] for key in ("CC", "CXX", "CFLAGS", "CXXFLAGS", "LDFLAGS")
+         },
++        "boost_dependency": (
++            {"root": str(boost_root), "libdir": str(boost_libdir),
++             "runtime_library_name": regex_library_name,
++             "version_header_sha256": sha(boost_root / "include/boost/version.hpp")}
++            if boost_root is not None else None
++        ),
+         "artifacts": {
+             name: {
+                 "sha256": sha(prefix / name),
+                 "bytes": (prefix / name).stat().st_size,
+             }
+-            for name in ("bin/spike", "lib/libgemmini.so")
++            for name in runtime_members
+         },
+     }
+     (prefix / "deployment.json").write_text(
+@@ -230,14 +267,21 @@ def build(package: Path, work: Path, jobs: int) -> dict:
+ 
+ def prepare_runtime(prefix: Path, runtime: Path, receipt: dict) -> None:
+     """Copy only the small runtime endpoints, never source or include roots."""
+-    if set(receipt["artifacts"]) != {"bin/spike", "lib/libgemmini.so"}:
++    allowed = {"bin/spike", "lib/libgemmini.so"}
++    boost = receipt.get("boost_dependency")
++    if boost:
++        name = boost.get("runtime_library_name", "")
++        if not name.startswith("libboost_regex.so.") or "/" in name:
++            raise ValueError("selected Boost runtime library has an invalid name")
++        allowed.add("lib/" + name)
++    if set(receipt["artifacts"]) != allowed:
+         raise ValueError(
+             "runtime requires exactly the baseline executable and functional library"
+         )
+     runtime.mkdir(exist_ok=False)
+     for filename, expected in receipt["artifacts"].items():
+         if (
+-            filename not in {"bin/spike", "lib/libgemmini.so"}
++            filename not in allowed
+             or sha(prefix / filename) != expected["sha256"]
+         ):
+             raise ValueError("runtime endpoint differs from its exact build receipt")
+@@ -253,6 +297,8 @@ def main() -> None:
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--work-dir", type=Path)
+     parser.add_argument("--jobs", type=int, default=1)
++    parser.add_argument("--boost-root", type=Path, help="explicit staged Boost installation root")
++    parser.add_argument("--boost-libdir", type=Path, help="explicit staged Boost library directory")
+     parser.add_argument("--verify-only", action="store_true")
+     args = parser.parse_args()
+     package = Path(__file__).resolve().parent
+@@ -262,7 +308,10 @@ def main() -> None:
+     elif args.work_dir is None:
+         parser.error("--work-dir is required for a fresh build")
+     else:
+-        build(package, args.work_dir.absolute(), args.jobs)
++        build(
++            package, args.work_dir.absolute(), args.jobs,
++            boost_root=args.boost_root, boost_libdir=args.boost_libdir,
++        )
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/examples/gemmini/functional_baseline/export.py b/examples/gemmini/functional_baseline/export.py
+index a9f904f..8a004ac 100644
+--- a/examples/gemmini/functional_baseline/export.py
++++ b/examples/gemmini/functional_baseline/export.py
+@@ -11,25 +11,34 @@ import subprocess
+ import tarfile
+ from pathlib import Path
+ 
+-PINS = {
+-    "spike": (
+-        "9c190a07c6838f6392bafa4ad83acea462c7f759",
+-        "https://github.com/riscv-software-src/riscv-isa-sim.git",
+-    ),
+-    "libgemmini": (
++SPIKE_PIN = (
++    "9c190a07c6838f6392bafa4ad83acea462c7f759",
++    "https://github.com/riscv-software-src/riscv-isa-sim.git",
++)
++RECEIVER_PINS = {
++    "stock_u250": (
+         "ea8f7ed7afd68e001fb06ddccad9a023c990961d",
+         "https://github.com/ucb-bar/libgemmini.git",
+     ),
++    "fire_aligned_30mhz": (
++        "5b1254a7dc72f757442280e7f28ef30542c78533",
++        "https://github.com/ucb-bar/libgemmini.git",
++    ),
+ }
+ CRITICAL = {
+     "spike": {
+         "riscv/rocc.h": "08bdaf6f3f6e846125c937f4c19d54ab11efaf3026ffab55aad609e2c6a52eea"
+     },
+-    "libgemmini": {
++    "stock_u250": {
+         "gemmini_params.h": "3758ae967af3a179497660970201093a7fb624be00173990ce33d3f5c38da924",
+         "gemmini.cc": "209c0f4f4bc7c2313655ea36f3742a5eb590988b8ef7958cd74b9f80b5e7fc9f",
+         "gemmini.h": "e13cde296d0faa650fe558351021628f3e4461525fa85b86bf81d44e66625590",
+     },
++    "fire_aligned_30mhz": {
++        "gemmini_params.h": "3758ae967af3a179497660970201093a7fb624be00173990ce33d3f5c38da924",
++        "gemmini.cc": "c468a86deb68cb2e12e3fb1177821075b0eb87e27a37ff835280ee7caf61b13a",
++        "gemmini.h": "506d6857dd0a02a2921535e1a5725639c0b6374e83a95935426fc9b5c6349ac3",
++    },
+ }
+ 
+ 
+@@ -41,16 +50,18 @@ def sha(path: Path) -> str:
+     return digest.hexdigest()
+ 
+ 
+-def export(spike: Path, library: Path, output: Path) -> None:
++def export(spike: Path, library: Path, output: Path, profile: str = "stock_u250") -> None:
+     output.mkdir(parents=True, exist_ok=False)
+     manifest = {
+         "schema": "merlin.functional_spike_sources.v1",
++        "target_profile": profile,
+         "sources": {},
+         "package_files": {},
+     }
+     for name, repo in (("spike", spike), ("libgemmini", library)):
+-        revision, url = PINS[name]
+-        for filename, expected in CRITICAL[name].items():
++        revision, url = SPIKE_PIN if name == "spike" else RECEIVER_PINS[profile]
++        critical = CRITICAL["spike" if name == "spike" else profile]
++        for filename, expected in critical.items():
+             raw = subprocess.check_output(
+                 ["git", "-C", str(repo), "show", revision + ":" + filename]
+             )
+@@ -94,12 +105,15 @@ def export(spike: Path, library: Path, output: Path) -> None:
+             "archive": archive.name,
+             "sha256": sha(archive),
+             "bytes": archive.stat().st_size,
+-            "critical_files": CRITICAL[name],
++            "critical_files": critical,
+             "source_roster": roster,
+         }
+-    for filename in ("build.py", "profile.json", "README.md"):
++    for filename in ("build.py", "README.md"):
+         shutil.copyfile(Path(__file__).parent / filename, output / filename)
+         manifest["package_files"][filename] = sha(output / filename)
++    source_profile = Path(__file__).parent / ("profile.json" if profile == "stock_u250" else "profile_fire_aligned_30mhz.json")
++    shutil.copyfile(source_profile, output / "profile.json")
++    manifest["package_files"]["profile.json"] = sha(output / "profile.json")
+     (output / "sources.json").write_text(
+         json.dumps(manifest, sort_keys=True, indent=2) + "\n"
+     )
+@@ -109,9 +123,10 @@ def main() -> None:
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--spike-repo", type=Path, required=True)
+     parser.add_argument("--libgemmini-repo", type=Path, required=True)
++    parser.add_argument("--profile", choices=tuple(RECEIVER_PINS), default="stock_u250")
+     parser.add_argument("--output", type=Path, required=True)
+     args = parser.parse_args()
+-    export(args.spike_repo, args.libgemmini_repo, args.output)
++    export(args.spike_repo, args.libgemmini_repo, args.output, args.profile)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/examples/gemmini/functional_baseline/profile_fire_aligned_30mhz.json b/examples/gemmini/functional_baseline/profile_fire_aligned_30mhz.json
+new file mode 100644
+index 0000000..596e187
+--- /dev/null
++++ b/examples/gemmini/functional_baseline/profile_fire_aligned_30mhz.json
+@@ -0,0 +1,62 @@
++{
++  "candidate_access": {
++    "header_include_roots": "none; build headers stay outside runtime deployment",
++    "runner": "broker access to runtime/bin/spike and runtime/lib/libgemmini.so only",
++    "source_archives": "trusted operator build inputs; never candidate grants"
++  },
++  "claim": "functional Gemmini software ABI only",
++  "functional_only": true,
++  "hardware_association": {
++    "archive_sha256": "0af6f26e1cbad1c03f9e5873217505a5100bf2d0d068205cfa486522b24fc603",
++    "chipyard_revision": "009e85b05ca817a15fcd6c3fe4eedd86cc2a3617",
++    "embedded_bitstream_sha256": null,
++    "evidence": "operator-verified 30 MHz U250 source handoff and pinned FireSim DTS; original bitstream and driver are not in this package",
++    "functional_receiver_revision": "5b1254a7dc72f757442280e7f28ef30542c78533",
++    "gemmini_revision": "63f0b68a68f185a016a2993f2fb32e1661ea9e6c",
++    "generated_params_sha256": "3758ae967af3a179497660970201093a7fb624be00173990ce33d3f5c38da924",
++    "host_dts_sha256": "c4a2009a405945ea98f731713e0f4e7dc483031ab8cd5156d871e4eb7594f1df",
++    "scope": "functional parameter/header association; matched FPGA execution and physical equivalence unestablished"
++  },
++  "launch": {
++    "additional_extensions": "disabled by default; require independent evidence and an explicit deployment choice",
++    "extension": "gemmini",
++    "harts": 1,
++    "isa": "rv64imafdcb_zicsr_zifencei_zihpm_zfh_zba_zbb_zbs",
++    "isa_status": "explicit executable compatibility selection; not proof of bitstream ISA",
++    "memory_base": 2147483648,
++    "memory_bytes": 17179869184,
++    "memory_mib": 16384,
++    "memory_status": "explicit Spike allocation matching the DTS address span; board capacity still requires execution qualification",
++    "privilege": "m"
++  },
++  "physical_cpu_isa_match": "not_established",
++  "platform": "xilinx_alveo_u250",
++  "policy": "FireSim-selected 5b1254a7 receiver unchanged; no-FSM policy is enforced independently by the compiler grader",
++  "rtl_elaboration_source_lineage": "Chipyard 009e85b05ca817a15fcd6c3fe4eedd86cc2a3617 with Gemmini 63f0b68a68f185a016a2993f2fb32e1661ea9e6c; historical FireSim dirty overlay unproven",
++  "schema": "merlin.functional_spike_profile.v1",
++  "software_abi": {
++    "accumulator_bytes": 4,
++    "accumulator_rows": 1024,
++    "address_bits": 32,
++    "custom_opcode": 123,
++    "custom_opcode_mask": 127,
++    "dim": 16,
++    "element_bytes": 1,
++    "first_layer_optimizations": true,
++    "full_width_accumulator_readout": true,
++    "maximum_software_transfer_bytes": 64,
++    "scratchpad_banks": 4,
++    "scratchpad_rows": 16384,
++    "scratchpad_rows_per_bank": 4096
++  },
++  "target_config": "FireSimGemminiRocketConfig",
++  "target_profile": "fire_aligned_30mhz",
++  "timing_model_included": false,
++  "timing_qualification": "not_established",
++  "unmodeled_physical_behavior": [
++    "Rocket pipeline, physical register and cache timing",
++    "accelerator command queues, latency and overlap",
++    "physical memory mapping, capacity and bandwidth",
++    "interrupt, loader, console and physical board deployment equivalence"
++  ]
++}
+diff --git a/examples/gemmini/timing/README.md b/examples/gemmini/timing/README.md
+index 02a6cdd..d4b94aa 100644
+--- a/examples/gemmini/timing/README.md
++++ b/examples/gemmini/timing/README.md
+@@ -9,11 +9,14 @@ These trusted simulator sources are independent of the generated OOT compiler.
+ Phase 1 receives runtime endpoints through its broker; these sources, vendor
+ headers and selfcheck fixtures are not candidate inputs.
+ 
+-The implementation uses public `libgemmini` semantics at
+-`ea8f7ed7afd68e001fb06ddccad9a023c990961d`. `export_config.py` verifies the exact
+-public source, generated parameter-header and Spike RoCC declaration bytes
+-before exporting the stock U250 configuration. It imports no compiler, kernel,
+-scheduler or model code.
++The observer has two separately pinned target profiles. `stock_u250.json` uses
++public `libgemmini` `ea8f7ed7afd68e001fb06ddccad9a023c990961d` and the
++`a9a190b9` archive. `fire_aligned_30mhz.json` uses the receiver
++`5b1254a7dc72f757442280e7f28ef30542c78533` selected by Gemmini
++`63f0b68a68f185a016a2993f2fb32e1661ea9e6c` and the `0af6f26e` archive.
++Both have the same generated parameter-header bytes, but their receiver source
++bytes differ. `export_config.py` verifies each source and the Spike RoCC header
++before exporting. It imports no compiler, kernel, scheduler or model code.
+ 
+ ## Standalone source bundle
+ 
+@@ -26,6 +29,7 @@ contains those canonical bytes and requires only Python's standard library.
+ 
+ ```sh
+ python3 examples/gemmini/timing/export_config.py \
++  --profile stock_u250 \
+   --public-library /path/to/public/libgemmini \
+   --spike-rocc /path/to/riscv-isa-sim/riscv/rocc.h \
+   --bundle-dir /path/to/new/provider-source
+@@ -34,6 +38,14 @@ python3 /path/to/new/provider-source/build_provider.py \
+   --output-library /path/to/libtiming_provider.so
+ ```
+ 
++For the selected 30 MHz FireSim build, pass `--profile fire_aligned_30mhz`
++and the `software/libgemmini` checkout at `5b1254a7` from the pinned Gemmini
++tree. Its exported source bundle contains `fire_aligned_30mhz.json` instead of
++`stock_u250.json`. The generated profile pins the 16 GiB board's archive,
++source revisions and DTS; its embedded bitstream digest remains unknown because
++the source-only handoff excludes that file. Prices and queue capacities remain
++unset until Phase 1 measurements and calibration establish them.
++
+ The closed bundle contains only the observer, bridge, shared build helper, this README,
+ generated stock facts and a hash manifest, within one MiB. It contains no kernels
+ or compiler implementation. `--output` remains available for facts-only export.
+diff --git a/examples/gemmini/timing/export_config.py b/examples/gemmini/timing/export_config.py
+index 8a4d9c4..83a8b8a 100644
+--- a/examples/gemmini/timing/export_config.py
++++ b/examples/gemmini/timing/export_config.py
+@@ -7,11 +7,31 @@ import hashlib
+ import json
+ from pathlib import Path
+ 
+-LIBGEMMINI_REVISION = "ea8f7ed7afd68e001fb06ddccad9a023c990961d"
+ PARAMS_SHA256 = "3758ae967af3a179497660970201093a7fb624be00173990ce33d3f5c38da924"
+-HEADER_SHA256 = "e13cde296d0faa650fe558351021628f3e4461525fa85b86bf81d44e66625590"
+-SOURCE_SHA256 = "209c0f4f4bc7c2313655ea36f3742a5eb590988b8ef7958cd74b9f80b5e7fc9f"
+ ROCC_SHA256 = "08bdaf6f3f6e846125c937f4c19d54ab11efaf3026ffab55aad609e2c6a52eea"
++PROFILES = {
++    "stock_u250": {
++        "libgemmini_revision": "ea8f7ed7afd68e001fb06ddccad9a023c990961d",
++        "header_sha256": "e13cde296d0faa650fe558351021628f3e4461525fa85b86bf81d44e66625590",
++        "source_sha256": "209c0f4f4bc7c2313655ea36f3742a5eb590988b8ef7958cd74b9f80b5e7fc9f",
++        "archive_sha256": "a9a190b9fc26d577b1e8af0e3b46a94c8efaf2976f7fca6650236e0fd6d4eca1",
++        "embedded_bitstream_sha256": "6bfb72e3d69d0bed14eaa8db9fd5faf53f82780ef9ecded6b2d49983dfcbc229",
++        "rtl_elaboration_source_lineage": "unrecovered_from_archive",
++    },
++    "fire_aligned_30mhz": {
++        "libgemmini_revision": "5b1254a7dc72f757442280e7f28ef30542c78533",
++        "header_sha256": "506d6857dd0a02a2921535e1a5725639c0b6374e83a95935426fc9b5c6349ac3",
++        "source_sha256": "c468a86deb68cb2e12e3fb1177821075b0eb87e27a37ff835280ee7caf61b13a",
++        "archive_sha256": "0af6f26e1cbad1c03f9e5873217505a5100bf2d0d068205cfa486522b24fc603",
++        "embedded_bitstream_sha256": None,
++        "rtl_elaboration_source_lineage": "009e85b05ca817a15fcd6c3fe4eedd86cc2a3617; historical dirty overlay unproven",
++        "chipyard_revision": "009e85b05ca817a15fcd6c3fe4eedd86cc2a3617",
++        "gemmini_revision": "63f0b68a68f185a016a2993f2fb32e1661ea9e6c",
++        "saturn_revision": "e16a301d261fa4b5a374eb7069b78107a8c9aefb",
++        "firesim_revision": "b084672c2f8cf32e55d78f73a001074c23f8a2b8",
++        "host_dts_sha256": "c4a2009a405945ea98f731713e0f4e7dc483031ab8cd5156d871e4eb7594f1df",
++    },
++}
+ KINDS = ("config", "preload", "flush", "counter", "fence", "load", "store", "pool_store",
+          "normalize1", "normalize2", "normalize3", "normalize4", "normalize5", "normalize6", "normalize7",
+          "compute_ws", "compute_os", "compute_ws_relu", "compute_os_relu",
+@@ -27,10 +47,11 @@ def _bound(path: Path, digest: str) -> bytes:
+     return raw
+ 
+ 
+-def export(public_library: Path, rocc_header: Path) -> dict:
++def export(public_library: Path, rocc_header: Path, profile: str = "stock_u250") -> dict:
++    selected = PROFILES[profile]
+     params = _bound(public_library / "gemmini_params.h", PARAMS_SHA256).decode()
+-    _bound(public_library / "gemmini.h", HEADER_SHA256)
+-    source = _bound(public_library / "gemmini.cc", SOURCE_SHA256).decode()
++    _bound(public_library / "gemmini.h", selected["header_sha256"])
++    source = _bound(public_library / "gemmini.cc", selected["source_sha256"]).decode()
+     rocc = _bound(rocc_header, ROCC_SHA256).decode()
+     defines = {}
+     for line in params.splitlines():
+@@ -68,15 +89,17 @@ def export(public_library: Path, rocc_header: Path) -> dict:
+         "target_config": "FireSimGemminiRocketConfig",
+         "provenance": {
+             "platform": "xilinx_alveo_u250",
+-            "archive_sha256": "a9a190b9fc26d577b1e8af0e3b46a94c8efaf2976f7fca6650236e0fd6d4eca1",
+-            "embedded_bitstream_sha256": "6bfb72e3d69d0bed14eaa8db9fd5faf53f82780ef9ecded6b2d49983dfcbc229",
++            "archive_sha256": selected["archive_sha256"],
++            "embedded_bitstream_sha256": selected["embedded_bitstream_sha256"],
+             "generated_params_sha256": PARAMS_SHA256,
+-            "functional_extension_revision": LIBGEMMINI_REVISION,
+-            "public_sources": {"gemmini.h": HEADER_SHA256, "gemmini.cc": SOURCE_SHA256},
++            "functional_extension_revision": selected["libgemmini_revision"],
++            "public_sources": {"gemmini.h": selected["header_sha256"], "gemmini.cc": selected["source_sha256"]},
+             "public_architecture_headers": {"riscv/rocc.h": ROCC_SHA256},
+             "hardware_pin_registry": "merlin/contract/hardware_pins.yaml",
+             "archive_identity": "operator_verified_pin",
+-            "rtl_elaboration_source_lineage": "unrecovered_from_archive",
++            "rtl_elaboration_source_lineage": selected["rtl_elaboration_source_lineage"],
++            **{key: selected[key] for key in ("chipyard_revision", "gemmini_revision", "saturn_revision",
++                                              "firesim_revision", "host_dts_sha256") if key in selected},
+         },
+         "target": {"hardware": hardware,
+                    "prices": {**{kind: {"latency_cycles": None, "occupancy_cycles": None,
+@@ -95,7 +118,7 @@ def export(public_library: Path, rocc_header: Path) -> dict:
+     }
+ 
+ 
+-def export_bundle(document: dict, destination: Path):
++def export_bundle(document: dict, destination: Path, profile: str = "stock_u250"):
+     from merlin_timing.provider_bundle import export_bundle as export_sources
+ 
+     root = Path(__file__).absolute().parent
+@@ -108,7 +131,7 @@ def export_bundle(document: dict, destination: Path):
+             raise ValueError("provider source must be an ordinary bounded file")
+         with path.open("rb") as stream:
+             payloads[name] = stream.read(1024 * 1024 + 1)
+-    payloads["stock_u250.json"] = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
++    payloads[profile + ".json"] = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode()
+     return export_sources(payloads, destination, entrypoint="bridge.cpp")
+ 
+ 
+@@ -116,13 +139,14 @@ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--public-library", type=Path, required=True)
+     parser.add_argument("--spike-rocc", type=Path, required=True)
++    parser.add_argument("--profile", choices=tuple(PROFILES), default="stock_u250")
+     output = parser.add_mutually_exclusive_group(required=True)
+     output.add_argument("--output", type=Path)
+     output.add_argument("--bundle-dir", type=Path)
+     args = parser.parse_args()
+-    document = export(args.public_library, args.spike_rocc)
++    document = export(args.public_library, args.spike_rocc, args.profile)
+     if args.bundle_dir:
+-        print(json.dumps(export_bundle(document, args.bundle_dir), sort_keys=True))
++        print(json.dumps(export_bundle(document, args.bundle_dir, args.profile), sort_keys=True))
+     else:
+         if args.output.exists() or args.output.is_symlink():
+             raise ValueError("export destination already exists")
+diff --git a/examples/gemmini/timing/fire_aligned_30mhz.json b/examples/gemmini/timing/fire_aligned_30mhz.json
+new file mode 100644
+index 0000000..2f0a363
+--- /dev/null
++++ b/examples/gemmini/timing/fire_aligned_30mhz.json
+@@ -0,0 +1,272 @@
++{
++  "limitations": {
++    "local_dependency_granularity": "complete local rows, conservative",
++    "physical_queue_capacities": "unknown",
++    "primitive_latencies": "unknown",
++    "qualification": "unqualified timing until explicit parameters and resources are selected",
++    "requested_dma_bytes": "command payload, not physical DRAM transactions"
++  },
++  "provenance": {
++    "archive_identity": "operator_verified_pin",
++    "archive_sha256": "0af6f26e1cbad1c03f9e5873217505a5100bf2d0d068205cfa486522b24fc603",
++    "chipyard_revision": "009e85b05ca817a15fcd6c3fe4eedd86cc2a3617",
++    "embedded_bitstream_sha256": null,
++    "firesim_revision": "b084672c2f8cf32e55d78f73a001074c23f8a2b8",
++    "functional_extension_revision": "5b1254a7dc72f757442280e7f28ef30542c78533",
++    "gemmini_revision": "63f0b68a68f185a016a2993f2fb32e1661ea9e6c",
++    "generated_params_sha256": "3758ae967af3a179497660970201093a7fb624be00173990ce33d3f5c38da924",
++    "hardware_pin_registry": "merlin/contract/hardware_pins.yaml",
++    "host_dts_sha256": "c4a2009a405945ea98f731713e0f4e7dc483031ab8cd5156d871e4eb7594f1df",
++    "platform": "xilinx_alveo_u250",
++    "public_architecture_headers": {
++      "riscv/rocc.h": "08bdaf6f3f6e846125c937f4c19d54ab11efaf3026ffab55aad609e2c6a52eea"
++    },
++    "public_sources": {
++      "gemmini.cc": "c468a86deb68cb2e12e3fb1177821075b0eb87e27a37ff835280ee7caf61b13a",
++      "gemmini.h": "506d6857dd0a02a2921535e1a5725639c0b6374e83a95935426fc9b5c6349ac3"
++    },
++    "rtl_elaboration_source_lineage": "009e85b05ca817a15fcd6c3fe4eedd86cc2a3617; historical dirty overlay unproven",
++    "saturn_revision": "e16a301d261fa4b5a374eb7069b78107a8c9aefb"
++  },
++  "resources": {
++    "accelerator.config": {
++      "capacity": null,
++      "queue_capacity": null
++    },
++    "accelerator.dma_read": {
++      "capacity": null,
++      "queue_capacity": null
++    },
++    "accelerator.dma_write": {
++      "capacity": null,
++      "queue_capacity": null
++    },
++    "accelerator.execute": {
++      "capacity": null,
++      "queue_capacity": null
++    },
++    "accelerator.load": {
++      "capacity": null,
++      "queue_capacity": null
++    },
++    "accelerator.store": {
++      "capacity": null,
++      "queue_capacity": null
++    }
++  },
++  "schema": "gemmini.annotated_spike.target.v1",
++  "target": {
++    "hardware": {
++      "accumulator_bytes": 4,
++      "accumulator_rows": 1024,
++      "address_bits": 32,
++      "custom_opcode": 123,
++      "custom_opcode_mask": 127,
++      "dim": 16,
++      "element_bytes": 1,
++      "first_layer_optimizations": 1,
++      "full_width_accumulator_readout": 1,
++      "reset_accumulator_activation": null,
++      "scratchpad_rows": 16384
++    },
++    "prices": {
++      "compute_os": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "compute_os_relu": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "compute_ws": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "compute_ws_relu": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "config": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "counter": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "dma": {
++        "read_bytes_per_cycle": null,
++        "write_bytes_per_cycle": null
++      },
++      "fence": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "flush": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "load": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "normalize1": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "normalize2": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "normalize3": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "normalize4": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "normalize5": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "normalize6": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "normalize7": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "pool_store": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "pool_store_act1": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "preload": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "store": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "store_act1": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "store_act2": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "store_act3": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      },
++      "store_act4": {
++        "latency_cycles": null,
++        "latency_per_byte_cycles": null,
++        "latency_per_mac_cycles": null,
++        "occupancy_cycles": null,
++        "occupancy_per_byte_cycles": null,
++        "occupancy_per_mac_cycles": null
++      }
++    }
++  },
++  "target_config": "FireSimGemminiRocketConfig"
++}
+diff --git a/examples/gemmini/timing/provider.hpp b/examples/gemmini/timing/provider.hpp
+index 6cf6327..64f0e88 100644
+--- a/examples/gemmini/timing/provider.hpp
++++ b/examples/gemmini/timing/provider.hpp
+@@ -2,7 +2,7 @@
+ #define GEMMINI_ANNOTATED_SPIKE_PROVIDER_HPP
+ 
+ // Observation only. Encodings and state transitions follow public libgemmini
+-// ea8f7ed7afd68e001fb06ddccad9a023c990961d; no kernel library is included.
++// Receiver source is selected by the target profile; no kernel library is included.
+ #include <merlin_timing/engine.hpp>
+ 
+ #include <array>
+-- 
+2.34.1
+

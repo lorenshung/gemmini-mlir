@@ -1,0 +1,164 @@
+From 83439ef98709e30297bd123a378a6a1bf63142e0 Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Mon, 19 Oct 2026 04:24:59 +0000
+Subject: [PATCH] Add explicit asynchronous scheduling and reservation
+ ownership
+
+---
+ timing/core/include/merlin_timing/engine.hpp  | 19 ++++++
+ .../include/merlin_timing/reservations.hpp    | 58 +++++++++++++++++++
+ timing/core/tests/test_reservations.cpp       | 34 +++++++++++
+ timing/tests/run_unit.py                      |  1 +
+ 4 files changed, 112 insertions(+)
+ create mode 100644 timing/core/include/merlin_timing/reservations.hpp
+ create mode 100644 timing/core/tests/test_reservations.cpp
+
+diff --git a/timing/core/include/merlin_timing/engine.hpp b/timing/core/include/merlin_timing/engine.hpp
+index f31d67e..243500d 100644
+--- a/timing/core/include/merlin_timing/engine.hpp
++++ b/timing/core/include/merlin_timing/engine.hpp
+@@ -129,6 +129,25 @@ public:
+     return std::max(*entry.writer, *entry.readers);
+   }
+   std::optional<Cycle> issue_frontier() const { return issue_; }
++  // Explicit asynchronous v2 scheduling. A controller event may start in the
++  // future without moving CPU admission to that future dependency. Physical
++  // reservation ownership must be managed separately by the selected adapter.
++  // The original submit/barrier semantics and v1 callers are unchanged.
++  Result submit_detached(const Event &event) {
++    const auto saved = issue_;
++    try {
++      const auto result = submit(event);
++      issue_ = saved;
++      return result;
++    } catch (...) {
++      issue_ = saved;
++      throw;
++    }
++  }
++  void advance_issue(std::optional<Cycle> admission) {
++    if (!admission || !issue_) { issue_.reset(); return; }
++    issue_ = std::max(*issue_, *admission);
++  }
+   void reset(ValueId value) {
+     const auto done = last_use(value);
+     if (!issue_ || !done || *done > *issue_)
+diff --git a/timing/core/include/merlin_timing/reservations.hpp b/timing/core/include/merlin_timing/reservations.hpp
+new file mode 100644
+index 0000000..e0647e4
+--- /dev/null
++++ b/timing/core/include/merlin_timing/reservations.hpp
+@@ -0,0 +1,58 @@
++#ifndef MERLIN_TIMING_RESERVATIONS_HPP
++#define MERLIN_TIMING_RESERVATIONS_HPP
++
++#include "engine.hpp"
++#include <optional>
++#include <vector>
++
++namespace merlin_timing {
++
++// A reservation entry stays owned through the explicitly selected release
++// stage. This is distinct from Engine's waiting-until-start resource queues.
++class ReservationWindow {
++public:
++  struct Ticket { std::size_t slot; std::uint64_t generation; Cycle admitted; };
++  explicit ReservationWindow(std::size_t capacity) : entries_(capacity) {
++    if (!capacity || capacity > 65536) throw std::invalid_argument("invalid reservation capacity");
++  }
++  std::optional<Ticket> allocate(Cycle earliest) {
++    std::optional<std::size_t> selected;
++    std::optional<Cycle> admitted;
++    for (std::size_t i = 0; i < entries_.size(); ++i) {
++      const auto &entry = entries_[i];
++      if (!entry.owned || entry.release) {
++        const auto available = entry.owned ? std::max(earliest, *entry.release) : earliest;
++        if (!admitted || available < *admitted) { selected = i; admitted = available; }
++      }
++    }
++    if (!selected) return {};
++    auto &entry = entries_[*selected];
++    if (entry.generation == std::numeric_limits<std::uint64_t>::max())
++      throw std::overflow_error("reservation generation overflow");
++    entry.owned = true; entry.release.reset(); ++entry.generation;
++    return Ticket{*selected, entry.generation, *admitted};
++  }
++  void release(const Ticket &ticket, std::optional<Cycle> when) {
++    if (ticket.slot >= entries_.size() || !entries_[ticket.slot].owned ||
++        entries_[ticket.slot].generation != ticket.generation ||
++        (when && *when < ticket.admitted))
++      throw std::logic_error("reservation release does not own its original entry");
++    entries_[ticket.slot].release = when;
++  }
++  std::optional<Cycle> drained(Cycle earliest, std::optional<Ticket> except = {}) const {
++    Cycle result = earliest;
++    for (std::size_t i = 0; i < entries_.size(); ++i) {
++      const auto &entry = entries_[i];
++      if (!entry.owned) continue;
++      if (except && except->slot == i && except->generation == entry.generation) continue;
++      if (!entry.release) return {};
++      result = std::max(result, *entry.release);
++    }
++    return result;
++  }
++private:
++  struct Entry { bool owned = false; std::optional<Cycle> release; std::uint64_t generation = 0; };
++  std::vector<Entry> entries_;
++};
++} // namespace merlin_timing
++#endif
+diff --git a/timing/core/tests/test_reservations.cpp b/timing/core/tests/test_reservations.cpp
+new file mode 100644
+index 0000000..f5e48b6
+--- /dev/null
++++ b/timing/core/tests/test_reservations.cpp
+@@ -0,0 +1,34 @@
++#include <merlin_timing/reservations.hpp>
++#include <cassert>
++
++int main() {
++  using namespace merlin_timing;
++  ReservationWindow reservations(2);
++  const auto load = reservations.allocate(2), preload = reservations.allocate(3);
++  assert(load && preload && !reservations.allocate(4));
++  // A lone excluded PRELOAD does not exclude unfinished DMA work.
++  assert(!reservations.drained(4, preload));
++  reservations.release(*load, 50);
++  assert(reservations.drained(4, preload) == 50);
++  assert(!reservations.drained(4));
++  // Completion ownership, not start/service, frees the ordinary entry.
++  auto next = reservations.allocate(5);
++  assert(next && next->admitted == 50);
++  reservations.release(*next, 51);
++  bool refused = false;
++  try { reservations.release(*load, 100); } catch (const std::logic_error &) { refused = true; }
++  assert(refused);
++  reservations.release(*preload, 80);
++  assert(reservations.drained(6) == 80);
++
++  Engine engine(4, {{0, 1, 0}});
++  const ValueId token = 0;
++  const Demand service{0, 1, 10};
++  Event effect{20, {}, {&token, 1}, {&service, 1}, 30};
++  const auto detached = engine.submit_detached(effect);
++  assert(detached.issue == 20 && detached.ready == 50);
++  assert(engine.issue_frontier() == 0 && engine.ready(token) == 50);
++  engine.advance_issue(5);
++  assert(engine.issue_frontier() == 5);
++  assert(engine.barrier() == 50);
++}
+diff --git a/timing/tests/run_unit.py b/timing/tests/run_unit.py
+index 42ecf0e..58bcd07 100755
+--- a/timing/tests/run_unit.py
++++ b/timing/tests/run_unit.py
+@@ -51,6 +51,7 @@ def main():
+     model_file.write_text(json.dumps(model))
+     cases = [
+         ("engine", [ROOT / "timing/core/tests/test_engine.cpp"], []),
++        ("reservations", [ROOT / "timing/core/tests/test_reservations.cpp"], []),
+         ("decode", [ROOT / "timing/tests/test_cpu_decode.cpp"], []),
+         ("counter-taint", [ROOT / "timing/tests/test_counter_taint.cpp"], []),
+         (
+-- 
+2.34.1
+

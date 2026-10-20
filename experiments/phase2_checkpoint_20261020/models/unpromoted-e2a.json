@@ -1,0 +1,322 @@
+{
+  "cpu": {
+    "isa": "rv64imafdcb_zicsr_zifencei_zihpm_zfh_zba_zbb_zbs"
+  },
+  "cpu_execution_resources": {
+    "cpu.bitmanip": "cpu.integer_alu",
+    "cpu.branch": "cpu.integer_alu",
+    "cpu.csr": "cpu.control",
+    "cpu.custom": "cpu.rocc_dispatch",
+    "cpu.divide": "cpu.muldiv",
+    "cpu.fence": "cpu.control",
+    "cpu.fp_load": "cpu.integer_alu",
+    "cpu.fp_store": "cpu.integer_alu",
+    "cpu.integer": "cpu.integer_alu",
+    "cpu.load": "cpu.integer_alu",
+    "cpu.multiply": "cpu.muldiv",
+    "cpu.store": "cpu.integer_alu"
+  },
+  "domain": {
+    "device_sha256": "12a1a0b45fe7767f03f1b277349b7600c7c68243f7161aba52242df1921721e0",
+    "feature_engine_sha256": "e3c5f4f8499d68adcc209f929d349d91abb201254ef9d7cd2a433eb33755d166",
+    "feature_schema_sha256": "6e5f95729a8a794474bce584be73ec86589aa7f80203ed0a85364b6a02b2cca8",
+    "label_engine": "gsim",
+    "label_engine_sha256": "76ddbfdc5b3beadef6b6b37768a08522122327057b92d71d3539a9529e4ea651",
+    "memory_regime_sha256": "ca14c17022cd298ef7f516cae39c4418558fddc2ba97090f9dca41c11199a73a",
+    "scope_sha256": "82dae761bda30488a6760c9ae51764069a6ed9e60544661e90f883477d273525"
+  },
+  "libraries": [
+    "2dbd8445376cdda0df63abcf217c7a19f974d34a16ada21b549ed82fffd718eb",
+    "00a82c941275fe0caffe2255368a93b0f85e68172b14f7be8da02f9de532c8da"
+  ],
+  "memory": {
+    "caches": {
+      "l1d": {
+        "line_bytes": 64,
+        "policy": "write_back_write_allocate",
+        "sets": 64,
+        "ways": 8
+      },
+      "l1i": {
+        "line_bytes": 64,
+        "policy": "write_back_write_allocate",
+        "sets": 64,
+        "ways": 8
+      },
+      "l2": {
+        "line_bytes": 64,
+        "policy": "write_back_write_allocate",
+        "sets": 1024,
+        "ways": 8
+      }
+    },
+    "coherence_granule": 64,
+    "coherence_policy": "writeback_invalidate",
+    "paths": {
+      "cpu_data": [
+        "l1d",
+        "l2"
+      ],
+      "cpu_fetch": [
+        "l1i",
+        "l2"
+      ],
+      "device": [
+        "l2"
+      ]
+    }
+  },
+  "parameters": {
+    "cpu.branch.latency_cycles": 1,
+    "cpu.branch.not_taken_penalty_cycles": 0,
+    "cpu.branch.occupancy_cycles": 1,
+    "cpu.branch.taken_penalty_cycles": 0.0,
+    "cpu.csr.latency_cycles": 1,
+    "cpu.csr.occupancy_cycles": 1,
+    "cpu.custom.latency_cycles": 1,
+    "cpu.custom.occupancy_cycles": 1,
+    "cpu.fence.latency_cycles": 1,
+    "cpu.fence.occupancy_cycles": 1,
+    "cpu.integer.latency_cycles": 1,
+    "cpu.integer.occupancy_cycles": 1,
+    "cpu.issue_cycles": 1,
+    "cpu.load.latency_cycles": 2,
+    "cpu.load.occupancy_cycles": 1,
+    "cpu.multiply.latency_cycles": 8,
+    "cpu.multiply.occupancy_cycles": 8,
+    "cpu.store.latency_cycles": 1,
+    "cpu.store.occupancy_cycles": 1,
+    "memory.dram_latency_cycles": 9.0,
+    "memory.dram_per_byte_cycles": 0.0625,
+    "memory.immutable_access_cycles": 1,
+    "memory.l1d.hit_cycles": 1.0,
+    "memory.l1d.miss_cycles": 1,
+    "memory.l1i.hit_cycles": 1,
+    "memory.l1i.miss_cycles": 1,
+    "memory.l2.hit_cycles": 1.0,
+    "memory.l2.miss_cycles": 1,
+    "memory.snoop_cycles": 1
+  },
+  "profile": "phase1-public",
+  "resources": [
+    {
+      "capacity": 1,
+      "id": 0,
+      "name": "cpu.issue",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 1,
+      "name": "cpu.integer_alu",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 2,
+      "name": "cpu.muldiv",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 3,
+      "name": "accelerator.issue.load",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 4,
+      "name": "accelerator.issue.execute",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 5,
+      "name": "accelerator.issue.store",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 6,
+      "name": "accelerator.controller.load",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 7,
+      "name": "accelerator.controller.execute",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 8,
+      "name": "accelerator.controller.store",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 9,
+      "name": "cpu.control",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 10,
+      "name": "cpu.rocc_dispatch",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 11,
+      "name": "memory.shared",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 12,
+      "name": "accelerator.storage.scratchpad.0",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 13,
+      "name": "accelerator.storage.scratchpad.1",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 14,
+      "name": "accelerator.storage.scratchpad.2",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 15,
+      "name": "accelerator.storage.scratchpad.3",
+      "queue_capacity": 0
+    },
+    {
+      "capacity": 1,
+      "id": 16,
+      "name": "accelerator.storage.accumulator.all",
+      "queue_capacity": 0
+    }
+  ],
+  "schema": "merlin.annotated_spike_model.v1",
+  "scope": {
+    "kind": "counter_pc_pair"
+  },
+  "target": {
+    "hardware": {
+      "accumulator_bytes": 4,
+      "accumulator_rows": 1024,
+      "address_bits": 32,
+      "custom_opcode": 123,
+      "custom_opcode_mask": 127,
+      "dim": 16,
+      "element_bytes": 1,
+      "first_layer_optimizations": 1,
+      "full_width_accumulator_readout": 1,
+      "reset_accumulator_activation": 0,
+      "scratchpad_rows": 16384
+    },
+    "prices": {
+      "compute_ws": {
+        "latency_cycles": 40.0,
+        "latency_per_byte_cycles": 0,
+        "latency_per_mac_cycles": 0.00390625,
+        "occupancy_cycles": 1,
+        "occupancy_per_byte_cycles": 0,
+        "occupancy_per_mac_cycles": 0.00390625
+      },
+      "config": {
+        "latency_cycles": 1,
+        "latency_per_byte_cycles": 0,
+        "latency_per_mac_cycles": 0,
+        "occupancy_cycles": 1,
+        "occupancy_per_byte_cycles": 0,
+        "occupancy_per_mac_cycles": 0
+      },
+      "fence": {
+        "latency_cycles": 0,
+        "latency_per_byte_cycles": 0,
+        "latency_per_mac_cycles": 0,
+        "occupancy_cycles": 0,
+        "occupancy_per_byte_cycles": 0,
+        "occupancy_per_mac_cycles": 0
+      },
+      "flush": {
+        "latency_cycles": 1,
+        "latency_per_byte_cycles": 0,
+        "latency_per_mac_cycles": 0,
+        "occupancy_cycles": 1,
+        "occupancy_per_byte_cycles": 0,
+        "occupancy_per_mac_cycles": 0
+      },
+      "load": {
+        "latency_cycles": 10.0,
+        "latency_per_byte_cycles": 0.0625,
+        "latency_per_mac_cycles": 0,
+        "occupancy_cycles": 1,
+        "occupancy_per_byte_cycles": 0.0625,
+        "occupancy_per_mac_cycles": 0
+      },
+      "pool_store": {
+        "latency_cycles": 16,
+        "latency_per_byte_cycles": 0.0625,
+        "latency_per_mac_cycles": 0,
+        "occupancy_cycles": 1,
+        "occupancy_per_byte_cycles": 0.0625,
+        "occupancy_per_mac_cycles": 0
+      },
+      "preload": {
+        "latency_cycles": 20.0,
+        "latency_per_byte_cycles": 0,
+        "latency_per_mac_cycles": 0,
+        "occupancy_cycles": 16,
+        "occupancy_per_byte_cycles": 0,
+        "occupancy_per_mac_cycles": 0
+      },
+      "store": {
+        "latency_cycles": 20.0,
+        "latency_per_byte_cycles": 0.0625,
+        "latency_per_mac_cycles": 0,
+        "occupancy_cycles": 1,
+        "occupancy_per_byte_cycles": 0.0625,
+        "occupancy_per_mac_cycles": 0
+      },
+      "store_act1": {
+        "latency_cycles": 16,
+        "latency_per_byte_cycles": 0.0625,
+        "latency_per_mac_cycles": 0,
+        "occupancy_cycles": 1,
+        "occupancy_per_byte_cycles": 0.0625,
+        "occupancy_per_mac_cycles": 0
+      }
+    },
+    "scheduling": {
+      "allow_dependency_ordered_phases": 1,
+      "conservative_local_store_holds": 1,
+      "controller_entries": {
+        "execute": 10,
+        "load": 8,
+        "store": 2
+      },
+      "dma_commands": {
+        "load": 2,
+        "store": 2
+      },
+      "issue_latency_cycles": 1,
+      "issue_occupancy_cycles": 1,
+      "require_fenced_phases": 1,
+      "reservations": {
+        "execute": 16,
+        "load": 8,
+        "store": 4
+      },
+      "scratchpad_bank_count": 4,
+      "scratchpad_bank_rows": 4096,
+      "version": 2
+    }
+  }
+}

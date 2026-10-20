@@ -1,0 +1,301 @@
+From 878a91144244aae89eaa9b7a0e039f08678acb36 Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Mon, 19 Oct 2026 04:47:31 +0000
+Subject: [PATCH] Preserve staged preload retirement and audit fenced timing
+ domain
+
+---
+ examples/gemmini/timing/README.md             | 29 +++++++
+ examples/gemmini/timing/bridge.cpp            |  4 +-
+ examples/gemmini/timing/staged.hpp            | 77 ++++++++++++++++++-
+ examples/gemmini/timing/tests/run_native.py   |  4 +-
+ examples/gemmini/timing/tests/staged_test.cpp | 38 +++++++++
+ 5 files changed, 146 insertions(+), 6 deletions(-)
+
+diff --git a/examples/gemmini/timing/README.md b/examples/gemmini/timing/README.md
+index d4b94aa..751a3ce 100644
+--- a/examples/gemmini/timing/README.md
++++ b/examples/gemmini/timing/README.md
+@@ -118,6 +118,35 @@ not a count of nonzero arithmetic. Queueing, resource overlap and read/write
+ hazards come from the generic engine. Physical banking and intra-command phase
+ overlap are not independently resolved by this provider.
+ 
++## Explicit staged scheduling selection
++
++`target.scheduling.version = 2` separately selects `staged.hpp`. The legacy
++selection remains unchanged. This selection distinguishes reservation admission,
++controller issue, FIFO consumption, effects and retirement. It requires explicit
++LD/EX/ST reservation and controller-queue capacities, DMA command-tracker
++capacities, six `accelerator.{issue,controller}.{load,execute,store}` resources,
++and issue latency/occupancy prices. Missing prices remain unknown.
++
++A pending solitary PRELOAD survives a fence and starts only when its following
++execute command is observed. Non-garbage destination tags retain their reservation
++through the following compute result, rather than retiring at descriptor
++readiness. Admission timestamps are clamped to the CPU issue frontier, including
++after a fence. Load/store configuration reservations release on controller issue;
++their configuration effects remain ordered at controller consumption.
++
++`require_fenced_phases = 1` restricts the initial model domain to explicitly
++fenced controller phases and rejects a COMPUTE-to-PRELOAD transition without a
++completion fence. Such transitions require independent cross-controller bank or
++overlapped mesh/tag semantics. The command-order audit continues when prices are
++unknown, and an observed fence remains ordering evidence even when its cost is
++unknown. These refusals affect native timing, not complete instruction counts.
++
++These mechanisms and the synthetic tests do not establish accelerator timing
++qualification. The selected source/fact correspondence, supported semantic
++subset, all prices and held-out timing gates require separate review. Resource
++breakdowns in native reports remain explicitly scoped whole-trace diagnostics;
++they must not be summed into counter-window costs or physical traffic.
++
+ ## Verification
+ 
+ Run bounded independent C++ and source-pinning checks:
+diff --git a/examples/gemmini/timing/bridge.cpp b/examples/gemmini/timing/bridge.cpp
+index 3f067f7..c2bbf84 100644
+--- a/examples/gemmini/timing/bridge.cpp
++++ b/examples/gemmini/timing/bridge.cpp
+@@ -113,6 +113,7 @@ std::optional<G::StagedConfig> staged_config(Services &services) {
+   result.dma_commands = {count("dma_commands.load"), count("dma_commands.store")};
+   result.issue_latency = price("issue_latency_cycles");
+   result.issue_occupancy = price("issue_occupancy_cycles");
++  result.require_fenced_phases = services.number("target.scheduling.require_fenced_phases") == std::optional<double>{1};
+   return result;
+ }
+ 
+@@ -121,7 +122,8 @@ public:
+   Provider(Services services, Inputs inputs)
+       : services_(std::move(services)), opcode_(inputs.opcode), opcode_mask_(inputs.opcode_mask),
+         staged_(inputs.staged ? std::make_unique<G::StagedObserver>(services_.engine, *inputs.staged,
+-          inputs.tokens + inputs.hardware.scratchpad_rows + inputs.hardware.accumulator_rows + 4) : nullptr),
++          inputs.tokens + inputs.hardware.scratchpad_rows + inputs.hardware.accumulator_rows + 4,
++          services_.unresolved, inputs.tokens, inputs.hardware.scratchpad_rows, inputs.hardware.dim) : nullptr),
+         observer_(services_.engine, inputs.hardware, std::move(inputs.parameters),
+           inputs.resources, inputs.tokens, [this](merlin_timing::View<G::Transfer> transfers) {
+             std::vector<spike_timing::MemoryEffect> rows;
+diff --git a/examples/gemmini/timing/staged.hpp b/examples/gemmini/timing/staged.hpp
+index 63c5cc0..a04a82e 100644
+--- a/examples/gemmini/timing/staged.hpp
++++ b/examples/gemmini/timing/staged.hpp
+@@ -12,6 +12,7 @@ struct StagedConfig {
+   std::array<std::size_t, 2> dma_commands;
+   std::array<ResourceId, 3> issue_resources, controller_resources;
+   std::optional<Cycle> issue_latency, issue_occupancy;
++  bool require_fenced_phases = false;
+ };
+ 
+ // Version 2 explicitly distinguishes CPU admission, reservation issue, FIFO
+@@ -19,8 +20,11 @@ struct StagedConfig {
+ // and memory effects, not a separate decorative plan. Prices remain external.
+ class StagedObserver {
+ public:
+-  StagedObserver(Engine &engine, StagedConfig config, ValueId execute_configuration)
+-      : engine_(engine), config_(config), execute_configuration_(execute_configuration) {
++  StagedObserver(Engine &engine, StagedConfig config, ValueId execute_configuration,
++      std::function<void(const std::string &)> unresolved = {},
++      ValueId local_base = 0, std::uint32_t scratchpad_rows = 0, std::uint32_t dim = 0)
++      : engine_(engine), config_(config), execute_configuration_(execute_configuration),
++        unresolved_(std::move(unresolved)), local_base_(local_base), scratchpad_rows_(scratchpad_rows), dim_(dim) {
+     for (std::size_t i = 0; i < 3; ++i) {
+       reservations_[i] = std::make_unique<merlin_timing::ReservationWindow>(config.reservations[i]);
+       controllers_[i] = std::make_unique<merlin_timing::ReservationWindow>(config.controller_entries[i]);
+@@ -35,6 +39,10 @@ public:
+       // A pending PRELOAD has no following execute command yet. It retains its
+       // reservation/descriptor/configuration dependency while other work drains.
+       const auto drained = engine_.barrier();
++      // The instruction establishes the ordering grammar even when its price
++      // is unknown. Timing UNKNOWN must not erase observed fence evidence.
++      last_data_group_.reset();
++      computed_since_fence_ = false;
+       Event event = source;
+       if (drained) event.earliest = std::max(event.earliest, *drained);
+       else event.latency.reset();
+@@ -47,7 +55,33 @@ public:
+     const auto subtype = config ? rs1 & 3 : 0;
+     const std::size_t group = config ? (subtype == 1 ? 0 : subtype >= 2 ? 2 : 1) :
+         (funct == 1 || funct == 2 || funct == 14) ? 0 : funct == 3 ? 2 : 1;
+-    auto ticket = reservations_[group]->allocate(source.earliest);
++    // Audit actual command order independently of priced Engine progress. An
++    // unpriced first event must not hide unsupported later commands.
++    if (config_.require_fenced_phases && group == 1) {
++      if (audit_pending_preload_ && funct != 4 && funct != 5) {
++        missing("staged:preload_followed_by_noncompute_not_admitted");
++        semantic_scope_known_ = false;
++      }
++      if (funct == 6) {
++        if (computed_since_fence_) {
++          missing("staged:compute_preload_overlap_without_completion_fence");
++          semantic_scope_known_ = false;
++        }
++        audit_pending_preload_ = true;
++      } else if (funct == 4 || funct == 5) {
++        audit_pending_preload_ = false;
++        computed_since_fence_ = true;
++      }
++    }
++    if (!config && config_.require_fenced_phases && last_data_group_ && *last_data_group_ != group) {
++      missing("staged:cross_controller_phase_without_completion_fence");
++      semantic_scope_known_ = false;
++    }
++    if (!config) last_data_group_ = group;
++    if (!semantic_scope_known_) return unknown(source);
++    const auto cpu_frontier = engine_.issue_frontier();
++    if (!cpu_frontier) return unknown(source);
++    auto ticket = reservations_[group]->allocate(std::max(source.earliest, *cpu_frontier));
+     if (!ticket) return unknown(source);
+     engine_.advance_issue(ticket->admitted);
+     if (group == 1 && pending_) {
+@@ -61,6 +95,16 @@ public:
+     command->earliest = ticket->admitted;
+     if (funct == 6) {
+       command->reads.push_back(execute_configuration_);
++      if (std::uint32_t(rs1) != 0xffffffffu && scratchpad_rows_) {
++        const auto address = std::uint32_t(rs1);
++        const auto rows = std::min<std::uint32_t>(rs1 >> 48, dim_);
++        if (std::uint64_t(address) + rows > scratchpad_rows_) {
++          missing("staged:preload_local_address_outside_selected_store");
++          return unknown(source);
++        }
++        for (std::uint32_t row = 0; row < rows; ++row) command->reads.push_back(local_base_ + address + row);
++      }
++      command->preload_requires_result = std::uint32_t(rs2) != 0xffffffffu;
+       pending_ = std::move(command);
+       return {ticket->admitted, ticket->admitted, ticket->admitted, merlin_timing::UnknownReason::none};
+     }
+@@ -80,6 +124,7 @@ private:
+     Window::Ticket ticket;
+     std::size_t group;
+     bool config;
++    bool preload_requires_result = false;
+     std::uint64_t subtype;
+     Cycle earliest;
+     Command(const std::string &name, const Event &event, std::optional<Cycle> busy,
+@@ -97,6 +142,14 @@ private:
+   std::array<std::unique_ptr<Window>, 3> reservations_, controllers_;
+   std::array<std::unique_ptr<Window>, 2> dma_;
+   std::unique_ptr<Command> pending_;
++  std::optional<Window::Ticket> preload_retirement_;
++  std::optional<std::size_t> last_data_group_;
++  bool audit_pending_preload_ = false, computed_since_fence_ = false, semantic_scope_known_ = true;
++  std::function<void(const std::string &)> unresolved_;
++  ValueId local_base_;
++  std::uint32_t scratchpad_rows_, dim_;
++
++  void missing(const std::string &reason) { if (unresolved_) unresolved_(reason); }
+ 
+   static bool extend(Cycle &earliest, std::optional<Cycle> value) {
+     if (!value) return false;
+@@ -140,7 +193,23 @@ private:
+     const auto result = engine_.submit_detached(effect);
+     if (queue) controllers_[command.group]->release(*queue, result.start);
+     if (dma_ticket) dma_[dma_index]->release(*dma_ticket, result.ready);
+-    if (!command.config || command.subtype == 0) rs.release(command.ticket, result.ready);
++    if (command.kind == "preload" && command.preload_requires_result) {
++      // Descriptor/feed readiness is not retirement: a non-garbage PRELOAD
++      // carries the mesh output tag. Its RS entry survives through the later
++      // compute's result completion, even if descriptor consumption finished.
++      if (preload_retirement_) {
++        // A second unretired destination requires the overlapped mesh/tag
++        // protocol, outside this initial staged subset. Never reuse its entry.
++        Event unresolved; unresolved.earliest = command.earliest;
++        engine_.submit_detached(unresolved);
++        missing("staged:overlapped_preload_tag_retirement_not_admitted");
++      }
++      preload_retirement_ = command.ticket;
++    } else if (!command.config || command.subtype == 0) rs.release(command.ticket, result.ready);
++    if (command.kind.compare(0, 8, "compute_") == 0 && preload_retirement_) {
++      reservations_[1]->release(*preload_retirement_, result.ready);
++      preload_retirement_.reset();
++    }
+     return {command.ticket.admitted, result.start, result.ready, result.unknown};
+   }
+ };
+diff --git a/examples/gemmini/timing/tests/run_native.py b/examples/gemmini/timing/tests/run_native.py
+index e4f8548..369bcc8 100644
+--- a/examples/gemmini/timing/tests/run_native.py
++++ b/examples/gemmini/timing/tests/run_native.py
+@@ -29,16 +29,18 @@ def main():
+     parser.add_argument("--timing-provider", type=Path, required=True)
+     parser.add_argument("--build-dir", type=Path, required=True)
+     parser.add_argument("--clang", default="clang")
++    parser.add_argument("--linker", default="lld", help="linker name or absolute executable path")
+     parser.add_argument("--staged", action="store_true", help="exercise separately selected v2 scheduling with synthetic prices")
+     args = parser.parse_args()
+     root = Path(__file__).resolve().parent.parent
+     build = args.build_dir.absolute()
+     build.mkdir(parents=True, exist_ok=False)
+     elf = build / "primitive.elf"
++    linker = "--ld-path=" + args.linker if Path(args.linker).is_absolute() else "-fuse-ld=" + args.linker
+     _, compile_seconds = run([args.clang, "--target=riscv64-unknown-elf", "-march=rv64gc", "-mabi=lp64d",
+                              "-mcmodel=medany", "-O1", "-Wall", "-Wextra", "-Werror", "-ffreestanding",
+                              "-fno-builtin", "-fno-stack-protector", "-msmall-data-limit=0",
+-                             "-nostdlib", "-fuse-ld=lld", "-Wl,-T," + str(root / "tests/elf/link.ld"),
++                             "-nostdlib", linker, "-Wl,-T," + str(root / "tests/elf/link.ld"),
+                              root / "tests/elf/start.S", root / "tests/elf/primitive.c", "-o", elf])
+     spec = importlib.util.spec_from_file_location("spike_native_tests", args.spike_root / "timing/tests/run_native.py")
+     module = importlib.util.module_from_spec(spec)
+diff --git a/examples/gemmini/timing/tests/staged_test.cpp b/examples/gemmini/timing/tests/staged_test.cpp
+index 9e72076..f326f65 100644
+--- a/examples/gemmini/timing/tests/staged_test.cpp
++++ b/examples/gemmini/timing/tests/staged_test.cpp
+@@ -45,6 +45,8 @@ int main() {
+     Event fence{3, {}, {}, {}, 0};
+     assert(scheduler.submit("fence", fence, 0, 127, 0, 0).ready == 51);
+     assert(scheduler.pending_preload());
++    Event stale{10, {&descriptor, 1}, {}, {}, 2};
++    assert(scheduler.submit("compute_ws", stale, 1, 4, 0, 0).issue == 51);
+   }
+   // Ordinary entries remain owned until actual effects complete, not until
+   // service starts or the controller queue dequeues.
+@@ -55,6 +57,21 @@ int main() {
+     assert(scheduler.submit("load", first, 1, 2, 0, 0).ready == 51);
+     assert(scheduler.submit("load", second, 1, 2, 0, 0).issue == 51);
+   }
++  // A non-garbage PRELOAD's entry is not released at descriptor readiness.
++  // With two EX slots, compute occupies the other slot; the next EX admission
++  // must wait for actual output/tag completion.
++  {
++    auto selected = config(); selected.reservations[1] = 2;
++    Engine engine(8, resources()); StagedObserver scheduler(engine, selected, 4);
++    const ValueId descriptor = 5;
++    Event preload{0, {}, {&descriptor, 1}, {}, 2};
++    scheduler.submit("preload", preload, 1, 6, 0, 0x80000000u);
++    Event compute{1, {&descriptor, 1}, {}, {}, 50};
++    const auto result = scheduler.submit("compute_ws", compute, 1, 4, 0, 0);
++    Event following{2, {}, {}, {}, 1};
++    const auto next = scheduler.submit("config", following, 1, 0, 0, 0);
++    assert(result.ready && next.issue == result.ready);
++  }
+   // EX config waits all prior execute completion. ST config uses ST's path.
+   {
+     Engine engine(8, resources()); StagedObserver scheduler(engine, config(), 4);
+@@ -72,4 +89,25 @@ int main() {
+     assert(!scheduler.submit("load", load, 1, 2, 0, 0).ready);
+     assert(!engine.report().complete && !engine.barrier());
+   }
++  // Unknown prices do not erase observed ordering fences or hide a later
++  // unsupported phase transition. These are semantic-domain refusals, not
++  // prices to be fitted away.
++  {
++    auto selected = config(); selected.require_fenced_phases = true;
++    selected.issue_latency.reset();
++    std::vector<std::string> missing;
++    Engine engine(8, resources());
++    StagedObserver scheduler(engine, selected, 4, [&](const auto &s) { missing.push_back(s); });
++    Event event{0, {}, {}, {}, 1};
++    scheduler.submit("load", event, 1, 2, 0, 0);
++    scheduler.submit("fence", event, 0, 127, 0, 0);
++    scheduler.submit("preload", event, 1, 6, 0, 0);
++    scheduler.submit("compute_ws", event, 1, 4, 0, 0);
++    assert(missing.empty());
++    scheduler.submit("preload", event, 1, 6, 0, 0);
++    assert(missing.size() == 1);
++    assert(missing[0] == "staged:compute_preload_overlap_without_completion_fence");
++    scheduler.submit("store", event, 1, 3, 0, 0);
++    assert(missing.back() == "staged:cross_controller_phase_without_completion_fence");
++  }
+ }
+-- 
+2.34.1
+

@@ -1,0 +1,79 @@
+"""Original dc413 live constructors; no saved owner or qualification restore.
+
+Run under the selected ROOT OOT namespace and the caller's original shared CPU
+environment. Optional source correspondence consumes the actual live generated
+source capability. It does not change its semantics, numeric or issue gates.
+"""
+import json
+import os
+from pathlib import Path
+
+ROOT=Path('/work/merlin/tasks/phase2-el4-explore-20261018')
+P1=Path('/work/merlin/tasks/phase1-harness-v2')
+CROOT=Path('/work/merlin/tasks/phase2-target-adapters-20261019')
+
+def construct_selection(work_root):
+    from merlin.common.cpu_pool import shared_compute_pool
+    from gemmini_count_hardware import CountHardwareCorrespondenceOwner,derive
+    from gemmini_native_timing_semantics import NativeTimingSemanticsOwner
+    from gemmini_selected_scheduling import SelectedSchedulingTarget
+    from merlin.llvmlower.reviewed_pass_capabilities import PassCapabilityBinding,ReviewedPassCapability
+    from merlin_experiments.phase2.archive_spike_runtime import freeze_runtime
+    from merlin_experiments.phase2.archive_screen_selection import NativeArchiveScreenSelection
+    from merlin_experiments.phase2.contracts import sha256_file
+
+    work_root=Path(work_root);task=Path(os.environ['TASK_DIR']).resolve(strict=True)
+    if not work_root.is_absolute() or work_root.resolve()!=work_root or not work_root.is_relative_to(task) or work_root.exists():
+        raise ValueError('fresh canonical metadata output must be within executing TASK_DIR')
+    with shared_compute_pool(timeout_s=60):
+        work_root.mkdir(parents=True)
+        spec=json.loads((CROOT/'out/artifacts/target-adapters/gemmini/native-archive-preflight-current-v2/report.json').read_bytes())['runtime']
+        runtime=freeze_runtime(review_id='original unchanged dc413 public archive native diagnostic selection',
+            functional_argv=tuple(spec['functional_argv']),observer=Path(spec['observer']),disassembler=Path(spec['disassembler']),
+            model_path=Path(spec['model']),source_manifest=Path(spec['source_manifest']),libraries=tuple(map(Path,spec['libraries'])),
+            dependencies=tuple(map(Path,spec['dependencies'])),entry_symbol=spec['entry_symbol'],completion_symbol=spec['completion_symbol'],
+            timing_selection=spec['timing_selection'])
+        assert sha256_file(runtime.model_path)=='dc413b315b21b0bb2874098c0421db5900d541aef99cf20f76fa8eaf02f3fc0d'
+        facts=P1/'merlin/out/artifacts/probes/gemmini/fire-aligned-30mhz/input/facts-v6.json'
+        observed=P1/'merlin/out/artifacts/probes/gemmini/v1/probes_gemmini_v1_20261018T090833Z_580ba4a/target_contract.json'
+        proof=derive(model_path=runtime.model_path,selected=SelectedSchedulingTarget.read(facts,observed),
+            runtime=P1/'out/fire-aligned-spike-30mhz/runtime',receiver=P1/'.tmp/functional-fire-build-v3/sources/libgemmini',
+            functional_spike_source=P1/'.tmp/functional-fire-build-v3/sources/spike')
+        sidecar=work_root/'count-correspondence.json';sidecar.write_text(json.dumps(proof,sort_keys=True,indent=2)+'\n')
+        count=CountHardwareCorrespondenceOwner.bind(sidecar,model_path=runtime.model_path,facts_path=facts,
+            observed_contract_path=observed,functional_extension_path=runtime.libraries[0])
+        base=CROOT/'out/build/native-staged-v2'
+        native=NativeTimingSemanticsOwner.bind(count,source_root=P1/'.tmp/chipyard-fire-aligned',spike_source=ROOT/'spike-timing',
+            observer_build=base/'observer-build',provider_bundle=base/'native-owner-v1/provider-source',rebuild_dir=work_root/'provider-rebuild')
+        binding=PassCapabilityBinding(**count.selected_binding());cal=base/'replay-holds-refined-v1'
+        return NativeArchiveScreenSelection(review_id='original old public domain; current source/activity checks remain required',
+            archive=P1/'merlin/out/runs/gemmini/phase1/el4-fire-aligned-phase1-20261017-v3/capsule_timing_training_d4c730b33e12.tar',
+            archive_sha256='f815a0d2f4d80415b1e89e6ccdd62a0eb7af039287f539c91bd235451f8cfd5a',
+            binding_path=cal/'reviewed-binding.json',observations_path=cal/'original-observations.json',screen_path=None,runtime=runtime,
+            correspondence=ReviewedPassCapability('timing_model_correspondence',binding,count),
+            native_semantics=ReviewedPassCapability('native_timing_semantics',binding,native),
+            expected_rtl_facts_sha256=binding.hardware,expected_observed_contract_sha256=binding.software)
+
+def prepare_exploration(work_root, *, source_capability=None, collect_unqualified_counts=False, direct_source_domain=False):
+    from merlin.common.cpu_pool import shared_compute_pool
+    from merlin.llvmlower.reviewed_pass_capabilities import ReviewedPassCapability
+    from merlin_experiments.phase2 import public_native_exploration as N
+
+    if type(direct_source_domain) is not bool or direct_source_domain and source_capability is None:
+        raise ValueError("direct source timing requires explicit original live source capability")
+    selected=construct_selection(work_root)
+    with shared_compute_pool(timeout_s=60):
+        kwargs={}
+        if source_capability is not None:
+            from gemmini_generated_source_native import GeneratedSourceNativeCorrespondenceOwner
+
+            bridge=GeneratedSourceNativeCorrespondenceOwner.bind(source_capability,selected.correspondence)
+            kwargs.update(binding_correspondence=ReviewedPassCapability('compiler_source_native_correspondence',
+                selected.correspondence.binding,bridge),metadata_protocol=N.JOINT_METADATA_PROTOCOL)
+        if direct_source_domain:
+            kwargs['source_domain_protocol']=N.DIRECT_POINTER_DOMAIN_PROTOCOL
+        if collect_unqualified_counts:
+            kwargs['count_protocol']=N.UNQUALIFIED_COUNT_PROTOCOL
+            kwargs['count_feedback_protocol']=N.OBSERVED_COUNT_FEEDBACK_PROTOCOL
+            kwargs['exploratory_estimate_protocol']=N.EXPLORATORY_ESTIMATE_PROTOCOL
+        return N.prepare_public_native_exploration(selected,**kwargs)

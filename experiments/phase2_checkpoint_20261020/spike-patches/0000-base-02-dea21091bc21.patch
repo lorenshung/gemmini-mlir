@@ -1,0 +1,58 @@
+From dea21091bc2164989eaacd0c7acf62c79d004ee8 Mon Sep 17 00:00:00 2001
+From: Agustin Coppari Hollmann <copparihollmann@berkeley.edu>
+Date: Fri, 16 Oct 2026 00:25:28 +0000
+Subject: [PATCH] Record FireSim host ISA and 16 GiB span in timing profile
+
+---
+ examples/gemmini/timing/export_config.py        | 6 +++++-
+ examples/gemmini/timing/fire_aligned_30mhz.json | 3 +++
+ 2 files changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/examples/gemmini/timing/export_config.py b/examples/gemmini/timing/export_config.py
+index 83a8b8a..848d2e0 100644
+--- a/examples/gemmini/timing/export_config.py
++++ b/examples/gemmini/timing/export_config.py
+@@ -30,6 +30,9 @@ PROFILES = {
+         "saturn_revision": "e16a301d261fa4b5a374eb7069b78107a8c9aefb",
+         "firesim_revision": "b084672c2f8cf32e55d78f73a001074c23f8a2b8",
+         "host_dts_sha256": "c4a2009a405945ea98f731713e0f4e7dc483031ab8cd5156d871e4eb7594f1df",
++        "dram_base": 0x80000000,
++        "dram_bytes": 16 * (1 << 30),
++        "host_isa": "rv64imafdcbzicsr_zifencei_zihpm_zfh_zba_zbb_zbs_xrocket",
+     },
+ }
+ KINDS = ("config", "preload", "flush", "counter", "fence", "load", "store", "pool_store",
+@@ -99,7 +102,8 @@ def export(public_library: Path, rocc_header: Path, profile: str = "stock_u250")
+             "archive_identity": "operator_verified_pin",
+             "rtl_elaboration_source_lineage": selected["rtl_elaboration_source_lineage"],
+             **{key: selected[key] for key in ("chipyard_revision", "gemmini_revision", "saturn_revision",
+-                                              "firesim_revision", "host_dts_sha256") if key in selected},
++                                              "firesim_revision", "host_dts_sha256", "dram_base",
++                                              "dram_bytes", "host_isa") if key in selected},
+         },
+         "target": {"hardware": hardware,
+                    "prices": {**{kind: {"latency_cycles": None, "occupancy_cycles": None,
+diff --git a/examples/gemmini/timing/fire_aligned_30mhz.json b/examples/gemmini/timing/fire_aligned_30mhz.json
+index 2f0a363..32df56e 100644
+--- a/examples/gemmini/timing/fire_aligned_30mhz.json
++++ b/examples/gemmini/timing/fire_aligned_30mhz.json
+@@ -10,6 +10,8 @@
+     "archive_identity": "operator_verified_pin",
+     "archive_sha256": "0af6f26e1cbad1c03f9e5873217505a5100bf2d0d068205cfa486522b24fc603",
+     "chipyard_revision": "009e85b05ca817a15fcd6c3fe4eedd86cc2a3617",
++    "dram_base": 2147483648,
++    "dram_bytes": 17179869184,
+     "embedded_bitstream_sha256": null,
+     "firesim_revision": "b084672c2f8cf32e55d78f73a001074c23f8a2b8",
+     "functional_extension_revision": "5b1254a7dc72f757442280e7f28ef30542c78533",
+@@ -17,6 +19,7 @@
+     "generated_params_sha256": "3758ae967af3a179497660970201093a7fb624be00173990ce33d3f5c38da924",
+     "hardware_pin_registry": "merlin/contract/hardware_pins.yaml",
+     "host_dts_sha256": "c4a2009a405945ea98f731713e0f4e7dc483031ab8cd5156d871e4eb7594f1df",
++    "host_isa": "rv64imafdcbzicsr_zifencei_zihpm_zfh_zba_zbb_zbs_xrocket",
+     "platform": "xilinx_alveo_u250",
+     "public_architecture_headers": {
+       "riscv/rocc.h": "08bdaf6f3f6e846125c937f4c19d54ab11efaf3026ffab55aad609e2c6a52eea"
+-- 
+2.34.1
+
