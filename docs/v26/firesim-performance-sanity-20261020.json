@@ -1,0 +1,226 @@
+{
+  "arithmetic_sanity": {
+    "decode_fraction": 0.9248854404493931,
+    "mean_decode_cycles_exact": 2341096125.6875,
+    "mean_decode_over_prefill": 0.38478119537625705,
+    "prefill_plus_decode_matches_total": true
+  },
+  "models": {
+    "resnet50": {
+      "batch": 1,
+      "checked_arrays": 1,
+      "checked_elements": 1000,
+      "host_fp32": {
+        "pooling_operations": 2,
+        "relus": 17,
+        "residual_additions": 16
+      },
+      "image_shape": [
+        224,
+        224
+      ],
+      "invocation_cycles": 2179239099,
+      "max_error": 0,
+      "mismatches": 0,
+      "offload": {
+        "convolutions": 53,
+        "final_matmuls": 1
+      },
+      "reference_kind": "quantized_reference",
+      "rms_error": 0,
+      "runtime_errors": 0,
+      "scheduling_evidence": {
+        "attributed_cycle_percentages": null,
+        "dynamic_observer_artifacts": null,
+        "first_convolution_activation_row_loads_approx": 2460000,
+        "first_convolution_fences_approx": 160000,
+        "kernel_count_is_not_operation_count": true,
+        "physical_bytes": null,
+        "reported_command_mode": "raw_commands_without_hardware_loop_instructions",
+        "reported_kernel_count": 41,
+        "some_convolution_readout_dtype": "int32_for_host_processing"
+      }
+    },
+    "tinyllama": {
+      "batch": 1,
+      "checked_arrays": 99,
+      "checked_elements": 24846294,
+      "decode_cycles": 74915076022,
+      "decode_steps": 32,
+      "input_tokens": 32,
+      "invocation_cycles": 80999302990,
+      "layers": 22,
+      "max_decode_cycles": 2488755134,
+      "max_error": 0,
+      "mean_decode_cycles_reported": 2341096126,
+      "min_decode_cycles": 2192773326,
+      "mismatches": 0,
+      "offload": {
+        "attention_matmul_sites": 44,
+        "weight_linear_sites": 155
+      },
+      "prefill_cycles": 6084226968,
+      "reference_kind": "quantized_reference",
+      "rms_error": 0,
+      "runtime_errors": 0,
+      "scheduling_evidence": {
+        "aggregate_calls_across_prefill_and_decode": null,
+        "attributed_cycle_percentages": null,
+        "call_count_window_needs_original_artifacts": true,
+        "comparison_memcpy_calls_approx": 99000000,
+        "comparison_memcpy_inside_invocation_window": false,
+        "host_scaling_and_encoding_audit": "incomplete",
+        "int8_contraction_calls_per_reported_invocation": 3675
+      }
+    }
+  },
+  "policy": {
+    "changing_quantization_recipe": "separate_reviewed_contract_not_phase2_schedule_optimization",
+    "hardware_loop_and_configuration_instructions": "forbidden_by_explicit_user_instruction",
+    "loop_documentation": "https://github.com/ucb-bar/gemmini#matmul-and-conv-loop-unrollers",
+    "loop_documentation_qualifies_selected_target": false,
+    "permitted_schedule_implementation": "raw_commands_and_ordinary_software_loops",
+    "validation_cleanup_improves_reported_invocation_cycles": false
+  },
+  "priorities": [
+    {
+      "contract": "preserve",
+      "mechanism": "blocking_operand_reuse_larger_legal_transfers",
+      "required_evidence": [
+        "dynamic_requests",
+        "row_reuse",
+        "scratchpad_accumulator_ownership",
+        "complete_outputs"
+      ]
+    },
+    {
+      "contract": "preserve",
+      "mechanism": "configuration_and_fence_cleanup",
+      "required_evidence": [
+        "instruction_effects",
+        "dependencies",
+        "completion",
+        "negative_invalidation_controls"
+      ]
+    },
+    {
+      "contract": "preserve_actual_GQA_and_selected_planes",
+      "mechanism": "attention_batching_layout_retention_KV_reuse",
+      "required_evidence": [
+        "complete_source_work",
+        "carried_state",
+        "intermediate_contracts",
+        "no_dropped_planes_or_heads"
+      ]
+    },
+    {
+      "contract": "existing_only_if_exactly_legal",
+      "mechanism": "native_readout_and_fusion",
+      "required_evidence": [
+        "scale_granularity",
+        "activation_order",
+        "rounding",
+        "clamp",
+        "bias",
+        "full_width_exits"
+      ]
+    }
+  ],
+  "provenance": {
+    "actual_facts_sha256": null,
+    "actual_frequency_hz": null,
+    "compiler_package_sha256": null,
+    "executable_sha256": null,
+    "firesim_bitstream_sha256": null,
+    "independent_receipts_reopened": false,
+    "kind": "user_reported_fire_sim_results",
+    "original_artifacts": null,
+    "received_utc_date": "2026-10-20"
+  },
+  "quoted_reference_claims": {
+    "comparable": false,
+    "hardware_and_timing_boundary_match": null,
+    "measured_speedup": null,
+    "note": "Do not divide across unmatched hardware, numerical contracts or workload windows.",
+    "resnet50_cycles_approx": 23000000,
+    "source": null,
+    "tinyllama_cycles_approx": 220000000,
+    "tinyllama_tokens_and_stages": null
+  },
+  "raw_command_ISA_policy": {
+    "custom_slot": 3,
+    "forbidden_funct": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      24,
+      25
+    ],
+    "header_only_funct": [
+      25
+    ],
+    "ordinary_raw_CONFIG_CMD_funct": 0,
+    "ordinary_raw_configuration_allowed": true
+  },
+  "schema": "gemmini.operator_fullmodel_sanity.v1",
+  "selected_facts_sanity": {
+    "actual_firesim_identity_match": "UNKNOWN",
+    "facts_sha256": "b8ff28edc096392cec356f9fececdf17ba70cd3e4b02e6c5931aedc43bb117af",
+    "fullmodel_attainment": null,
+    "fullmodel_compulsory_traffic": null,
+    "fullmodel_floor_cycles": null,
+    "fullmodel_source_work": null,
+    "rate_is_optimistic_structural_upper_bound": true,
+    "spike_model_fullmodel_domain": "UNKNOWN",
+    "spike_prediction_cycles": null,
+    "structural_machine": {
+      "array_cols": 16,
+      "array_rows": 16,
+      "basis": {
+        "compute": "sum of extracted rows * columns * explicit mac_idiom.muls; simultaneous issue upper bound",
+        "movement": "facts.timing_structure.memory_clients beat peaks (read 16, write 16 byte(s)/cycle); the in-flight window is not applied without a fitted round trip"
+      },
+      "peak_macs_per_cycle": 256,
+      "read_bytes_per_cycle": 16,
+      "unresolved": {},
+      "write_bytes_per_cycle": 16
+    },
+    "sustained_bandwidth": null
+  },
+  "timing_boundary": {
+    "completion_protocol": null,
+    "excluded": [
+      "startup",
+      "input_and_state_copies",
+      "comparisons",
+      "logging"
+    ],
+    "included": [
+      "host_computation",
+      "Gemmini_commands",
+      "DMA_inside_model"
+    ],
+    "name": "complete_model_invocation",
+    "repeats": null,
+    "unit": "target_cycles"
+  },
+  "use": {
+    "agent_visible_performance_feedback": false,
+    "calibration_training": false,
+    "incumbent_promotion": false,
+    "operator_sanity_only": true,
+    "reference_cycles_are_roofline": false,
+    "search_objective": false,
+    "validation_workloads": true
+  }
+}

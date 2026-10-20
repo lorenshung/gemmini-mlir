@@ -1,0 +1,344 @@
+{
+  "archives": [
+    {
+      "bytes": 7455,
+      "members": [
+        {
+          "bytes": 70128,
+          "name": "exo_llm.c"
+        },
+        {
+          "bytes": 2752,
+          "name": "exo_llm.h"
+        }
+      ],
+      "path": "/work/merlin/exo-tinyllama-v2-314961814-rocc-source.zip",
+      "sha256": "61d5c4e6023cb50862e20e3d25c806713d2047f5a0b724ee547c3d1073f1f52a"
+    },
+    {
+      "bytes": 76513813,
+      "members": [
+        {
+          "bytes": 13543992,
+          "name": "resnet18.elf"
+        },
+        {
+          "bytes": 24653368,
+          "name": "resnet34.elf"
+        },
+        {
+          "bytes": 27610664,
+          "name": "resnet50.elf"
+        },
+        {
+          "bytes": 48101792,
+          "name": "resnet101.elf"
+        }
+      ],
+      "path": "/work/merlin/dragon_resnet18_34_50_101_gemmini_baremetal_20261015.zip",
+      "sha256": "0022568b38780daa1f5759abdf36d15d408412fb5817bed8769bdc046ae17bbd"
+    }
+  ],
+  "calibration_or_search_training": false,
+  "copied_candidate_code": false,
+  "execution_count": 0,
+  "facts": {
+    "bytes": 130008,
+    "path": "/work/merlin/tasks/phase1-harness-v2/merlin/out/artifacts/probes/gemmini/fire-aligned-30mhz/input/facts-v6.json",
+    "sha256": "b8ff28edc096392cec356f9fececdf17ba70cd3e4b02e6c5931aedc43bb117af"
+  },
+  "general_requirements_only": [
+    "blocked transfers and resource-proved operand reuse",
+    "configuration lifetime and completion-proved fence placement",
+    "constant packing retained over its valid lifetime",
+    "layout and batched group semantics without head/plane expansion where legal",
+    "exact epilogue fusion only under the existing numerical contract",
+    "bounded double buffering with ownership and dependency proof"
+  ],
+  "not_transferred": [
+    "kernel_implementations",
+    "model_specific_thresholds",
+    "addresses_or_tile_constants",
+    "reference_weights_or_answers",
+    "unmatched_latency_labels"
+  ],
+  "operator_policy": {
+    "final_ELF_zero_loop_audit": "preserve",
+    "hardware_loop_and_configuration_instructions": "forbidden",
+    "ordinary_software_loops": "allowed"
+  },
+  "raw_command_ISA_policy": {
+    "custom_slot": 3,
+    "forbidden_funct": [
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      24,
+      25
+    ],
+    "header_only_funct": [
+      25
+    ],
+    "ordinary_raw_CONFIG_CMD_funct": 0,
+    "ordinary_raw_configuration_allowed": true
+  },
+  "resnet50": {
+    "artifact_kind": "ELF_only_no_C_or_schedule_source",
+    "cycle_result_in_archive": false,
+    "dynamic_counts_or_reachability": "UNKNOWN",
+    "embedded_result_strings_are_measurements": false,
+    "executable_sections": [
+      {
+        "bytes": 454,
+        "section": ".text.init",
+        "static": {
+          "instructions": 167,
+          "scalar_fp_arithmetic_opcode": 32
+        }
+      },
+      {
+        "bytes": 1335322,
+        "section": ".text",
+        "static": {
+          "custom3.COMPUTE_AND_FLIP_CMD": 7781,
+          "custom3.COMPUTE_AND_STAY_CMD": 26900,
+          "custom3.CONFIG_CMD": 854,
+          "custom3.FLUSH_CMD": 1,
+          "custom3.LOAD2_CMD": 3362,
+          "custom3.LOAD3_CMD": 2338,
+          "custom3.LOAD_CMD": 1716,
+          "custom3.PRELOAD_CMD": 34681,
+          "custom3.STORE_CMD": 2288,
+          "instructions": 417893,
+          "scalar_fp_arithmetic_opcode": 2,
+          "standard_fence_opcode": 65
+        }
+      },
+      {
+        "bytes": 504,
+        "section": ".text.startup",
+        "static": {
+          "instructions": 160
+        }
+      }
+    ],
+    "image_sha256": "44503d99212ba2e5ff78806f36a02b6f6d556bc78e63a155d227d06ef331d9f9",
+    "measurement_comparability": "UNKNOWN",
+    "numerical_equivalence_to_selected_contract": "UNKNOWN",
+    "selected_symbols": [
+      {
+        "bytes": 17842,
+        "static": {
+          "custom3.COMPUTE_AND_FLIP_CMD": 318,
+          "custom3.COMPUTE_AND_STAY_CMD": 240,
+          "custom3.CONFIG_CMD": 37,
+          "custom3.LOAD2_CMD": 1,
+          "custom3.LOAD3_CMD": 40,
+          "custom3.LOAD_CMD": 74,
+          "custom3.PRELOAD_CMD": 558,
+          "custom3.STORE_CMD": 56,
+          "instructions": 5478,
+          "standard_fence_opcode": 1
+        },
+        "symbol": "dg_conv1_native"
+      },
+      {
+        "bytes": 3352,
+        "static": {
+          "custom3.FLUSH_CMD": 1,
+          "instructions": 892,
+          "scalar_fp_arithmetic_opcode": 2
+        },
+        "symbol": "dragon_infer"
+      },
+      {
+        "bytes": 534,
+        "static": {
+          "custom3.COMPUTE_AND_FLIP_CMD": 16,
+          "custom3.CONFIG_CMD": 4,
+          "custom3.LOAD2_CMD": 4,
+          "custom3.LOAD_CMD": 1,
+          "custom3.PRELOAD_CMD": 16,
+          "custom3.STORE_CMD": 4,
+          "instructions": 163,
+          "standard_fence_opcode": 1
+        },
+        "symbol": "dg_avgpool_native_panel"
+      },
+      {
+        "bytes": 68,
+        "static": {
+          "instructions": 27
+        },
+        "symbol": "dg_avgpool_native"
+      },
+      {
+        "bytes": 476,
+        "static": {
+          "instructions": 150
+        },
+        "symbol": "main"
+      },
+      {
+        "bytes": 10390,
+        "static": {
+          "custom3.COMPUTE_AND_FLIP_CMD": 47,
+          "custom3.CONFIG_CMD": 5,
+          "custom3.LOAD2_CMD": 89,
+          "custom3.LOAD3_CMD": 32,
+          "custom3.LOAD_CMD": 18,
+          "custom3.PRELOAD_CMD": 47,
+          "custom3.STORE_CMD": 14,
+          "instructions": 3436,
+          "standard_fence_opcode": 1
+        },
+        "symbol": "dg_fc_native"
+      },
+      {
+        "bytes": 396,
+        "static": {
+          "custom3.CONFIG_CMD": 3,
+          "custom3.LOAD_CMD": 3,
+          "custom3.STORE_CMD": 1,
+          "instructions": 138,
+          "standard_fence_opcode": 2
+        },
+        "symbol": "dg_maxpool_native"
+      }
+    ]
+  },
+  "schema": "gemmini.operator_static_reference_inspection.v1",
+  "scope": "operator_only_static_mechanism_audit",
+  "tinyllama": {
+    "complete_model_driver_in_archive": false,
+    "cycle_measurement_or_results_in_archive": false,
+    "files": [
+      "exo_llm.c",
+      "exo_llm.h"
+    ],
+    "functions": [
+      {
+        "fence_callsites": 1,
+        "name": "att_pv",
+        "static_api_calls": {
+          "gemmini_extended3_config_ex": 1,
+          "gemmini_extended4_config_ld": 2,
+          "gemmini_extended_compute_accumulated": 15,
+          "gemmini_extended_compute_preloaded": 8,
+          "gemmini_extended_config_st": 1,
+          "gemmini_extended_mvin": 5,
+          "gemmini_extended_mvin2": 3,
+          "gemmini_extended_mvout": 6,
+          "gemmini_extended_preload": 23,
+          "gemmini_fence": 1
+        }
+      },
+      {
+        "fence_callsites": 1,
+        "name": "att_qk",
+        "static_api_calls": {
+          "gemmini_extended3_config_ex": 1,
+          "gemmini_extended4_config_ld": 2,
+          "gemmini_extended_compute_accumulated": 2,
+          "gemmini_extended_compute_preloaded": 2,
+          "gemmini_extended_config_st": 1,
+          "gemmini_extended_mvin": 1,
+          "gemmini_extended_mvin2": 1,
+          "gemmini_extended_mvout": 1,
+          "gemmini_extended_preload": 4,
+          "gemmini_fence": 1
+        }
+      },
+      {
+        "fence_callsites": 1,
+        "name": "mm_down",
+        "static_api_calls": {
+          "gemmini_extended3_config_ex": 1,
+          "gemmini_extended4_config_ld": 2,
+          "gemmini_extended_compute_preloaded": 20,
+          "gemmini_extended_config_st": 1,
+          "gemmini_extended_mvin": 1,
+          "gemmini_extended_mvin2": 13,
+          "gemmini_extended_mvout": 4,
+          "gemmini_extended_preload": 20,
+          "gemmini_fence": 1
+        }
+      },
+      {
+        "fence_callsites": 1,
+        "name": "mm_gu",
+        "static_api_calls": {
+          "gemmini_extended3_config_ex": 1,
+          "gemmini_extended4_config_ld": 2,
+          "gemmini_extended_compute_preloaded": 32,
+          "gemmini_extended_config_st": 2,
+          "gemmini_extended_mvin": 1,
+          "gemmini_extended_mvin2": 17,
+          "gemmini_extended_mvout": 6,
+          "gemmini_extended_preload": 32,
+          "gemmini_fence": 1
+        }
+      },
+      {
+        "fence_callsites": 1,
+        "name": "mm_lm",
+        "static_api_calls": {
+          "gemmini_extended3_config_ex": 1,
+          "gemmini_extended4_config_ld": 2,
+          "gemmini_extended_compute_preloaded": 17,
+          "gemmini_extended_config_st": 1,
+          "gemmini_extended_mvin": 1,
+          "gemmini_extended_mvin2": 10,
+          "gemmini_extended_mvout": 4,
+          "gemmini_extended_preload": 17,
+          "gemmini_fence": 1
+        }
+      },
+      {
+        "fence_callsites": 1,
+        "name": "mm_o",
+        "static_api_calls": {
+          "gemmini_extended3_config_ex": 1,
+          "gemmini_extended4_config_ld": 2,
+          "gemmini_extended_compute_preloaded": 17,
+          "gemmini_extended_config_st": 1,
+          "gemmini_extended_mvin": 1,
+          "gemmini_extended_mvin2": 10,
+          "gemmini_extended_mvout": 4,
+          "gemmini_extended_preload": 17,
+          "gemmini_fence": 1
+        }
+      },
+      {
+        "fence_callsites": 1,
+        "name": "mm_qkv",
+        "static_api_calls": {
+          "gemmini_extended3_config_ex": 1,
+          "gemmini_extended4_config_ld": 2,
+          "gemmini_extended_compute_preloaded": 49,
+          "gemmini_extended_config_st": 3,
+          "gemmini_extended_mvin": 1,
+          "gemmini_extended_mvin2": 25,
+          "gemmini_extended_mvout": 9,
+          "gemmini_extended_preload": 49,
+          "gemmini_fence": 1
+        }
+      }
+    ],
+    "gemmini_header_in_archive": false,
+    "header_contracts_observed": "predominantly 16-row contraction kernels, separate one-row vocabulary projection, packed constant weights, mixed i8 and i32 outputs; not a full 32+32 driver",
+    "measurement_comparability": "UNKNOWN",
+    "numerical_equivalence_to_selected_contract": "UNKNOWN",
+    "static_loop_engine_api_mentions": []
+  }
+}
