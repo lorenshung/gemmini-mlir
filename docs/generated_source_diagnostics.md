@@ -92,6 +92,12 @@ nonzero data and ambiguous storage refuse. A NOBITS/BSS section label alone
 supplies no initialization evidence. The older immutable PROGBITS-zero path
 and the whole-program default remain unchanged.
 
+The direct caller veto separately reads bounded `nm -S --defined-only` text
+symbols for the exact kernel and `main`, requiring unique nonempty extents
+inside executable ELF sections. Tensor/output ownership continues to use the
+original data-symbol roster. Static code extents supply no execution verdict;
+the original full commit-stream call/return and host-store checks remain required.
+
 `gemmini_generated_source_native.GeneratedSourceNativeCorrespondenceOwner.bind`
 accepts only the exact live generated-source capability and original
 `CountHardwareCorrespondenceOwner` capability. It keeps composite software and

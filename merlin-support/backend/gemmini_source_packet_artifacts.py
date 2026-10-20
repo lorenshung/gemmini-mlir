@@ -143,6 +143,7 @@ def check_direct_execution_packets(
     )
     # Complete products/readouts are established first. The same full trace
     # must additionally veto host answer stores during the one real call.
+    from gemmini_direct_host_scope import linked_code_extents
     from gemmini_primitive_host_scope import check_host_output_writes
 
     checker_path = (
@@ -155,6 +156,7 @@ def check_direct_execution_packets(
     checker = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(checker)
     symbols = checker._symbols(Path(elf), Path(nm))
+    code = linked_code_extents(Path(elf), Path(nm), entry_symbol)
 
     def symbol(name):
         rows = [(start, size) for start, size, label in symbols if label == name]
@@ -165,8 +167,8 @@ def check_direct_execution_packets(
     trace = invocation_record.verify(Path(invocation))
     report["host_output_scope"] = check_host_output_writes(
         Path(trace["stderr"]["path"]).read_text(),
-        entry=symbol(entry_symbol)[0],
-        main=symbol("main"),
+        entry=code[entry_symbol][0],
+        main=code["main"],
         outputs=[
             symbol(physical)
             for physical, (logical, _tensor) in abi.items()

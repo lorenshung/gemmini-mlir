@@ -45,6 +45,7 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             "gemmini_load_streams",
             "gemmini_zero_fill",
             "gemmini_private_zero_storage",
+            "gemmini_direct_host_scope",
             "merlin.llvmlower.direct_source_contraction",
             "merlin.targetgen.native_pointer_source_binding",
             "merlin.targetgen.native_pointer_source_execution",
