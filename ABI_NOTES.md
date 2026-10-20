@@ -196,3 +196,28 @@ dtype semantics are Merlin obligations; a provider proof never waives them.
 Structural compact DMA loops remain because supported model-size layouts need
 them to fit compiler memory/code-generation budgets. Literal folding and the
 requant-A performance implementation are preserved only on `gemmini-perf`.
+
+## VCS RTL engine
+
+The backend accepts `vcs` explicitly in `available`, `run_elf` and
+`simulator_identity`, with oracle kind `rtl_vcs`. Discovery uses
+`MERLIN_GEMMINI_SIMV`, then Chipyard's
+`sims/vcs/simv-chipyard.harness-<rtl_sim_config>`. The VCS config override is
+`MERLIN_GEMMINI_VCS_CONFIG`; Verilator's override does not select a VCS build.
+An explicit VCS request never falls back to another engine.
+
+Execution follows Chipyard's permissive plusarg convention: DRAMSim/ini directory,
+cycle cap, seed, `+loadmem=<absolute ELF>`, then `+permissive-off <ELF>`.
+`-no_save` avoids VCS save/restore's ASLR re-exec in restricted sandboxes.
+The ELF directory is the writable cwd; stdin is `/dev/null`. The caller owns
+license environment/access and the wall timeout. DRAM geometry is the selected
+RTL model, with the ordinary target linker/arena contract.
+
+Identity binds the executable hash and a sorted recursive `.daidir` file
+manifest, its `daidir_sha256`, and a combined `digest`. Missing or incomplete
+runtime trees have no complete digest. Native invocation records also include
+daidir and DRAM ini files as dependencies. The grader must grant the binary,
+its resolved `.daidir`, vendor/runtime shared libraries, ini directory and ELF,
+plus writable work/tmp directories. Preserve the site's license environment
+and authorized network or file access; the backend supplies no license server.
+Verilator and GSIM interfaces remain unchanged.
