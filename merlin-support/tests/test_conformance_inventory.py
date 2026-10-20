@@ -26,6 +26,7 @@ TRANSFORMATIONS = (
     "standalone_elementwise_review.json",
     "reference_boundary_removal.json",
     "contract_sync_migration.json",
+    "vcs_execution_migration.json",
 )
 OUTPUT_SCOPES = {
     "reference_boundary_removal.json": {"backend/gemmini.py", "tests/test_provider_resources.py"},
