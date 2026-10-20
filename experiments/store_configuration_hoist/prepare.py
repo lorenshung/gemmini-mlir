@@ -23,11 +23,16 @@ HOISTED = (
     SETUP
     + "    # Raw readout state is invariant across every tile in this contraction.\n"
     + "    # Other config families do not modify store state; retain all fences.\n"
-    + "    if dtype == 'i32':\n"
+    + "    store_config_hoisted = dtype == 'i32' and m > 0 and k > 0 and 0 < n <= 0x3FFFFFFF\n"
+    + "    if store_config_hoisted:\n"
     + "        _mvout_config(b, n * 4, 1.0, False)\n"
 )
 PER_TILE = "            if dtype == 'i32':\n                _mvout_config(b, n * 4, 1.0, False)\n"
-WITHOUT_REPEAT = "            if dtype == 'i32':\n"
+WITHOUT_REPEAT = (
+    "            if dtype == 'i32':\n"
+    "                if not store_config_hoisted:\n"
+    "                    _mvout_config(b, n * 4, 1.0, False)\n"
+)
 
 
 def inventory(root):

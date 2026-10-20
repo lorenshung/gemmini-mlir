@@ -213,3 +213,24 @@ def test_existing_destination_is_never_overwritten(tmp_path):
 def test_rewrite_refuses_changed_generator_sites():
     with pytest.raises(ValueError, match="sites changed"):
         P.rewrite(sources()[0].replace(P.SETUP, ""))
+
+
+@pytest.mark.parametrize("shape", [(0,16,32), (17,16,0), (17,0,32)])
+def test_zero_trip_or_empty_reduction_retains_original_effects(shape):
+    assert expansion(sources()[0], *shape) == expansion(sources()[1], *shape)
+
+
+def test_overflowing_store_stride_never_hoists_configuration_into_setup():
+    class SetupOnly(Expansion):
+        def loop(self, begin, end, step, callback):
+            # Inspect setup only; a billion-column loop is not expanded.
+            self.events.append(("unexpanded-loop", begin, end, step))
+
+    rows = []
+    for source in sources():
+        b = SetupOnly()
+        module(source)["matmul"](b,0x200000,0x400000,0x600000,17,16,1<<30,
+                                 {"output_dtype":"i32"},{},{})
+        rows.append(b.events)
+    assert rows[0] == rows[1]
+    assert not any(map(is_store_config, rows[1]))

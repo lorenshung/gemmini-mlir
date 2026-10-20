@@ -9,7 +9,9 @@ residency policy. The original package remains immutable.
 The raw-i32 branch always configures identical stride `N*4`, identity scale,
 no activation and no pooling for each tile. The candidate emits that exact
 configuration once, after the existing execute/load setup and before the tile
-loops. Every load, zero initialization, preload, compute, readout, CPU layout
+loops, only for positive M/N/K and a stride representable in the 32-bit field.
+Zero-trip, empty-reduction or overflowing-stride calls retain the original
+per-tile path. Every load, zero initialization, preload, compute, readout, CPU layout
 operation, completion marker and fence remains. Each new contraction establishes
 its own store state, including when the next contraction has a different width.
 The i8, per-column scale and pooling paths retain their original behavior.
@@ -50,7 +52,7 @@ The tests expand generator loops with a concrete test recorder. They verify
 identical configuration at every readout and identical other effects across
 aligned/tail/deep-K, transpose, bias, resident RHS, and consecutive contractions.
 They also check unchanged i8/scale paths and reject altered source inventories
-or absent/wrong configuration. This is static generation evidence, not selected
+or absent/wrong configuration, zero-trip behavior and overflowing-stride setup. This is static generation evidence, not selected
 compiler execution, an independent RTL decoder or a hardware proof.
 
 For the existing 17×16×32 public witness, static contraction expansion predicts
