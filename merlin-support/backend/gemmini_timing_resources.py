@@ -18,9 +18,16 @@ from merlin.targetgen.rtl import firrtl_struct as F
 
 
 def _pin(path):
+    from merlin.common import read_lease_digest
+
     path = Path(path).resolve(strict=True)
-    with path.open("rb") as stream:
-        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    # Explicit operator opt-in reuses only a kernel-protected digest. Every hit
+    # still checks the current name, inode and held lease; unsupported files
+    # retain full reads. This never caches an owner or an execution verdict.
+    digest = read_lease_digest.digest(path)
+    if digest is None:
+        with path.open("rb") as stream:
+            digest = hashlib.file_digest(stream, "sha256").hexdigest()
     return {"path": str(path), "sha256": digest}
 
 
@@ -279,9 +286,13 @@ def extract(
 
 
 def _revalidate_sources(sources):
-    for pin in sources.values():
-        if _pin(pin["path"]) != pin:
-            raise ValueError("timing source changed during extraction or augmentation")
+    from merlin.common import read_lease_digest
+
+    # A lease used early in a multi-member check must also survive its end.
+    with read_lease_digest.verification():
+        for pin in sources.values():
+            if _pin(pin["path"]) != pin:
+                raise ValueError("timing source changed during extraction or augmentation")
 
 
 def augment_model(model, evidence, *, harts):
