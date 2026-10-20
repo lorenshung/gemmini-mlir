@@ -1,0 +1,60 @@
+{
+  "schema": "phase2.unpromoted_automatic_candidate.v1",
+  "origin": "Exact source delta from the original sandboxed V26 author; original refused checkpoint preserved",
+  "baseline": {
+    "tree_sha256": "29213759089b71de26f8a5ab26ca6ef1b8071dc0bb690041eb7de5d0efb53f24",
+    "files": 16,
+    "relative_package": "../../phase1_generated/el4_fire_aligned_v26_original_29213759/package"
+  },
+  "candidate": {
+    "tree_sha256": "85f4799617a22bcd06afd2032775b90831a8276fdd7f3e727cd8b323d0a793ed",
+    "files": 16,
+    "changed_files": [
+      "backend.py",
+      "linalg_frontend.py"
+    ],
+    "patch_sha256": "a635388495ead021d235f52c3355dc49f1525b14b54dc939e7b600d7ff910e66",
+    "patch_representation": "zero-context unified source diff; exact16-file package unchanged"
+  },
+  "hypothesis": "Retain admitted RHS panels across M tiles with a bounded tile-count policy; existing padded-store capacity fallback and numerical contract remain",
+  "numerical_policy": "unchanged selected signed-i8/raw-i32 zero-initialized contractions; frontend rejects unsupported scalar semantics",
+  "decision": "UNPROMOTED; actual emissions differ but native execution refused beforebuild",
+  "actual_queued_replay": {
+    "job_id": "4b64ab3075514e30810eb06d8f987d64",
+    "source_epoch": "source-v6",
+    "evaluated_merlin_commit": "bcec6d8099c261e8c47f58c8091070f90ee13b3b",
+    "source_seal": "c3d83dd3642579aa429a62ec7f56bdde9577902abccd05056f76ee522ec88f19",
+    "selected_members": [
+      "public_source_diagnostic/PG_source_traversal_guard_0000"
+    ],
+    "full_four_member_roster_preserved": true,
+    "unselected_members": "pending, not dropped",
+    "same_typed_source_and_command_buffer": true,
+    "different_emitted_LLVM": true,
+    "executed_outputs": 0,
+    "linked_ELFs": 0,
+    "fresh_count_reports": 0,
+    "functional_status": "UNKNOWN_OR_FAILURE",
+    "refusal": "standalone pointer source needs bounded timeout and exact hardware selection",
+    "cause": "Aggregate900s deadline reached nativeleaf unchanged600s guard withoutclamping",
+    "original_queue_transport": "completed; originalfeedback and UNKNOWNdecision published",
+    "complete_functional_and_compiled": false,
+    "original_outer_cleanup": "complete",
+    "old_checkpoint_relabelled": false,
+    "independent_emission_audit": {
+      "path": "/work/merlin/tasks/phase2-target-adapters-20261019/out/artifacts/target-adapters/gemmini/retained85-v3-emission-audit-v2/delivery.json",
+      "sha256": "db011681400807e837f6c58935331db9f207f6cfd29e85c7adb6aef357663601"
+    }
+  },
+  "measurement": {
+    "measured_cycles": null,
+    "qualified_predicted_cycles": null,
+    "roofline_attainment": null
+  },
+  "broader_verification": "DS0/DS3/DS4 and capacity/readout/tail qualification pending; resident first-overwrite packet coverage needs independent checks",
+  "campaign_start_utc": "2026-10-20T14:23:20+00:00",
+  "campaign_deadline_utc": "2026-10-20T18:23:20+00:00",
+  "new_gsim_jobs": 0,
+  "hardware_loops_allowed": false,
+  "subsequent_host_fix": "Merlin17dbc3909 bounds nativeleaf to original600s;30hosttests passed; not target-reexecuted in this campaign"
+}

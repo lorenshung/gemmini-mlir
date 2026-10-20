@@ -64,3 +64,12 @@ directory, make that copy writable, then apply the patch with
 `patch -d CANDIDATE_PACKAGE -p1 < automatic_v26_single_full_tile_v6/candidate.patch`.
 Keep the original package read-only and recheck the resulting package digest
 against `experiment.json` before evaluation.
+
+`automatic_v26_rhs_reuse_85f47996` retains a later exact authored source delta
+from the same immutable V26 baseline. Its original queued replay produced
+different LLVM, then both arms refused before native build because of a
+queue-to-leaf timeout mismatch. Feedback and an UNKNOWN decision were published,
+with complete process cleanup. No outputs, linked ELF or fresh counts were
+produced by this replay. The subsequent host fix has regression coverage but
+was not target-reexecuted. This candidate remains unpromoted; see its README
+and pinned `experiment.json` for the separate evidence and remaining checks.

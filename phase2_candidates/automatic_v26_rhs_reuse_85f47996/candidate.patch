@@ -1,0 +1,125 @@
+--- a/backend.py
++++ b/backend.py
+@@ -9,0 +10,2 @@
++    from contraction import DIM
++
+@@ -58 +60,8 @@
+-            if resident_uses[handle] > 1:
++            # Reuse exists across row tiles even for one logical command.
++            # Keep the existing padded-SRAM admission check in the packer,
++            # and cap newly unrolled RHS load/reduction sites at 64 tiles.
++            row_tiles = (ashape[-2] + DIM - 1) // DIM
++            rhs_tiles = ((wshape[-2] + DIM - 1) // DIM) * ((wshape[-1] + DIM - 1) // DIM)
++            row_reuse = (row_tiles > 1 and 0 < rhs_tiles <= 64
++                         and not attrs.get('acc_scale_by_column'))
++            if resident_uses[handle] > 1 or row_reuse:
+--- a/linalg_frontend.py
++++ b/linalg_frontend.py
+@@ -37,0 +38,4 @@
++    from xdsl.dialects import arith
++    from xdsl.dialects.builtin import IntegerType, NoneAttr, Signedness
++    from xdsl.dialects.linalg.ops import GenericOp, YieldOp
++
+@@ -46,0 +51,19 @@
++    if type(operation) is not GenericOp:
++        return None
++    if len(operation.inputs) != 2 or len(operation.outputs) != 1 or len(operation.results) != 1:
++        return None
++    values = [*operation.inputs, *operation.outputs, *operation.results]
++    if not all(isinstance(value.type, TensorType) for value in values):
++        return None
++    if [str(value.type.element_type) for value in values] != ['i8', 'i8', 'i32', 'i32']:
++        return None
++    if any(type(value.type.element_type) is not IntegerType or
++           value.type.element_type.signedness.data != Signedness.SIGNLESS or
++           type(value.type.encoding) is not NoneAttr for value in values):
++        return None
++    if operation.results[0].type != operation.outputs[0].type:
++        return None
++    if (any(not key.startswith('prov.') for key in operation.attributes) or
++            {key for key in operation.properties if not key.startswith('prov.')} - {
++                'indexing_maps', 'iterator_types', 'operandSegmentSizes'}):
++        return None
+@@ -60,0 +84,2 @@
++    if any(mapping.num_dims != rank + 1 or mapping.num_symbols for mapping in maps):
++        return None
+@@ -68,0 +94,11 @@
++    extents = {}
++    for value, projection in zip(values[:3], dimensions):
++        shape = value.type.get_shape()
++        if len(shape) != len(projection) or any(extent <= 0 for extent in shape):
++            return None
++        for dimension, extent in zip(projection, shape):
++            if dimension in extents and extents[dimension] != extent:
++                return None
++            extents[dimension] = extent
++    if len(operation.regions) != 1 or len(operation.regions[0].blocks) != 1:
++        return None
+@@ -69,0 +106,2 @@
++    if len(block.args) != 3 or [str(argument.type) for argument in block.args] != ['i8', 'i8', 'i32']:
++        return None
+@@ -71,19 +109,27 @@
+-    arithmetic = [op_name(item) for item in inner]
+-    accepted = {'arith.extsi', 'arith.extui', 'arith.muli', 'arith.addi', 'linalg.yield'}
+-    if any(item not in accepted for item in arithmetic):
+-        return None
+-    if arithmetic.count('arith.muli') != 1 or arithmetic.count('arith.addi') != 1:
+-        return None
+-    multiply = next(item for item in inner if op_name(item) == 'arith.muli')
+-    addition = next(item for item in inner if op_name(item) == 'arith.addi')
+-    terminator = inner[-1]
+-    if multiply.results[0] not in addition.operands or block.args[2] not in addition.operands:
+-        return None
+-    if op_name(terminator) != 'linalg.yield' or tuple(terminator.operands) != tuple(addition.results):
+-        return None
+-    for actual, expected in zip(multiply.operands, block.args[:2]):
+-        owner = actual.owner
+-        if op_name(owner) in ('arith.extsi', 'arith.extui'):
+-            actual = owner.operands[0]
+-        if actual != expected:
+-            return None
++    if [type(item) for item in inner] != [arith.ExtSIOp, arith.ExtSIOp,
++                                        arith.MuliOp, arith.AddiOp, YieldOp]:
++        return None
++    lhs_extension, rhs_extension, multiply, addition, terminator = inner
++    extensions = (lhs_extension, rhs_extension)
++    if any(len(extension.operands) != 1 or len(extension.results) != 1 or
++           str(extension.results[0].type) != 'i32' or
++           any(not key.startswith('prov.') for key in extension.attributes) or
++           any(not key.startswith('prov.') for key in extension.properties)
++           for extension in extensions):
++        return None
++    if {extension.operands[0] for extension in extensions} != set(block.args[:2]):
++        return None
++    for arithmetic in (multiply, addition):
++        if (len(arithmetic.operands) != 2 or len(arithmetic.results) != 1 or
++                str(arithmetic.results[0].type) != 'i32' or arithmetic.overflow_flags.data or
++                any(not key.startswith('prov.') for key in arithmetic.attributes) or
++                {key for key in arithmetic.properties if not key.startswith('prov.')} - {'overflowFlags'}):
++            return None
++    if set(multiply.operands) != {extension.results[0] for extension in extensions}:
++        return None
++    if set(addition.operands) != {multiply.results[0], block.args[2]}:
++        return None
++    if (tuple(terminator.operands) != tuple(addition.results) or
++            any(not key.startswith('prov.') for key in terminator.attributes) or
++            any(not key.startswith('prov.') for key in terminator.properties)):
++        return None
+@@ -99,0 +146 @@
++        from .mixed_frontend import zero_initializer
+@@ -101,0 +149 @@
++        from mixed_frontend import zero_initializer
+@@ -144,2 +192,5 @@
+-        if len(inputs) < 2 or len(operation.results) != 1:
+-            raise ValueError('A contraction requires two data tensors and one result')
++        outputs = list(operation.outputs)
++        if len(inputs) != 2 or len(outputs) != 1 or len(operation.results) != 1:
++            raise ValueError('A contraction requires two data tensors, one initializer and one result')
++        if not all(isinstance(value.type, TensorType) for value in [*inputs, *outputs, *operation.results]):
++            raise ValueError('Accelerator contractions require ranked tensor operands')
+@@ -149,2 +200,3 @@
+-        if len(inputs) != 2:
+-            raise ValueError('Nonzero-point quantized matmul is not supported')
++        if (str(outputs[0].type.element_type) != 'i32' or
++                operation.results[0].type != outputs[0].type or not zero_initializer(outputs[0])):
++            raise ValueError('Accelerator contractions require a zero-initialized i32 result')
