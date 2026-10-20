@@ -184,6 +184,7 @@ class GeneratedSourceDiagnosticIssuer:
                 "gemmini_source_execution",
                 "gemmini_source_execution_issuer",
                 "gemmini_source_packet_artifacts",
+                "merlin.targetgen.riscv_memory_effects",
                 "merlin.targetgen.native_model_execution",
                 "merlin.common.invocation_record",
             )

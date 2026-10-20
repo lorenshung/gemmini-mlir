@@ -143,8 +143,11 @@ def test_fresh_observation_refuses_changed_memory_derivation(generated):
         )
 
 
+@pytest.mark.parametrize(
+    "changed_module", ["gemmini_load_streams", "merlin.targetgen.riscv_memory_effects"]
+)
 def test_factory_source_closure_is_selected_before_any_privileged_callback(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, changed_module
 ):
     F = importlib.import_module("gemmini_generated_source_factory")
     W = importlib.import_module("gemmini_whole_program_memory_effects")
@@ -158,13 +161,14 @@ def test_factory_source_closure_is_selected_before_any_privileged_callback(
 
     monkeypatch.setattr(F, "module_source_path", source)
     old = F.original_factory({}).record()
-    assert len(old["sources"]) == 2
+    assert len(old["sources"]) == 3
     selected = F.original_factory({"source_memory_effects_protocol": W.PROTOCOL})
     assert {p["path"] for p in selected.record()["sources"]} == {
         str(source(name))
         for name in (
             "gemmini_generated_source_diagnostic",
             "gemmini_generated_source_trace",
+            "merlin.targetgen.riscv_memory_effects",
             "gemmini_whole_program_memory_effects",
             "gemmini_load_streams",
             "gemmini_zero_fill",
@@ -175,7 +179,7 @@ def test_factory_source_closure_is_selected_before_any_privileged_callback(
     monkeypatch.setattr(
         F, "_original_restore", lambda *a, **k: calls.append("forbidden")
     )
-    source("gemmini_load_streams").write_text("# changed helper before create\n")
+    source(changed_module).write_text("# changed helper before create\n")
     with pytest.raises(ValueError, match="factory or inputs changed"):
         selected.create(work_root=tmp_path / "new")
     assert calls == []

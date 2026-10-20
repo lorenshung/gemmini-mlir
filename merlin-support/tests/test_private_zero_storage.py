@@ -31,6 +31,33 @@ def test_complete_observed_zero_coverage_then_device_use(M):
     )
 
 
+@pytest.mark.parametrize("word,width", [(0x23, 1), (0x1023, 2), (0x2023, 4)])
+def test_adjacent_nonzero_abi_redzone_does_not_clobber_private_zero(M, word, width):
+    # DS0 actual route has SB poison immediately below a separately linked
+    # scratch buffer. Complete observed zero initialization remains mandatory.
+    address = 0x1000 - width
+    poison = f"core 0: 3 0x80000000 (0x{word:08x}) mem 0x{address:x} 0x" + "a5" * width
+    rows = [store(0x1000), store(0x1008), poison, DEVICE]
+    assert prove(M, rows) == ((0x1000, 16, "private"),)
+    # Moving the same exact store one byte across the boundary must refuse.
+    rows[2] = poison.replace(f"mem 0x{address:x}", f"mem 0x{address + 1:x}")
+    assert prove(M, rows) == ()
+
+
+def test_real_ds0_three_byte_poison_and_two_independent_zero_buffers(M):
+    first, second = 0x800017C0, 0x80001800
+    rows = [store(base + offset) for base in (first, second) for offset in range(0, 64, 8)]
+    rows.extend(
+        f"core 0: 3 0x80000000 (0x00068023) mem 0x{address:x} 0xa5"
+        for address in (0x800017B9, 0x800017BA, 0x800017BB)
+    )
+    rows.append(DEVICE)
+    symbols = ((first, 64, "scratch_g1"), (second, 64, "scratch_g53"))
+    assert prove(M, rows, symbols=symbols) == symbols
+    # A real late write into either buffer is still a clobber, even if zero.
+    assert prove(M, rows + [store(first)], symbols=symbols) == (symbols[1],)
+
+
 @pytest.mark.parametrize(
     "fault",
     [

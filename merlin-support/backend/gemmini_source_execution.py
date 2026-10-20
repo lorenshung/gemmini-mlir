@@ -99,6 +99,7 @@ class SourceExecutionOwner:
             "gemmini_source_packet_artifacts",
             "gemmini_packet_contractions",
             "gemmini_execute_state",
+            "merlin.targetgen.riscv_memory_effects",
             "merlin.llvmlower.source_contraction_bindings",
             "merlin.perf.compiler_plan_evidence",
             "merlin.perf.executed_trace",

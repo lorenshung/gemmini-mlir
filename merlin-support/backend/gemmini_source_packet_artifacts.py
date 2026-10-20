@@ -12,11 +12,19 @@ from gemmini_packet_contractions import Contraction, check_packets
 from merlin.common import invocation_record
 from merlin.llvmlower.source_contraction_bindings import bind_rank_two_contractions
 from merlin.targetgen.elf_lanes import _section_headers
+from merlin.targetgen.riscv_memory_effects import rv64_scalar_store_width
 
 POINTER_CONTRACTIONS_PROTOCOL = "gemmini.pointer_source_contractions.v1"
+_STORE_WIDTH_DECODER = rv64_scalar_store_width
+_STORE_WIDTH_CODE = rv64_scalar_store_width.__code__
 
 
 def _cpu_writes(log, custom_opcode):
+    if (
+        rv64_scalar_store_width is not _STORE_WIDTH_DECODER
+        or rv64_scalar_store_width.__code__ is not _STORE_WIDTH_CODE
+    ):
+        raise ValueError("original scalar-store effect decoder changed")
     result = []
     for line in log.splitlines():
         parts = line.split()
@@ -50,9 +58,19 @@ def _cpu_writes(log, custom_opcode):
                 raise ValueError(
                     "unresolved host store width prevents source zero-storage proof"
                 )
-            result.append(
-                (int(parts[i + 1], 16), max(8, (len(parts[i + 2]) - 2 + 1) // 2))
-            )
+            # Spike's committed value is sized by the retired store, including
+            # SB/SH. Expanding a byte store to an XLEN-sized interval invents
+            # clobbers of adjacent linked objects (for example ABI redzones next
+            # to a separately initialized private zero buffer).
+            width = rv64_scalar_store_width(word)
+            if (
+                len(parts[i + 2]) != 2 + width * 2
+                or not 0 <= int(parts[i + 2], 16) < 1 << (width * 8)
+            ):
+                raise ValueError(
+                    "host store lacks its exact complete committed memory width"
+                )
+            result.append((int(parts[i + 1], 16), width))
     return result
 
 

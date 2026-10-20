@@ -12,7 +12,11 @@ def restore_registry(inputs, *, work_root):
 
 
 def original_factory(inputs, *, sources=()):
-    names = ("gemmini_generated_source_diagnostic", "gemmini_generated_source_trace")
+    names = (
+        "gemmini_generated_source_diagnostic",
+        "gemmini_generated_source_trace",
+        "merlin.targetgen.riscv_memory_effects",
+    )
     if (
         inputs.get("source_binding_protocol")
         == "gemmini.pointer_source_contractions.v1"
