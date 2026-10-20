@@ -39,3 +39,28 @@ simulator and counter-window identities, complete-output comparisons, paired
 repeats, refusals, costs and roofline assumptions. Qualification of the full
 models, the native Spike timing engine, and the complete public corpus remains
 separate. An observed kernel improvement is not a whole-model speedup.
+
+## Automatic V26 source development
+
+`automatic_v26_single_full_tile_v6` preserves the exact one-file delta produced
+by the sandboxed V26 author on 20 October. It starts from the separate immutable
+16-file V26 package, not a V23 candidate or the handwritten backend. Its
+`experiment.json` records both package digests and the original refusal.
+
+The author reported structural tile-coverage checks. Its native command sandbox
+could not reach the broker, so no queued compilation, complete-output comparison
+or timing ran in that author attempt. The original checkpoint is refused and
+unconsumable. This patch is an unpromoted hypothesis; any independent subsequent
+queue evaluation must retain its own identity and results.
+
+A subsequent independent original queue evaluation passed both arms' 544
+outputs and 8,704 source products. LLVM differed, but the final ELF and all 125
+scoped count features were identical. The performance hypothesis is rejected.
+Native timing remains UNKNOWN because flush activity is outside the fixed
+calibration support. This evaluation does not complete the earlier author run.
+
+To reproduce the source only, copy the V26 package into a fresh candidate
+directory, make that copy writable, then apply the patch with
+`patch -d CANDIDATE_PACKAGE -p1 < automatic_v26_single_full_tile_v6/candidate.patch`.
+Keep the original package read-only and recheck the resulting package digest
+against `experiment.json` before evaluation.

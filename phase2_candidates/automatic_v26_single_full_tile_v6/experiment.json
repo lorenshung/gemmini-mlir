@@ -1,0 +1,55 @@
+{
+  "schema": "phase2.unpromoted_automatic_candidate.v1",
+  "origin": "V6 sandboxed automatic author; root preserved its exact source delta",
+  "baseline": {
+    "tree_sha256": "29213759089b71de26f8a5ab26ca6ef1b8071dc0bb690041eb7de5d0efb53f24",
+    "files": 16,
+    "relative_package": "../../phase1_generated/el4_fire_aligned_v26_original_29213759/package"
+  },
+  "candidate": {
+    "tree_sha256": "aaebdafdd75d54157ee92e98f14cf21077d9eca185e43a1225430c1e24082e03",
+    "files": 16,
+    "changed_files": [
+      "contraction.py"
+    ],
+    "patch_sha256": "1c03dbf43eafeedf768edf131035dd222bbfbe429938312753877542c918fb29"
+  },
+  "hypothesis": "Emit a single complete tile directly; preserve the software loop for multiple tiles and retain tails. Applicability derives from extent and target tile width.",
+  "numerical_policy": "unchanged",
+  "author_local_check": "reported same tile coverage and order for extents1..4096; not complete accelerator-output qualification",
+  "queued_evaluation_at_preservation": "NOT_RUN: native command sandbox blocked broker TCP",
+  "measurement": {
+    "measured_cycles": null,
+    "predicted_cycles": null,
+    "roofline_attainment": null
+  },
+  "decision": "UNPROMOTED; original author checkpoint refused; independent queue correct but executable unchanged, so performance hypothesis rejected",
+  "audit": {
+    "path": "/work/merlin/tasks/phase2-target-adapters-20261019/out/artifacts/target-adapters/gemmini/capsule-source-search-connection-v1/v6-authored-candidate-audit-v1.json",
+    "sha256": "4696e052793890c0a710c9808f94a8faefd5d9739ee580f20b98010057a736c2"
+  },
+  "campaign_start_utc": "2026-10-20T09:18:38+00:00",
+  "campaign_deadline_utc": "2026-10-20T13:18:38+00:00",
+  "new_campaign_started": false,
+  "independent_queue_evaluation": {
+    "source": "existing original normal queue; separately supervised after author attempt, not retroactive V6 feedback",
+    "delivery": {
+      "path": "/work/merlin/tasks/phase2-target-adapters-20261019/out/artifacts/target-adapters/gemmini/v6-authored-original-normal-queue-v1/delivery.json",
+      "sha256": "a2eaffff2b83ea5c99aa3dce2aeb186defea3feaa5a649b38fd95487bf36f2d9"
+    },
+    "baseline_complete_outputs": 544,
+    "candidate_complete_outputs": 544,
+    "source_products_checked_per_arm": 8704,
+    "emitted_LLVM": "different",
+    "final_ELF": "byte-identical",
+    "ELF_sha256": "f5385c333ec700d7b6c4c425dfa39c5a61cc077d3948e54f370410d23a81867c",
+    "all_125_scoped_count_features": "identical",
+    "numerical_and_source_checks": "PASS",
+    "forbidden_hardware_loop_and_config_selector_audit": "all15clean",
+    "native_timing": "UNKNOWN: flush activity0 outside fixed training support",
+    "decision": "REJECT as a performance improvement; identical executable and counts",
+    "pool_cleanup": "complete",
+    "wall_seconds": 202.7287,
+    "CPU_seconds_lower_bound": 211.6505
+  }
+}

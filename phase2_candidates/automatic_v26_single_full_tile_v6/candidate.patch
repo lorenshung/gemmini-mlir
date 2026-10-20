@@ -1,0 +1,7 @@
+--- a/contraction.py
++++ b/contraction.py
+@@ -24 +24,3 @@
+-    if full:
++    if full == DIM:
++        callback(0, DIM)
++    elif full:
