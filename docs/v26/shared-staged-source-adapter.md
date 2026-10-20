@@ -100,12 +100,18 @@ not this pair evidence. Hardware execution, async overlap, complete-model
 composition and timing authority remain absent. Frozen native model/domain
 checks and interval decisions are separate and unchanged.
 
-The new target adapter and its generic dependencies are not automatically
-available under the existing candidate SDK grant. In particular, the existing
-`merlin.llvmlower.late_quant_rne` lexer and `direct_source_contraction` binding
-must be covered by a newly reviewed explicit release/import closure, selected
-equally for both prepared arms, before candidate use. A trusted host import
-does not widen that grant. Ordinary routing remains disabled in this change.
+The adapter uses the explicit public
+`merlin.compile.scheduling.source_tokens.llvm_tokens` and
+`merlin.compile.scheduling.direct_source.bind_direct_source_contraction`
+proposal APIs. Export them with `export_shared_scheduling(...,
+source_binding=True)` (library manifest V2), then review and select that exact
+release equally for both prepared arms. The default V1 library grant does not
+include them. The original private source checker independently rebinds the
+actual source and execution; this public reader issues no authority. Private
+late legalization and source admission modules stay outside the compiler grant.
+The target adapter itself still needs an explicitly permitted compiler source
+component. A trusted host import does not widen either grant. Ordinary routing
+remains disabled in this change.
 
 The callable returns LLVM IR text, matching the original Builder. The original
 V26 compiler imports that text with its selected `mlir-translate --import-llvm`

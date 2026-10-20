@@ -2,14 +2,23 @@
 
 import copy
 import hashlib
+import importlib.util
+import json
+import shutil
+import subprocess
+import sys
 from collections import Counter
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import gemmini_v26_staged_source as adapter
 import pytest
 from merlin.common import mlir_query as mq
+from merlin.compile.scheduling.export import export_shared_scheduling
 from merlin.compile.scheduling.staged_dense import StagedDenseContract
+from merlin.targetgen.compiler_library import freeze_compiler_library
+from merlin.targetgen.package_runtime import CertFailure, integrity_scan
 from merlin_experiments.phase0.connected_integer_bounds import derive
 
 PACKAGE = (
@@ -119,6 +128,67 @@ def original_finite(options):
     )
     recorder.fence()
     return b, recorder
+
+
+@pytest.mark.parametrize("selected", [False, True])
+def test_actual_adapter_runs_only_with_explicit_source_binding_sdk(tmp_path, selected):
+    options = inputs(tmp_path)
+    options["contract"] = asdict(options["contract"])
+    options["source"] = str(options["source"])
+    options["package"] = str(options["package"])
+    sdk = tmp_path / "sdk"
+    document = export_shared_scheduling(sdk, source_binding=selected)
+    contract = freeze_compiler_library(
+        sdk,
+        review_id="explicit-v26-host-emission-test",
+        public_modules=tuple(document["public_modules"]),
+        sources=tuple((row["path"], row["module"]) for row in document["members"])
+        + (("shared-library.json", None),),
+    )
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    leaf = candidate / "staged_source.py"
+    shutil.copyfile(adapter.__file__, leaf)
+    package = SimpleNamespace(directory=candidate, integrity_exempt=False)
+    if selected:
+        integrity_scan(package, compiler_library=contract, compiler_library_root=sdk)
+    else:
+        with pytest.raises(CertFailure):
+            integrity_scan(package, compiler_library=contract, compiler_library_root=sdk)
+    result = tmp_path / "result.json"
+    config = tmp_path / "config.json"
+    config.write_text(
+        json.dumps(
+            dict(
+                sdk=str(sdk),
+                selected=selected,
+                dependencies=sorted(
+                    {
+                        str(Path(importlib.util.find_spec(name).origin).parent.parent)
+                        for name in ("xdsl", "numpy", "yaml", "z3")
+                    }
+                ),
+                adapter=str(leaf),
+                options=options,
+                result=str(result),
+            )
+        )
+    )
+    worker = Path(__file__).parent / "fixtures/v26_staged_source_worker.py"
+    run = subprocess.run(
+        [sys.executable, "-I", "-S", "-B", str(worker), str(config)],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert run.returncode == 0, run.stdout + run.stderr
+    observed = json.loads(result.read_bytes())
+    if selected:
+        assert observed["host_emission"] == "PASS"
+        assert observed["target_executions"] == 0
+    else:
+        assert observed == {"unselected_import": "refused"}
+    contract.verify(sdk)
 
 
 def test_disabled_default_never_reads_package_or_source():

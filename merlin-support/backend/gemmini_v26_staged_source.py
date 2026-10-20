@@ -14,6 +14,8 @@ from collections import Counter
 from pathlib import Path
 from types import ModuleType
 
+from merlin.compile.scheduling.direct_source import bind_direct_source_contraction
+from merlin.compile.scheduling.source_tokens import llvm_tokens as _tokens
 from merlin.compile.scheduling.staged_dense import (
     AccumulatorReadout,
     AccumulatorZero,
@@ -28,8 +30,6 @@ from merlin.compile.scheduling.staged_dense import (
     order_output_tiles_n_before_m,
     rewrite_staged_dense,
 )
-from merlin.llvmlower.direct_source_contraction import bind_direct_source_contraction
-from merlin.llvmlower.late_quant_rne import _tokens
 
 _ORIGINAL = {
     "builder.py": "6ef98c486e55c84bf0b946f3174e74c66d11d2e70ee724c7e28c4937081894b0",
