@@ -179,6 +179,24 @@ def test_in_memory_helper_code_and_constructor_mutations_refuse(issued, monkeypa
         owner.record()
 
 
+def test_failed_final_original_derivation_revokes_partially_issued_bundle(
+    issued, monkeypatch
+):
+    M, _, selected, arithmetic = issued
+    count = len(M._ISSUED)
+
+    def failed(self):
+        raise ValueError("neutral original final derivation refused")
+
+    monkeypatch.setattr(M.SelectedAccumulatorZeroFill, "revalidate", failed)
+    # Keep the exception alive: weak-reference garbage collection alone must
+    # not remove a partially issued object retained by its failing traceback.
+    with pytest.raises(ValueError, match="final derivation refused") as error:
+        M.WholeProgramMemoryEffects(selected, arithmetic)
+    assert error.value.__traceback__ is not None
+    assert len(M._ISSUED) == count
+
+
 @pytest.fixture
 def packet_route(issued, tmp_path, monkeypatch, request):
     M, owner, selected, _ = issued
@@ -462,6 +480,23 @@ def test_foreign_or_json_packet_bundle_refuses_before_work(packet_route):
     P, _, _, args = packet_route
     with pytest.raises(TypeError, match="original live"):
         P.check_execution_packets(**args, memory_effects={"status": "pass"})
+
+
+def test_whole_wrapper_rechecks_live_selected_effects_after_packet_induction(
+    packet_route, monkeypatch
+):
+    P, owner, _, args = packet_route
+    M = importlib.import_module("gemmini_whole_program_memory_effects")
+    original = P._check_bound_execution_packets
+
+    def changed(**kwargs):
+        result = original(**kwargs)
+        M._ISSUED[owner]["loads"].ports["MVIN"] = 2
+        return result
+
+    monkeypatch.setattr(P, "_check_bound_execution_packets", changed)
+    with pytest.raises(ValueError, match="derivation changed"):
+        P.check_execution_packets(**args, memory_effects=owner)
 
 
 @pytest.mark.parametrize("packet_route", ["retained_public_35"], indirect=True)
