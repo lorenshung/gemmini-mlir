@@ -138,6 +138,8 @@ def test_vcs_failure_never_falls_back(vcs, monkeypatch, status, stderr):
 def test_vcs_defaults_and_dram_directory_convention(vcs, monkeypatch, tmp_path):
     module, _, _, ini, elf = vcs
     argv = module._vcs_argv(elf)
+    assert [v for v in argv if v.startswith('+loadmem=')] == [f'+loadmem={elf}']
+    assert argv[-2:] == ['+permissive-off', str(elf)]
     assert '+max-cycles=10000000' in argv and '+ntb_random_seed=1' in argv
     monkeypatch.delenv('MERLIN_GEMMINI_DRAMSIM_INI')
     monkeypatch.setenv('GEMMINI_DRAMSIM_INI', str(ini))

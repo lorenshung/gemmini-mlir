@@ -208,6 +208,9 @@ An explicit VCS request never falls back to another engine.
 
 Execution follows Chipyard's permissive plusarg convention: DRAMSim/ini directory,
 cycle cap, seed, `+loadmem=<absolute ELF>`, then `+permissive-off <ELF>`.
+Loadmem is unconditional and is the sole image loader, including timing runs;
+the positional ELF supplies symbols/HTIF metadata. Cycle counts may be compared
+only under this same loading convention, never against TSI-loaded receipts.
 `-no_save` avoids VCS save/restore's ASLR re-exec in restricted sandboxes.
 The ELF directory is the writable cwd; stdin is `/dev/null`. The caller owns
 license environment/access and the wall timeout. DRAM geometry is the selected

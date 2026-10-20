@@ -524,6 +524,8 @@ def vcs_dramsim_ini() -> Path:
 
 
 def _vcs_argv(elf: str | Path) -> list[str]:
+    # The sole image loader is +loadmem, for execution AND oracle timing.
+    # The positional ELF supplies symbols/HTIF metadata; TSI must not load it.
     # Chipyard variables.mk/common.mk SIM_FLAGS, LOADMEM=1 and VCS seed convention.
     # -no_save avoids VCS's ASLR/personality re-exec in restricted sandboxes.
     cycles = os.environ.get("MERLIN_GEMMINI_VCS_MAXCYCLES", "10000000")
