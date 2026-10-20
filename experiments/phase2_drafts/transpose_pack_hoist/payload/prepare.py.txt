@@ -1,0 +1,98 @@
+"""Prepare a separate bounded transpose-pack candidate; issue no authority."""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import hashlib
+import json
+from pathlib import Path
+
+from experiments.store_configuration_hoist.prepare import BASELINE_SHA256, FILES, inventory
+
+ANCHOR = "    epilogue = attrs.get('epilogue', [])\n"
+HOOK = '''    from pack_hoist import try_pack_rhs
+    # The original synchronous contraction ABI owns immutable input buffers
+    # and disjoint output storage. The final source/effect owner rechecks it.
+    prepared_rhs = try_pack_rhs(b, w, m, k, n, attrs,
+        transpose_rhs=transpose_rhs, resident=_resident, immutable_rhs=True)
+    if prepared_rhs is not None:
+        w, transpose_rhs = prepared_rhs, False
+'''
+
+
+def apply_to_copy(package):
+    """Insert one independent entry hook; preserve other candidate edits.
+
+    Intended order: layout preparation, then panel scheduling, then effect
+    cleanup. Refuse duplicate/changed anchors rather than overwrite a module.
+    """
+    package = Path(package)
+    target = package / "contraction.py"
+    if target.is_symlink() or not target.is_file():
+        raise ValueError("candidate contraction must be a regular copied file")
+    source = target.read_text()
+    if source.count(ANCHOR) != 1 or "from pack_hoist import" in source:
+        raise ValueError("transpose pack entry anchor changed or already selected")
+    updated = source.replace(ANCHOR, HOOK + ANCHOR)
+    ast.parse(updated)
+    helper = Path(__file__).resolve().parents[2] / "merlin-support/backend/gemmini_v26_pack_hoist.py"
+    destination = package / "pack_hoist.py"
+    if destination.exists() or destination.is_symlink():
+        raise ValueError("pack helper destination must be absent")
+    destination.write_bytes(helper.read_bytes())
+    # Ordinary candidate code carries the exact shared algorithm bytes, rather
+    # than acquiring an undeclared new import from the frozen public SDK.
+    from merlin.llvmlower import dense_layout_loop
+    shared = Path(dense_layout_loop.__file__).resolve()
+    shared_target = package / "dense_layout_loop.py"
+    if shared_target.exists() or shared_target.is_symlink():
+        raise ValueError("shared layout helper destination must be absent")
+    shared_target.write_bytes(shared.read_bytes())
+    destination.write_text(destination.read_text().replace(
+        "from merlin.llvmlower.dense_layout_loop import", "from dense_layout_loop import"))
+    target.write_text(updated)
+
+
+def prepare(baseline, destination):
+    baseline, destination = Path(baseline), Path(destination)
+    before = inventory(baseline)
+    if before[0] != BASELINE_SHA256:
+        raise ValueError("complete original V26 compiler bytes changed")
+    if destination.exists() or destination.is_symlink():
+        raise ValueError("candidate destination must be absent")
+    destination.mkdir(parents=True)
+    for name in FILES:
+        path = destination / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((baseline / name).read_bytes())
+    apply_to_copy(destination)
+    if inventory(baseline) != before:
+        raise ValueError("original compiler changed during preparation")
+    digest, rows = hashlib.sha256(), []
+    for path in sorted(destination.rglob("*")):
+        if path.is_file():
+            name, data = path.relative_to(destination).as_posix(), path.read_bytes()
+            digest.update(name.encode() + b"\0" + data + b"\0")
+            rows.append(dict(path=name, bytes=len(data), sha256=hashlib.sha256(data).hexdigest()))
+    return dict(schema="gemmini.transpose_pack_hoist_candidate.v1",
+                baseline_sha256=before[0], candidate_sha256=digest.hexdigest(),
+                files=rows, compiler_execution="NOT_RUN", source_effect_qualification="NOT_ISSUED",
+                timing="UNKNOWN", workspace_policy_bytes=65536,
+                wide_transfers="DISABLED: original packet owner requires cols<=DIM")
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--baseline", type=Path, required=True)
+    parser.add_argument("--destination", type=Path, required=True)
+    parser.add_argument("--report", type=Path, required=True)
+    args = parser.parse_args()
+    result = prepare(args.baseline, args.destination)
+    with args.report.open("x") as stream:
+        json.dump(result, stream, indent=2)
+        stream.write("\n")
+
+
+if __name__ == "__main__":
+    main()

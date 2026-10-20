@@ -1,0 +1,52 @@
+{
+  "schema": "phase2.disabled_source_draft.v1",
+  "status": "DISABLED_UNTESTED_DRAFT_PRESERVED",
+  "tests": "NOT_RUN",
+  "target_execution": "NOT_RUN",
+  "source_effect_qualification": "NOT_ISSUED",
+  "performance": "UNKNOWN",
+  "restore_policy": "Recover exact source bytes only after explicit review; no automatic restoration or activation.",
+  "repository": "gemmini-mlir",
+  "files": [
+    {
+      "original_intended_path": "merlin-support/backend/gemmini_v26_pack_hoist.py",
+      "payload": "payload/gemmini_v26_pack_hoist.py.txt",
+      "bytes": 1692,
+      "sha256": "3d5b33b831341ee771557ddc8a814d6f01002e3782343b97c9ecf59b20f2e876"
+    },
+    {
+      "original_intended_path": "experiments/transpose_pack_hoist/prepare.py",
+      "payload": "payload/prepare.py.txt",
+      "bytes": 4469,
+      "sha256": "49c6df026b933e24f26e341537d8f8f40627b51c77c61d6c44f3dccd3208e381"
+    },
+    {
+      "original_intended_path": "experiments/transpose_pack_hoist/test_candidate.py",
+      "payload": "payload/test_candidate.py.txt",
+      "bytes": 5730,
+      "sha256": "d11f6555ba46c72aecd7be2348b902b1b2573cb0ed77999e5a00309a5f6fffd5"
+    },
+    {
+      "original_intended_path": "experiments/transpose_pack_hoist/README.md",
+      "payload": "payload/original_README.md.txt",
+      "bytes": 1777,
+      "sha256": "1ab2b2fb653285baad2bc86657fbf0338d29258353bb3f1c237946e75660e673"
+    }
+  ],
+  "baseline_compiler_sha256": "29213759089b71de26f8a5ab26ca6ef1b8071dc0bb690041eb7de5d0efb53f24",
+  "known_test_issue": "The zero-seed allocation address moves when packing is hoisted. Comparing raw MVIN3 source pointers in the draft test is therefore not a valid semantic assertion; exact zero provenance and output extent must be compared before any test/admission claim.",
+  "intended_composition_order": [
+    "pack/layout preparation",
+    "bounded panel scheduling",
+    "configuration/effect cleanup"
+  ],
+  "wider_transfers": "Not implemented: selected raw load supports multi-block columns, but the original packet owner limits load cols to DIM. A distinct explicitly selected ownership protocol is required.",
+  "generic_source_preservation": {
+    "repository": "merlin",
+    "commit": "08d26c40575af6863774b0556c889526166b0247",
+    "manifest": "experiments/phase2_drafts/transpose_pack_hoist/manifest.json",
+    "payload": "experiments/phase2_drafts/transpose_pack_hoist/payload/dense_layout_loop.py.txt",
+    "source_sha256": "2c34a10d52e98c409dfcc9a87ee7df80de3622fe30cd9e784cac57d870447759",
+    "status": "Disabled ordinary text payload; no public SDK import or active implementation."
+  }
+}

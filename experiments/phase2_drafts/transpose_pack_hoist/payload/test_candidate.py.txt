@@ -1,0 +1,137 @@
+"""Concrete original/candidate scalar-loop and raw-program comparison.
+
+This test interpreter does not replace the actual target decoder/source owner.
+"""
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+from experiments.store_configuration_hoist.test_candidate import BASELINE, Expansion, module
+from experiments.transpose_pack_hoist import prepare as P
+from merlin.llvmlower.dense_layout_loop import emit_dense_transpose
+
+
+class Concrete(Expansion):
+    def __init__(self):
+        super().__init__()
+        self.memory, self.rhs_bytes, self.ld_stride = {}, [], {}
+
+    def byte(self, address):
+        return self.memory.get(address, (address, (address * 37 + address // 113) % 256))
+
+    def load(self, pointer, ty):
+        assert ty == "i8"
+        self.events.append(("load", pointer, ty))
+        return self.byte(pointer)
+
+    def store(self, value, pointer, ty):
+        assert ty == "i8"
+        self.events.append(("store", value, pointer, ty))
+        self.memory[pointer] = value
+
+    def rocc(self, funct, rs1, rs2):
+        super().rocc(funct, rs1, rs2)
+        if funct == 0 and rs1 & 3 == 1:
+            self.ld_stride[(rs1 >> 3) & 3] = rs2
+        if funct == 1:
+            rows, cols = rs2 >> 48, (rs2 >> 32) & 65535
+            self.rhs_bytes.append(tuple(self.byte(rs1 + r * self.ld_stride[1] + c)
+                                        for r in range(rows) for c in range(cols)))
+
+
+def candidate(tmp_path, monkeypatch):
+    target = tmp_path / "candidate"
+    report = P.prepare(BASELINE, target)
+    monkeypatch.syspath_prepend(str(target))
+    for name in ("pack_hoist", "dense_layout_loop"):
+        monkeypatch.delitem(sys.modules, name, raising=False)
+    return (target / "contraction.py").read_text(), report
+
+
+def run(source, shape, attrs=None, transpose=True):
+    b = Concrete()
+    module(source)["matmul"](b, 0x200000, 0x400000, 0x600000, *shape,
+                             attrs or {"output_dtype": "i32"}, {}, {},
+                             transpose_rhs=transpose)
+    return b
+
+
+@pytest.mark.parametrize("shape", [(17, 15, 17), (33, 31, 35), (32, 16, 32), (49, 17, 3)])
+def test_complete_emitted_rhs_values_and_compute_readout_preserved(tmp_path, monkeypatch, shape):
+    changed, _ = candidate(tmp_path, monkeypatch)
+    before, after = [run(source, shape) for source in ((BASELINE / "contraction.py").read_text(), changed)]
+    assert before.rhs_bytes == after.rhs_bytes
+    # All actual A DMA, PRELOAD, COMPUTE and MVOUT words remain identical.
+    for funct in (2, 3, 4, 6, 14):
+        assert [e for e in before.events if e[:2] == ("rocc", funct)] == [
+            e for e in after.events if e[:2] == ("rocc", funct)]
+    m, k, n = shape
+    assert sum(e[0] == "load" for e in before.events) == ((m + 15) // 16) * k * n
+    assert sum(e[0] == "load" for e in after.events) == k * n
+    first_dma = next(i for i, e in enumerate(after.events) if e[:2] == ("rocc", 1))
+    assert all(e[0] != "store" for e in after.events[first_dma:])
+    assert {e[1] for e in after.events if e[0] == "rocc"} <= {0, 1, 2, 3, 4, 6, 14}
+
+
+@pytest.mark.parametrize("shape,attrs,transpose", [
+    ((7, 17, 31), None, True),
+    ((17, 16, 32), None, False),
+    ((17, 16, 17), {"output_dtype": "i8"}, True),
+    ((0, 17, 31), None, True),
+    ((17, 0, 31), None, True),
+])
+def test_unsupported_routes_keep_exact_original_program(tmp_path, monkeypatch, shape, attrs, transpose):
+    changed, _ = candidate(tmp_path, monkeypatch)
+    assert run((BASELINE / "contraction.py").read_text(), shape, attrs, transpose).events == run(
+        changed, shape, attrs, transpose).events
+
+
+def test_workspace_or_unknown_effect_refuses_without_emission():
+    spec = importlib.util.spec_from_file_location("pack_helper", Path(__file__).parents[2] /
+                                                "merlin-support/backend/gemmini_v26_pack_hoist.py")
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+    for dims, attrs, kw in [
+        ((32, 1024, 65), {}, {}),
+        ((32, 16, 32), {"bias": "b"}, {}),
+        ((32, 16, 32), {}, {"resident": {}}),
+        ((32, 16, 32), {}, {"immutable_rhs": False}),
+        ((True, 16, 32), {}, {}),
+    ]:
+        b = Concrete()
+        options = dict(transpose_rhs=True, immutable_rhs=True)
+        options.update(kw)
+        assert helper.try_pack_rhs(b, 0x400000, *dims, attrs, **options) is None
+        assert not b.events
+
+
+@pytest.mark.parametrize("rows,cols", [(1, 1), (1, 17), (19, 1), (7, 31), (16, 16)])
+def test_shared_transpose_complete_bijection(rows, cols):
+    b = Concrete()
+    emit_dense_transpose(b, 0x400000, 0x500000, rows, cols, max_elements=rows * cols)
+    assert len(b.memory) == rows * cols
+    for r in range(rows):
+        for c in range(cols):
+            assert b.memory[0x500000 + c * rows + r] == b.byte(0x400000 + r * cols + c)
+
+
+@pytest.mark.parametrize("rows,cols,bound,same", [(True, 3, 10, False), (0, 3, 10, False),
+    (3, 4, 11, False), (3, 4, 12, True), (3, 4, True, False)])
+def test_shared_invalid_layout_refuses_before_emission(rows, cols, bound, same):
+    b = Concrete()
+    with pytest.raises(ValueError):
+        emit_dense_transpose(b, 0x400000, 0x400000 if same else 0x500000,
+                             rows, cols, max_elements=bound)
+    assert not b.events
+
+
+def test_composition_preserves_other_edits_and_refuses_second_application(tmp_path):
+    path = tmp_path / "contraction.py"
+    path.write_text((BASELINE / "contraction.py").read_text() + "\n# independent schedule\n")
+    P.apply_to_copy(tmp_path)
+    assert path.read_text().endswith("# independent schedule\n")
+    with pytest.raises(ValueError, match="anchor"):
+        P.apply_to_copy(tmp_path)

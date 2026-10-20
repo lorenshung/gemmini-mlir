@@ -1,0 +1,56 @@
+{
+  "schema": "phase2.retained_public_evidence_pointer.v1",
+  "origin_task": "phase2-dev-capsules-20261019",
+  "artifact_base_relative_to_task": "out/artifacts/verification/development-sources",
+  "status": "Pointers only; original ignored artifacts remain in place. No copied receipt or authority.",
+  "hash_status": "Previously sealed pins, not reopened as a new qualification during draft preservation.",
+  "records": [
+    {
+      "path": "model-scale-public-packet-v1/delivery.json",
+      "sha256": "3b78af5519f1dd6bbfb9cb341b32664f950e32af8efa692c1dcd6b9e208fd649",
+      "scope": "Custody index for public model-scale declaration packet; not admission."
+    },
+    {
+      "path": "model-scale-public-packet-v1/packet.json",
+      "sha256": "f4bf115fb9be4cc1dbecffe577dac51b706fe6226d3395b7b51bd6e0f9371ea2",
+      "scope": "17 existing declarations:13 objectives and4 guards; original roles retained."
+    },
+    {
+      "path": "model-scale-public-packet-v1/all243-overlay.json",
+      "sha256": "abd1e6dedffb3a3fae63281142138702793c6bc913ea42633edba5fabe48dc1e",
+      "scope": "All243 rows retained; additive status overlay only."
+    },
+    {
+      "path": "model-scale-public-packet-v1/all90-unchanged.json",
+      "sha256": "0cedb403db508671061bce64ef91baf2e694f85ab32e6d75edc990fc924a4ba3",
+      "scope": "All90 requirements retained byte-exact."
+    },
+    {
+      "path": "model-scale-public-packet-v1/linked-partition-contract.json",
+      "sha256": "777e3d2a98a9345859823edafa487d27b7768c9de28d304d81c2c74e983037f1",
+      "scope": "Disabled proposal; no large verification protocol issued."
+    },
+    {
+      "path": "model-scale2-fresh-capture-v1/capture/report.json",
+      "sha256": "7e1a02a6a6084ba7ea986df738d55c2c9ff8755843f0ecfd9e8cbffff2d6798f",
+      "scope": "Fresh source2 capture and independent replay;8192 exact values, not target admission."
+    },
+    {
+      "path": "model-scale2-original-target-v1/execution/report.json",
+      "sha256": "07c2d9343b7937446822fc7d9c031578261fe585dd428f4129d2fda8acee187a",
+      "scope": "Original early publication eligibility refusal; no compiler/native/trace/writer issued."
+    },
+    {
+      "path": "model-scale2-public-signature-probe-v1/report.json",
+      "sha256": "ead304829462f5a7075efb16d2827a182784a3647456126b5115a753fffb8099",
+      "scope": "Public-side writer/signature parsers pass; does not establish private-match cause."
+    }
+  ],
+  "reproduction": {
+    "capture_operator_relative_to_task": ".tmp/capture-model-scale2-inline-v1.py",
+    "capture_operator_sha256": "6ed1792f6779a1fca7da22e15dcaeb7f4edcece07955f8fee0fa5ce1b96b8068",
+    "capture_plan_relative_to_artifact_base": "model-scale2-fresh-capture-v1/plan.json",
+    "capture_plan_sha256": "715e64b15f1775229910b906c1f4d5d5fafe13ada5f8f92f3ff60d5e4c3f3b32",
+    "instructions": "Retain original purpose, plan, source/runtime pins and external resource supervisor. Inspect retained report/plan for original invocation. A new authorized purpose and live original gates are required before any rerun; these records are not an executable admission grant."
+  }
+}

@@ -1,0 +1,41 @@
+"""Opt-in bounded immutable RHS transpose preparation for the V26 emitter.
+
+This is a candidate adapter, not an effect owner or a selected source grant.
+No device command or numeric/readout field changes. The original complete
+source/host-write/ELF/native/packet owner must still admit the resulting code.
+"""
+
+from merlin.llvmlower.dense_layout_loop import emit_dense_transpose
+
+# Explicit compiler policy workspace budget, not a selected SRAM capacity.
+MAX_PACK_BYTES = 65536
+
+
+def try_pack_rhs(b, w, m, k, n, attrs, *, transpose_rhs=False, resident=None,
+                 immutable_rhs=False):
+    """Return a fresh dense RHS pointer, or None without emitting anything.
+
+    Pure raw-i32 contractions only. Across two or more M tiles the original
+    lowering repeats the same byte transpose; the caller explicitly supplies
+    the immutable-input lifetime. No cross-operation cache survives this call.
+    """
+    if (
+        immutable_rhs is not True
+        or transpose_rhs is not True
+        or resident is not None
+        or any(type(v) is not int or v <= 0 for v in (m, k, n))
+        or m <= 16
+        or k * n > MAX_PACK_BYTES
+        or max(m * k, m * n, n * 4) >= 1 << 31
+        or not isinstance(attrs, dict)
+        or set(attrs) - {"epilogue", "output_dtype"}
+        or attrs.get("epilogue", []) != []
+        or attrs.get("output_dtype", "i32") != "i32"
+    ):
+        return None
+    packed = b.alloc(k * n, "i8")
+    emit_dense_transpose(b, w, packed, n, k, max_elements=MAX_PACK_BYTES)
+    # Preserve the original host-layout -> DMA visibility boundary. All
+    # original per-tile and kernel-completion fences are retained as well.
+    b.fence()
+    return packed
