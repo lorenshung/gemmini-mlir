@@ -1,8 +1,8 @@
-"""Preserve original source ordinals while delegating pure tensor DCE to Merlin."""
+"""Preserve original source ordinals while using the pinned pure tensor DCE helper."""
 
 
 def pure_tensor_dce(function):
-    from merlin.llvmlower.entry_weight_projection import _pure_dce
+    from .._vendor.pure_tensor_dce import _pure_dce
     # These frontend value operations currently parse as unregistered xDSL
     # ops, so the shared effect query cannot see their pure Q/DQ semantics.
     qdq = {'quant_ext.quantize_per_tensor', 'quant_ext.dequantize_per_tensor',
