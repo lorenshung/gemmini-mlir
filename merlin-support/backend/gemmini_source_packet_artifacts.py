@@ -102,9 +102,12 @@ def check_direct_execution_packets(
     entry_symbol,
 ):
     """Use the exact typed direct-source binding; never invent a global plan."""
+    from gemmini_load_streams import SelectedLoadStreams
     from merlin.llvmlower.direct_source_contraction import (
         bind_direct_source_contraction,
     )
+
+    load_streams = SelectedLoadStreams(selected)
 
     contraction = Contraction(
         **bind_direct_source_contraction(source, command_buffer, proof)
@@ -123,6 +126,7 @@ def check_direct_execution_packets(
         contractions=(contraction,),
         abi=abi,
         command_buffer=command_buffer,
+        load_streams=load_streams,
     )
     # Complete products/readouts are established first. The same full trace
     # must additionally veto host answer stores during the one real call.
@@ -160,6 +164,7 @@ def check_direct_execution_packets(
         ],
     )
     invocation_record.verify(Path(invocation))
+    report["selected_load_streams"] = load_streams.record()
     return report
 
 
@@ -174,6 +179,7 @@ def _check_bound_execution_packets(
     contractions,
     abi,
     command_buffer,
+    load_streams=None,
 ):
     declaration = invocation_record.verify(Path(invocation))
     if declaration["argv"] != expected_trace_argv:
@@ -317,10 +323,18 @@ def _check_bound_execution_packets(
     def load(command):
         raw, decoded = command["rs1"]["raw"], command["decoded"]
         if (
-            decoded["state_id"] != 0
+            (
+                decoded["state_id"] != 0
+                if load_streams is None
+                else decoded["state_id"] not in load_streams.states
+            )
             or decoded["scale_bits"] != 0x3F800000
             or value("ConfigMvinRs1", "shrink", raw) != 0
-            or value("ConfigMvinRs1", "pixel_repeats", raw) != 0
+            or (
+                value("ConfigMvinRs1", "pixel_repeats", raw) != 0
+                if load_streams is None
+                else value("ConfigMvinRs1", "pixel_repeats", raw) not in (0, 1)
+            )
             or value("ConfigMvinRs1", "stride", raw) != geometry["array_cols"]
         ):
             raise ValueError(
@@ -347,6 +361,7 @@ def _check_bound_execution_packets(
         compute_shape=lambda raw: shape("ComputeRs", raw),
         preload_shape=lambda raw: shape("PreloadRs", raw),
         load_configuration=load,
+        load_streams=None if load_streams is None else load_streams.ports,
     )
     invocation_record.verify(Path(invocation))
     return report

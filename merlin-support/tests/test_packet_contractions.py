@@ -90,7 +90,9 @@ def stream(k=3, *, reuse=False):
     return result
 
 
-def check(packet, commands, *, k=3, zero=lambda a, w: 4000 <= a < 4008):
+def check(
+    packet, commands, *, k=3, zero=lambda a, w: 4000 <= a < 4008, load_streams=None
+):
     def memory(address, width):
         for start, count, name, element in (
             (1000, 3 * k, "A", 1),
@@ -123,6 +125,7 @@ def check(packet, commands, *, k=3, zero=lambda a, w: 4000 <= a < 4008):
         compute_shape=lambda raw: (raw >> 16, raw >> 8 & 255),
         preload_shape=lambda raw: (raw >> 16, raw >> 8 & 255),
         load_configuration=lambda row: None,
+        load_streams=load_streams,
     )
 
 
@@ -201,3 +204,68 @@ def test_effect_and_required_work_mutations_refuse(packet, mutation):
 def test_nonzero_or_unowned_initialization_refuses(packet):
     with pytest.raises(ValueError, match="independently proven zero"):
         check(packet, stream(), zero=lambda address, width: False)
+
+
+def banked_stream():
+    commands = stream()
+    for row in commands:
+        if row["class"] == "CONFIG_LD":
+            row["decoded"]["state_id"] = {0: 2, 3: 0, 2: 1}[row["decoded"]["stride"]]
+        elif row["class"] == "MVIN":
+            row["class"] = (
+                "MVIN3"
+                if row["rs1"]["raw"] == 4000
+                else "MVIN2"
+                if row["rs1"]["raw"] >= 2000
+                else "MVIN"
+            )
+    # Configure every state before any load: scalar 'last stride' would be 2,
+    # which is wrong for A (stride3) and zero D (stride0).
+    configurations = [row for row in commands if row["class"] == "CONFIG_LD"]
+    return [
+        commands[0],
+        *configurations[:3],
+        *[row for row in commands[1:] if row["class"] != "CONFIG_LD"],
+    ]
+
+
+def test_selected_load_streams_keep_independent_a_b_and_zero_strides(packet):
+    report = check(
+        packet, banked_stream(), load_streams={"MVIN": 0, "MVIN2": 1, "MVIN3": 2}
+    )
+    assert report["products"] == 18 and report["raw_i32_values"] == 6
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "unconfigured",
+        "foreign_state",
+        "wrong_mapping",
+        "overwrite_a",
+        "duplicate",
+        "bool",
+    ],
+)
+def test_selected_stream_state_or_mapping_mutations_refuse(packet, fault):
+    commands = banked_stream()
+    mapping = {"MVIN": 0, "MVIN2": 1, "MVIN3": 2}
+    if fault == "unconfigured":
+        del commands[2]
+    elif fault == "foreign_state":
+        commands[1]["decoded"]["state_id"] = 3
+    elif fault == "wrong_mapping":
+        mapping["MVIN"], mapping["MVIN2"] = 1, 0
+    elif fault == "overwrite_a":
+        commands.insert(4, command("CONFIG_LD", stride=2, state_id=0))
+    elif fault == "duplicate":
+        mapping["MVIN3"] = 0
+    else:
+        mapping["MVIN3"] = True
+    with pytest.raises(ValueError):
+        check(packet, commands, load_streams=mapping)
+
+
+def test_legacy_default_does_not_admit_additional_load_opcodes(packet):
+    with pytest.raises(ValueError):
+        check(packet, banked_stream())

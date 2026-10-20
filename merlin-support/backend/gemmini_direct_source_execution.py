@@ -42,6 +42,7 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
         for name in (
             "gemmini_direct_source_execution",
             "gemmini_primitive_host_scope",
+            "gemmini_load_streams",
             "merlin.llvmlower.direct_source_contraction",
             "merlin.targetgen.native_pointer_source_binding",
             "merlin.targetgen.native_pointer_source_execution",

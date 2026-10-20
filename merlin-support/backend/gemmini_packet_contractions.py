@@ -41,6 +41,7 @@ def check_packets(
     compute_shape,
     preload_shape,
     load_configuration,
+    load_streams=None,
 ):
     """Check a complete observed stream under original source/effect callbacks.
 
@@ -66,6 +67,19 @@ def check_packets(
     if sum(c.m * c.n for c in contractions) > 2_000_000:
         raise ValueError("packet checker exceeds its independent output-cell budget")
     pairs = {(c.lhs, c.rhs): c for c in contractions}
+    if load_streams is not None and (
+        type(load_streams) is not dict
+        or not load_streams
+        or any(
+            type(k) is not str or type(v) is not int or v < 0
+            for k, v in load_streams.items()
+        )
+        or len(set(load_streams.values())) != len(load_streams)
+    ):
+        raise ValueError(
+            "packet checker needs an explicit unique selected load-stream mapping"
+        )
+    load_states = {}
     spad, acc, outputs = {}, {}, set()
     pending, stationary, ex, load, store = None, None, False, None, None
     loads = computes = products = fences_with_pending = 0
@@ -108,7 +122,15 @@ def check_packets(
             ex = True
         elif kind == "CONFIG_LD":
             load_configuration(command)
-            load = fields["stride"]
+            if load_streams is None:
+                load = fields["stride"]
+            else:
+                state_id = fields.get("state_id")
+                if type(state_id) is not int or state_id not in load_streams.values():
+                    raise ValueError(
+                        "actual load configuration selects an unproved stream state"
+                    )
+                load_states[state_id] = fields["stride"]
         elif kind == "CONFIG_ST":
             forbidden = (
                 "acc_act",
@@ -130,7 +152,13 @@ def check_packets(
                     "actual readout has unsupported activation/scale/pooling effects"
                 )
             store = fields["out_stride_bytes"]
-        elif kind == "MVIN":
+        elif kind == "MVIN" or load_streams is not None and kind in load_streams:
+            if load_streams is not None:
+                if kind not in load_streams or load_streams[kind] not in load_states:
+                    raise ValueError(
+                        "actual load stream lacks its own selected configuration"
+                    )
+                load = load_states[load_streams[kind]]
             if load is None:
                 raise ValueError("actual load lacks complete selected configuration")
             rows, cols = fields["rows"], fields["cols"]

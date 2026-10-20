@@ -64,6 +64,15 @@ entry to evade the host-write check. Unsupported graphs/layouts/initialization
 or incomplete traces refuse. Source-semantic metadata preparation alone does
 not establish that any direct program passed these checks.
 
+The direct checker explicitly derives selected `MVIN`/`MVIN2`/`MVIN3` load
+states from the original operand observer. Each stream retains its own configured
+stride; an unconfigured stream refuses. Selected FIRRTL cutpoints also check
+that raw pixel-repeat encodings zero and one both normalize to one pixel and
+zero remaining repetitions. Identity scale, unshrunk rows and the selected
+block stride remain required. The whole-program checker's default state-zero
+interpretation is unchanged. This functional correspondence grants no DMA
+timing, overlap or physical-transaction claim.
+
 `gemmini_generated_source_native.GeneratedSourceNativeCorrespondenceOwner.bind`
 accepts only the exact live generated-source capability and original
 `CountHardwareCorrespondenceOwner` capability. It keeps composite software and
