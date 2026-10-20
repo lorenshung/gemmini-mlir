@@ -131,6 +131,11 @@ def observe_current_source(
                 else {}
             ),
             **(
+                {"accumulator_overwrite": state["overwrite"]}
+                if state.get("overwrite") is not None
+                else {}
+            ),
+            **(
                 {"source_memory_effects_protocol": state["memory_effects_protocol"]}
                 if state.get("memory_effects_protocol") is not None
                 else {}

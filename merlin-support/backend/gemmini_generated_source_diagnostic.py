@@ -65,6 +65,7 @@ class GeneratedSourceDiagnosticIssuer:
             "source_binding_protocol",
             "execution_contract",
             "source_memory_effects_protocol",
+            "source_accumulator_effects_protocol",
         }
         if not _FIELDS <= set(inputs) or set(inputs) - _FIELDS - optional:
             raise ValueError(
@@ -96,6 +97,15 @@ class GeneratedSourceDiagnosticIssuer:
             raise ValueError(
                 "direct source binding requires its explicit original execution contract"
             )
+        overwrite_protocol = inputs.get("source_accumulator_effects_protocol")
+        if overwrite_protocol is not None:
+            from gemmini_accumulator_overwrite import require_protocol
+
+            require_protocol(overwrite_protocol)
+            if binding_protocol == "whole_program":
+                raise ValueError(
+                    "accumulator overwrite V2 requires explicit direct source binding"
+                )
         from gemmini_source_execution import SourceExecutionOwner
 
         owner_type = SourceExecutionOwner
@@ -162,6 +172,11 @@ class GeneratedSourceDiagnosticIssuer:
                 )
             },
         )
+        overwrite = None
+        if overwrite_protocol is not None:
+            from gemmini_accumulator_overwrite import SelectedAccumulatorOverwrite
+
+            overwrite = SelectedAccumulatorOverwrite(selected, arithmetic)
         memory_effects = None
         if memory_effects_protocol is not None:
             from gemmini_whole_program_memory_effects import WholeProgramMemoryEffects
@@ -215,6 +230,10 @@ class GeneratedSourceDiagnosticIssuer:
                     )
                 }
             )
+        if overwrite is not None:
+            sources["gemmini_accumulator_overwrite"] = _pin(
+                module_source_path("gemmini_accumulator_overwrite")
+            )
         source_inputs, rule, proof = (
             selected.report()["selected_inputs"],
             arithmetic.source_rule(),
@@ -236,7 +255,10 @@ class GeneratedSourceDiagnosticIssuer:
                 ]
             )
             if binding_protocol == "whole_program"
-            else _digest([runtime, _pin(paths["execution_contract"])]),
+            else _digest(
+                [runtime, _pin(paths["execution_contract"])]
+                + ([] if overwrite is None else [overwrite.identity])
+            ),
             library.contract.sha256,
         )
         state = {
@@ -265,6 +287,9 @@ class GeneratedSourceDiagnosticIssuer:
             "memory_effects_identity": None
             if memory_effects is None
             else memory_effects.identity,
+            "overwrite": overwrite,
+            "overwrite_protocol": overwrite_protocol,
+            "overwrite_identity": None if overwrite is None else overwrite.identity,
             "owner_type": owner_type,
             "owner_init": owner_type.__init__,
             "owner_init_code": owner_type.__init__.__code__,
@@ -310,6 +335,16 @@ class GeneratedSourceDiagnosticIssuer:
                 asdict(binding),
                 binding_protocol,
             ]
+            + (
+                []
+                if overwrite is None
+                else [
+                    {
+                        "overwrite_protocol": overwrite_protocol,
+                        "overwrite_identity": overwrite.identity,
+                    }
+                ]
+            )
             + (
                 []
                 if memory_effects_protocol is None
@@ -369,6 +404,16 @@ class GeneratedSourceDiagnosticIssuer:
                     asdict(state["binding"]),
                     state["binding_protocol"],
                 ]
+                + (
+                    []
+                    if state["overwrite"] is None
+                    else [
+                        {
+                            "overwrite_protocol": state["overwrite_protocol"],
+                            "overwrite_identity": state["overwrite_identity"],
+                        }
+                    ]
+                )
                 + (
                     []
                     if state["memory_effects_protocol"] is None
@@ -436,6 +481,27 @@ class GeneratedSourceDiagnosticIssuer:
                 or state["memory_effects"].identity != state["memory_effects_identity"]
             ):
                 raise ValueError("original source memory-effects owner changed")
+        if state["overwrite_protocol"] != state["inputs"].get(
+            "source_accumulator_effects_protocol"
+        ):
+            raise ValueError("original overwrite selection changed")
+        if state["overwrite"] is None:
+            if (
+                state["overwrite_protocol"] is not None
+                or state["overwrite_identity"] is not None
+            ):
+                raise ValueError("unselected accumulator effect appeared")
+        else:
+            from gemmini_accumulator_overwrite import SelectedAccumulatorOverwrite
+
+            effect = state["overwrite"]
+            if (
+                type(effect) is not SelectedAccumulatorOverwrite
+                or effect.selected is not state["selected"]
+                or effect.arithmetic is not state["arithmetic"]
+                or effect.identity != state["overwrite_identity"]
+            ):
+                raise ValueError("original accumulator overwrite owner changed")
         return state
 
     @property
@@ -490,6 +556,9 @@ class GeneratedSourceDiagnosticIssuer:
             "timing_authority": "NONE",
             "promotion_authority": "NONE",
         }
+        if state["overwrite"] is not None:
+            record["source_accumulator_effects_protocol"] = state["overwrite_protocol"]
+            record["source_accumulator_effects"] = state["overwrite"].record()
         if state["memory_effects_protocol"] is not None:
             record["source_memory_effects_protocol"] = state["memory_effects_protocol"]
             record["source_memory_effects"] = state["memory_effects"].record()

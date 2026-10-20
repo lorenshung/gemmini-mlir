@@ -26,6 +26,21 @@ def original_factory(inputs, *, sources=()):
             "gemmini_source_packet_artifacts",
             "merlin.llvmlower.pointer_source_contractions",
         )
+    overwrite = inputs.get("source_accumulator_effects_protocol")
+    if overwrite is not None:
+        from gemmini_accumulator_overwrite import require_protocol
+
+        require_protocol(overwrite)
+        if inputs.get("source_binding_protocol", "whole_program") == "whole_program":
+            raise ValueError(
+                "accumulator overwrite V2 requires explicit direct source binding"
+            )
+        names += (
+            "gemmini_accumulator_overwrite",
+            "gemmini_direct_source_execution",
+            "gemmini_source_packet_artifacts",
+            "gemmini_packet_contractions",
+        )
     protocol = inputs.get("source_memory_effects_protocol")
     if protocol is not None:
         from gemmini_whole_program_memory_effects import require_protocol

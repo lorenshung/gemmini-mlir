@@ -29,17 +29,32 @@ from merlin.targetgen.golden_store import load_golden
 
 PROTOCOL = "merlin.native_pointer_source.v1"
 _OWNER_SELECTIONS = WeakKeyDictionary()
+_OVERWRITE_SELECTIONS = WeakKeyDictionary()
 
 
 class DirectSourceExecutionOwner(SourceExecutionOwner):
-    def __init__(self, *, execution_contract, **kwargs):
+    def __init__(self, *, execution_contract, accumulator_overwrite=None, **kwargs):
         if type(self) not in _OWNER_TYPES:
             raise TypeError("direct source proof requires its exact original owner")
+        if accumulator_overwrite is not None:
+            from gemmini_accumulator_overwrite import SelectedAccumulatorOverwrite
+
+            if (
+                type(accumulator_overwrite) is not SelectedAccumulatorOverwrite
+                or accumulator_overwrite.selected is not kwargs.get("selected")
+                or accumulator_overwrite.arithmetic is not kwargs.get("arithmetic")
+            ):
+                raise TypeError(
+                    "direct overwrite requires original same-selected arithmetic owner"
+                )
+            accumulator_overwrite.revalidate()
+        _OVERWRITE_SELECTIONS[self] = accumulator_overwrite
         _OWNER_SELECTIONS[self] = type(self)
         try:
             self._initialize(execution_contract, kwargs)
         except BaseException:
             _OWNER_SELECTIONS.pop(self, None)
+            _OVERWRITE_SELECTIONS.pop(self, None)
             raise
 
     def _initialize(self, execution_contract, kwargs):
@@ -69,15 +84,23 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             self._pins["merlin.llvmlower.pointer_source_contractions"] = _pin(
                 module_source_path("merlin.llvmlower.pointer_source_contractions")
             )
+        if _OVERWRITE_SELECTIONS[self] is not None:
+            self._pins["gemmini_accumulator_overwrite"] = _pin(
+                module_source_path("gemmini_accumulator_overwrite")
+            )
         self._identity = self._digest()
         self.revalidate()
 
     @property
     def identity(self):
         self._require_original_type()
+        version = "v1" if _OVERWRITE_SELECTIONS.get(self) is None else "v2"
         if type(self) is PointerContractionsExecutionOwner:
-            return "gemmini.current_pointer_contractions_execution.v1:" + self._identity
-        return "gemmini.current_direct_source_execution.v1:" + self._identity
+            return (
+                f"gemmini.current_pointer_contractions_execution.{version}:"
+                + self._identity
+            )
+        return f"gemmini.current_direct_source_execution.{version}:" + self._identity
 
     def revalidate(self):
         self._require_original_type()
@@ -97,6 +120,16 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
                 or function.__code__ is not code
             ):
                 raise ValueError("direct source proof lost its original callback")
+        effect = _OVERWRITE_SELECTIONS.get(self)
+        if effect is not None:
+            effect.revalidate()
+            if (
+                effect.selected is not self._selected
+                or effect.arithmetic is not self._arithmetic
+            ):
+                raise ValueError(
+                    "direct overwrite changed original selected arithmetic"
+                )
         _BASE_REVALIDATE(self)
 
     def _require_original_type(self):
@@ -121,7 +154,14 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             else PROTOCOL
         )
         return hashlib.sha256(
-            json.dumps([_BASE_DIGEST(self), protocol]).encode()
+            json.dumps(
+                [_BASE_DIGEST(self), protocol]
+                + (
+                    []
+                    if _OVERWRITE_SELECTIONS.get(self) is None
+                    else [_OVERWRITE_SELECTIONS[self].identity]
+                )
+            ).encode()
         ).hexdigest()
 
     def verify_source_execution(self, source_path, proof, capsule_dir):
@@ -290,6 +330,7 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             ],
             entry_symbol=selection["entry_symbol"],
             zero_fill=SelectedAccumulatorZeroFill(self._selected, self._arithmetic),
+            accumulator_overwrite=_OVERWRITE_SELECTIONS[self],
             **(
                 {"source_binding_protocol": POINTER_CONTRACTIONS_PROTOCOL}
                 if multiple

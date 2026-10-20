@@ -63,10 +63,9 @@ def _cpu_writes(log, custom_opcode):
             # clobbers of adjacent linked objects (for example ABI redzones next
             # to a separately initialized private zero buffer).
             width = rv64_scalar_store_width(word)
-            if (
-                len(parts[i + 2]) != 2 + width * 2
-                or not 0 <= int(parts[i + 2], 16) < 1 << (width * 8)
-            ):
+            if len(parts[i + 2]) != 2 + width * 2 or not 0 <= int(
+                parts[i + 2], 16
+            ) < 1 << (width * 8):
                 raise ValueError(
                     "host store lacks its exact complete committed memory width"
                 )
@@ -140,6 +139,7 @@ def check_direct_execution_packets(
     expected_trace_argv,
     entry_symbol,
     zero_fill=None,
+    accumulator_overwrite=None,
     source_binding_protocol="merlin.native_pointer_source.v1",
 ):
     """Use the exact typed direct-source binding; never invent a global plan."""
@@ -149,6 +149,17 @@ def check_direct_execution_packets(
     )
 
     load_streams = SelectedLoadStreams(selected)
+    if accumulator_overwrite is not None:
+        from gemmini_accumulator_overwrite import SelectedAccumulatorOverwrite
+
+        if (
+            type(accumulator_overwrite) is not SelectedAccumulatorOverwrite
+            or accumulator_overwrite.selected is not selected
+        ):
+            raise TypeError(
+                "direct overwrite requires its original live selected owner"
+            )
+        accumulator_overwrite.revalidate()
     if zero_fill is not None:
         from gemmini_zero_fill import SelectedAccumulatorZeroFill
 
@@ -194,6 +205,7 @@ def check_direct_execution_packets(
         command_buffer=command_buffer,
         load_streams=load_streams,
         zero_fill=zero_fill,
+        accumulator_overwrite=accumulator_overwrite,
     )
     # Complete products/readouts are established first. The same full trace
     # must additionally veto host answer stores during the one real call.
@@ -252,6 +264,7 @@ def _check_bound_execution_packets(
     command_buffer,
     load_streams=None,
     zero_fill=None,
+    accumulator_overwrite=None,
 ):
     declaration = invocation_record.verify(Path(invocation))
     if declaration["argv"] != expected_trace_argv:
@@ -444,6 +457,7 @@ def _check_bound_execution_packets(
         load_configuration=load,
         load_streams=None if load_streams is None else load_streams.ports,
         zero_fill=None if zero_fill is None else zero_fill.accepts,
+        accumulator_overwrite=accumulator_overwrite,
     )
     invocation_record.verify(Path(invocation))
     if load_streams is not None:

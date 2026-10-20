@@ -43,6 +43,7 @@ def check_packets(
     load_configuration,
     load_streams=None,
     zero_fill=None,
+    accumulator_overwrite=None,
 ):
     """Check a complete observed stream under original source/effect callbacks.
 
@@ -51,6 +52,14 @@ def check_packets(
     linked immutable zero element. Missing values or unsupported effects refuse.
     The callbacks and complete trace/source custody belong to the original owner.
     """
+    if accumulator_overwrite is not None:
+        from gemmini_accumulator_overwrite import SelectedAccumulatorOverwrite
+
+        if type(accumulator_overwrite) is not SelectedAccumulatorOverwrite:
+            raise TypeError(
+                "packet overwrite requires its original live selected owner"
+            )
+        accumulator_overwrite.revalidate()
     if (
         not contractions
         or len(contractions) > 1024
@@ -267,20 +276,31 @@ def check_packets(
                             "actual product cells differ from complete source matrix geometry"
                         )
                     location = cb + row, col
-                    if location not in acc:
-                        raise ValueError("compute writes an uninitialized accumulator")
-                    previous = acc[location]
-                    expected = None if k0 == 0 else (source.ordinal, m, n, k0)
-                    if previous != expected or (
-                        previous is not None and not continuation
-                    ):
-                        raise ValueError(
-                            "actual continuation duplicates/omits K or changes accumulator ownership"
-                        )
-                    if not continuation and k0 != 0:
-                        raise ValueError(
-                            "actual nonaccumulating write loses a reduction prefix"
-                        )
+                    # V2 is a write effect, not an invented initialized read.
+                    # Only the exact first source panel may replace the cell.
+                    overwrite = accumulator_overwrite is not None and not continuation
+                    if overwrite:
+                        if k0 != 0:
+                            raise ValueError(
+                                "actual nonaccumulating write loses a reduction prefix"
+                            )
+                    else:
+                        if location not in acc:
+                            raise ValueError(
+                                "compute writes an uninitialized accumulator"
+                            )
+                        previous = acc[location]
+                        expected = None if k0 == 0 else (source.ordinal, m, n, k0)
+                        if previous != expected or (
+                            previous is not None and not continuation
+                        ):
+                            raise ValueError(
+                                "actual continuation duplicates/omits K or changes accumulator ownership"
+                            )
+                        if not continuation and k0 != 0:
+                            raise ValueError(
+                                "actual nonaccumulating write loses a reduction prefix"
+                            )
                     acc[location] = (source.ordinal, m, n, k0 + ak)
                     products += ak
             computes += 1
@@ -329,7 +349,14 @@ def check_packets(
         raise ValueError(
             "actual accelerator work/outputs do not cover every required source product"
         )
+    if accumulator_overwrite is not None:
+        accumulator_overwrite.revalidate()
     return {
+        **(
+            {"accumulator_effects": accumulator_overwrite.record()}
+            if accumulator_overwrite is not None
+            else {}
+        ),
         "status": "checked_actual_source_product_coverage",
         "computes": computes,
         "products": products,
