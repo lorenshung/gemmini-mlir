@@ -1,0 +1,94 @@
+{
+  "schema": "gemmini.public_integer_fixture.v1",
+  "identity": "public544_direct_raw_i32",
+  "source_role": "public_synthetic_development_fixture_not_validation",
+  "original_capsule_metadata_sha256": "7466fa52caf3f867242d21a81b70b2681480b4cfc2d70922a982bb41b3bf6594",
+  "original_source_sha256": "23114f2413229dcaaa03f0142562c304d92b7c57a4c42977592d459c777f968c",
+  "typed_source_sha256": "bd7413654993b483098648b8c02f4225029d613b2abe81be6bca6cd1cfbdbe39",
+  "loader": "capsule.pytorch.py",
+  "loader_entry": "get_model_and_inputs",
+  "typed_source": "capsule.interface.mlir",
+  "weights": "capsule.weights.safetensors",
+  "weights_manifest": "capsule.weights.safetensors.manifest.json",
+  "reference": "independent-reference.npz",
+  "inputs": [
+    {
+      "ordinal": 0,
+      "name": "I0",
+      "shape": [
+        17,
+        16
+      ],
+      "dtype": "i8",
+      "reference_member": "input_0.npy",
+      "npy_sha256": "dd76cedc96d3a401785f3722943d67395381e4ad93c7472da1d71ec18ae7e4f9"
+    },
+    {
+      "ordinal": 1,
+      "name": "I1",
+      "shape": [
+        16,
+        32
+      ],
+      "dtype": "i8",
+      "reference_member": "input_1.npy",
+      "npy_sha256": "c32414c32535f73441a3a855e664db576f9f14e34377324018b02a983a54e57c"
+    }
+  ],
+  "outputs": [
+    {
+      "ordinal": 0,
+      "name": "Y0",
+      "shape": [
+        17,
+        32
+      ],
+      "dtype": "i32",
+      "comparison": "exact_int",
+      "reference_member": "output_0.npy",
+      "npy_sha256": "b33b3ddccb68e9d8053481485fffc2280468d8dbc576b5a166227ee8697bd77e"
+    }
+  ],
+  "arg_order": [
+    "I0",
+    "I1",
+    "Y0"
+  ],
+  "numeric_policy": {
+    "compare": "exact_int",
+    "dtype": "i32"
+  },
+  "arithmetic": {
+    "operands": "signed_i8",
+    "contractions": "exact_i32_source_results",
+    "intermediate_readout": "none_raw_i32",
+    "arbitrary_new_quantization_allowed": false
+  },
+  "required_algorithmic_products": 8704,
+  "boundary": {
+    "scope": "complete_source_call",
+    "includes": [
+      "packing",
+      "layouts",
+      "weight_transport",
+      "accelerator_transfers",
+      "command_issue",
+      "carried_state",
+      "all_live_outs"
+    ],
+    "timing": "NOT_MEASURED"
+  },
+  "qualification": {
+    "reconstructed_public_fixture": true,
+    "original_sealed_capture_or_admitted_capsule": false,
+    "V26_compilation": "NOT_RUN",
+    "V26_numerical_execution": "NOT_RUN",
+    "V26_source_realization": "NOT_QUALIFIED",
+    "V26_writer_admission": "NOT_ISSUED",
+    "fresh_host_capture_and_admission_required": true,
+    "formal_cohort": false
+  },
+  "limitations": [
+    "Small single-contraction engineering control; no broad-cohort or timing qualification."
+  ]
+}
