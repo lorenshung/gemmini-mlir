@@ -1,0 +1,9 @@
+--- a/contraction.py
++++ b/contraction.py
+@@ -144,0 +145,4 @@
++    # Raw readout state is invariant across every tile in this contraction.
++    # Other config families do not modify store state; retain all fences.
++    if dtype == 'i32':
++        _mvout_config(b, n * 4, 1.0, False)
+@@ -190 +193,0 @@
+-                _mvout_config(b, n * 4, 1.0, False)
