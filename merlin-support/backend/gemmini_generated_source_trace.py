@@ -130,7 +130,18 @@ def observe_current_source(
                 if state["binding_protocol"] != "whole_program"
                 else {}
             ),
+            **(
+                {"source_memory_effects_protocol": state["memory_effects_protocol"]}
+                if state.get("memory_effects_protocol") is not None
+                else {}
+            ),
         )
+        if state.get("memory_effects_protocol") is not None and (
+            owner._memory_effects_identity != state["memory_effects_identity"]
+        ):
+            raise ValueError(
+                "actual source owner changed selected memory-effects derivation"
+            )
         if time.monotonic() >= deadline:
             raise ValueError(
                 "generated source observation budget expired during original owner construction"

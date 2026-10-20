@@ -65,8 +65,18 @@ def check_execution_packets(
     nm,
     input_values,
     expected_trace_argv,
+    memory_effects=None,
 ):
     """Reopen an original completed trace, then reconstruct actual required work."""
+    loads = zeros = None
+    if memory_effects is not None:
+        from gemmini_whole_program_memory_effects import WholeProgramMemoryEffects
+
+        if type(memory_effects) is not WholeProgramMemoryEffects:
+            raise TypeError(
+                "whole-program packets require their original live memory-effects owner"
+            )
+        loads, zeros = memory_effects.packet_owners(selected)
     contractions = tuple(
         Contraction(**row)
         for row in bind_rank_two_contractions(source, command_buffer, proof)
@@ -75,7 +85,7 @@ def check_execution_packets(
         f"tensor_{i}": (row["tensor"], command_buffer["tensors"][row["tensor"]])
         for i, row in enumerate(command_buffer["kernel_abi"]["args"])
     }
-    return _check_bound_execution_packets(
+    report = _check_bound_execution_packets(
         selected=selected,
         elf=elf,
         invocation=invocation,
@@ -85,7 +95,16 @@ def check_execution_packets(
         contractions=contractions,
         abi=abi,
         command_buffer=command_buffer,
+        **(
+            {"load_streams": loads, "zero_fill": zeros}
+            if memory_effects is not None
+            else {}
+        ),
     )
+    if memory_effects is not None:
+        memory_effects.packet_owners(selected)
+        report["selected_source_memory_effects"] = memory_effects.record()
+    return report
 
 
 def check_direct_execution_packets(

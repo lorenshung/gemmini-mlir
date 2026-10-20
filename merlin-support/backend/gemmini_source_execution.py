@@ -37,10 +37,13 @@ COMMIT_ONLY_PROTOCOL = "gemmini.source_observation.v2"
 def source_trace_flags(protocol):
     """Explicit text transport; both versions retain every committed effect."""
     if type(protocol) is not str or protocol not in {
-        FULL_LOG_PROTOCOL, COMMIT_ONLY_PROTOCOL
+        FULL_LOG_PROTOCOL,
+        COMMIT_ONLY_PROTOCOL,
     }:
         raise ValueError("unknown original source observation protocol")
-    return ("-l", "--log-commits") if protocol == FULL_LOG_PROTOCOL else ("--log-commits",)
+    return (
+        ("-l", "--log-commits") if protocol == FULL_LOG_PROTOCOL else ("--log-commits",)
+    )
 
 
 class SourceExecutionOwner:
@@ -55,9 +58,21 @@ class SourceExecutionOwner:
         trace_invocation,
         nm,
         observation_protocol=FULL_LOG_PROTOCOL,
+        source_memory_effects_protocol=None,
     ):
+        if source_memory_effects_protocol is not None:
+            from gemmini_whole_program_memory_effects import require_protocol
+
+            require_protocol(source_memory_effects_protocol)
+            if type(self) is not SourceExecutionOwner:
+                raise TypeError(
+                    "whole-program memory effects require the original whole-program owner"
+                )
         self._observation_protocol = observation_protocol
         self._observation_flags = source_trace_flags(observation_protocol)
+        self._memory_effects_protocol = source_memory_effects_protocol
+        self._memory_effects = None
+        self._memory_effects_identity = None
         if (
             type(arithmetic) is not IntegerArithmeticOwner
             or type(selected) is not SelectedSchedulingTarget
@@ -98,14 +113,33 @@ class SourceExecutionOwner:
             / "experiments/shared_load_configuration/qualify.py"
         )
         self._pins["packet_framing_checker"] = _pin(checker)
+        if source_memory_effects_protocol is not None:
+            from gemmini_whole_program_memory_effects import WholeProgramMemoryEffects
+
+            self._memory_effects = WholeProgramMemoryEffects(selected, arithmetic)
+            self._memory_effects_identity = self._memory_effects.identity
+            self._pins["whole_program_memory_effects"] = _pin(
+                module_source_path("gemmini_whole_program_memory_effects")
+            )
         self._identity = self._digest()
         self.revalidate()
 
     def _digest(self):
         binding = [self._pins, self._arithmetic_identity, self._selected_inputs]
         if self._observation_protocol != FULL_LOG_PROTOCOL:
-            binding.append({"protocol": self._observation_protocol,
-                            "flags": self._observation_flags})
+            binding.append(
+                {
+                    "protocol": self._observation_protocol,
+                    "flags": self._observation_flags,
+                }
+            )
+        if getattr(self, "_memory_effects_protocol", None) is not None:
+            binding.append(
+                {
+                    "source_memory_effects_protocol": self._memory_effects_protocol,
+                    "owner_identity": self._memory_effects_identity,
+                }
+            )
         return hashlib.sha256(
             json.dumps(
                 binding,
@@ -116,11 +150,33 @@ class SourceExecutionOwner:
     @property
     def identity(self):
         version = "v1" if self._observation_protocol == FULL_LOG_PROTOCOL else "v2"
+        if self._memory_effects_protocol is not None:
+            version += ".memory_v1"
         return "gemmini.current_source_execution." + version + ":" + self._identity
 
     def revalidate(self):
         if source_trace_flags(self._observation_protocol) != self._observation_flags:
             raise ValueError("original source observation flags changed")
+        if self._memory_effects_protocol is None:
+            if (
+                self._memory_effects is not None
+                or self._memory_effects_identity is not None
+            ):
+                raise ValueError("unselected whole-program memory effects appeared")
+        else:
+            from gemmini_whole_program_memory_effects import (
+                WholeProgramMemoryEffects,
+                require_protocol,
+            )
+
+            require_protocol(self._memory_effects_protocol)
+            if type(self._memory_effects) is not WholeProgramMemoryEffects:
+                raise ValueError(
+                    "whole-program memory effects lost their original live owner"
+                )
+            self._memory_effects.packet_owners(self._selected)
+            if self._memory_effects.identity != self._memory_effects_identity:
+                raise ValueError("whole-program memory-effects selection changed")
         self._arithmetic.revalidate()
         self._selected.revalidate()
         if (
@@ -292,6 +348,11 @@ class SourceExecutionOwner:
                 *self._observation_flags,
                 str(elf),
             ],
+            **(
+                {"memory_effects": self._memory_effects}
+                if self._memory_effects_protocol is not None
+                else {}
+            ),
         )
         self.revalidate()
         result = {
@@ -313,4 +374,6 @@ class SourceExecutionOwner:
                 "protocol": self._observation_protocol,
                 "flags": list(self._observation_flags),
             }
+        if self._memory_effects_protocol is not None:
+            result["source_memory_effects"] = self._memory_effects.record()
         return result

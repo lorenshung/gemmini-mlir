@@ -63,6 +63,7 @@ class GeneratedSourceDiagnosticIssuer:
             "metadata_verification_protocol",
             "source_binding_protocol",
             "execution_contract",
+            "source_memory_effects_protocol",
         }
         if not _FIELDS <= set(inputs) or set(inputs) - _FIELDS - optional:
             raise ValueError(
@@ -75,6 +76,15 @@ class GeneratedSourceDiagnosticIssuer:
         binding_protocol = inputs.get("source_binding_protocol", "whole_program")
         if binding_protocol not in {"whole_program", "merlin.native_pointer_source.v1"}:
             raise ValueError("unknown generated-source binding protocol")
+        memory_effects_protocol = inputs.get("source_memory_effects_protocol")
+        if memory_effects_protocol is not None:
+            from gemmini_whole_program_memory_effects import require_protocol
+
+            require_protocol(memory_effects_protocol)
+            if binding_protocol != "whole_program":
+                raise ValueError(
+                    "selected source memory effects require whole_program binding"
+                )
         if (binding_protocol == "whole_program") != (
             "execution_contract" not in inputs
         ):
@@ -140,6 +150,11 @@ class GeneratedSourceDiagnosticIssuer:
                 )
             },
         )
+        memory_effects = None
+        if memory_effects_protocol is not None:
+            from gemmini_whole_program_memory_effects import WholeProgramMemoryEffects
+
+            memory_effects = WholeProgramMemoryEffects(selected, arithmetic)
         completion = StagedCompletionOwner(selected, source_root=paths["source_root"])
         runtime = {
             "spike": _pin(paths["runtime"] / "bin/spike"),
@@ -171,6 +186,18 @@ class GeneratedSourceDiagnosticIssuer:
                     )
                 }
             )
+        if memory_effects_protocol is not None:
+            sources.update(
+                {
+                    name: _pin(module_source_path(name))
+                    for name in (
+                        "gemmini_whole_program_memory_effects",
+                        "gemmini_load_streams",
+                        "gemmini_zero_fill",
+                        "gemmini_private_zero_storage",
+                    )
+                }
+            )
         source_inputs, rule, proof = (
             selected.report()["selected_inputs"],
             arithmetic.source_rule(),
@@ -180,7 +207,17 @@ class GeneratedSourceDiagnosticIssuer:
             source_inputs["facts"]["sha256"],
             _digest([source_inputs, proof["proof"]]),
             _digest([rule, arithmetic.record()]),
-            _digest(runtime)
+            _digest(
+                runtime
+                if memory_effects_protocol is None
+                else [
+                    runtime,
+                    {
+                        "source_memory_effects_protocol": memory_effects_protocol,
+                        "owner_identity": memory_effects.identity,
+                    },
+                ]
+            )
             if binding_protocol == "whole_program"
             else _digest([runtime, _pin(paths["execution_contract"])]),
             library.contract.sha256,
@@ -206,6 +243,11 @@ class GeneratedSourceDiagnosticIssuer:
             "trace": observe_current_source,
             "trace_code": observe_current_source.__code__,
             "binding_protocol": binding_protocol,
+            "memory_effects_protocol": memory_effects_protocol,
+            "memory_effects": memory_effects,
+            "memory_effects_identity": None
+            if memory_effects is None
+            else memory_effects.identity,
             "owner_type": owner_type,
             "owner_init": owner_type.__init__,
             "owner_init_code": owner_type.__init__.__code__,
@@ -228,6 +270,16 @@ class GeneratedSourceDiagnosticIssuer:
             )
             for name in names
         )
+        if memory_effects is not None:
+            state["callbacks"] += tuple(
+                (
+                    memory_effects,
+                    name,
+                    getattr(type(memory_effects), name),
+                    getattr(type(memory_effects), name).__code__,
+                )
+                for name in ("revalidate", "record", "packet_owners")
+            )
         state["identity"] = _digest(
             [
                 state["input_pins"],
@@ -241,6 +293,16 @@ class GeneratedSourceDiagnosticIssuer:
                 asdict(binding),
                 binding_protocol,
             ]
+            + (
+                []
+                if memory_effects_protocol is None
+                else [
+                    {
+                        "source_memory_effects_protocol": memory_effects_protocol,
+                        "owner_identity": memory_effects.identity,
+                    }
+                ]
+            )
         )
         _ISSUED[self] = state
         try:
@@ -290,6 +352,18 @@ class GeneratedSourceDiagnosticIssuer:
                     asdict(state["binding"]),
                     state["binding_protocol"],
                 ]
+                + (
+                    []
+                    if state["memory_effects_protocol"] is None
+                    else [
+                        {
+                            "source_memory_effects_protocol": state[
+                                "memory_effects_protocol"
+                            ],
+                            "owner_identity": state["memory_effects_identity"],
+                        }
+                    ]
+                )
             )
             != state["identity"]
         ):
@@ -316,8 +390,28 @@ class GeneratedSourceDiagnosticIssuer:
             or state["execution_contract"]
             != state["input_pins"].get("execution_contract")
             or state["protocol"] != COMMIT_ONLY_PROTOCOL
+            or state["memory_effects_protocol"]
+            != state["inputs"].get("source_memory_effects_protocol")
+            or (
+                state["memory_effects_protocol"] is not None
+                and state["binding_protocol"] != "whole_program"
+            )
         ):
             raise ValueError("original generated-source execution selection changed")
+        if state["memory_effects_protocol"] is None:
+            if (
+                state["memory_effects"] is not None
+                or state["memory_effects_identity"] is not None
+            ):
+                raise ValueError("unselected source memory-effects owner appeared")
+        else:
+            from gemmini_whole_program_memory_effects import WholeProgramMemoryEffects
+
+            if (
+                type(state["memory_effects"]) is not WholeProgramMemoryEffects
+                or state["memory_effects"].identity != state["memory_effects_identity"]
+            ):
+                raise ValueError("original source memory-effects owner changed")
         return state
 
     @property
@@ -332,6 +426,8 @@ class GeneratedSourceDiagnosticIssuer:
             state["selected"].revalidate()
             state["arithmetic"].revalidate()
             state["completion"].revalidate()
+            if state["memory_effects"] is not None:
+                state["memory_effects"].packet_owners(state["selected"])
             _revalidate_sources(
                 {**state["input_pins"], **state["runtime"], "nm": state["nm"]}
             )
@@ -358,7 +454,7 @@ class GeneratedSourceDiagnosticIssuer:
     def record(self):
         self.revalidate()
         state = _STATE(self)
-        return {
+        record = {
             "identity": self.identity,
             "selected_inputs": copy.deepcopy(state["selected_inputs"]),
             "sources": copy.deepcopy(state["sources"]),
@@ -370,6 +466,10 @@ class GeneratedSourceDiagnosticIssuer:
             "timing_authority": "NONE",
             "promotion_authority": "NONE",
         }
+        if state["memory_effects_protocol"] is not None:
+            record["source_memory_effects_protocol"] = state["memory_effects_protocol"]
+            record["source_memory_effects"] = state["memory_effects"].record()
+        return record
 
     def create_source_execution_owner(
         self, *, native_result, command_buffer, lowered, work_root, remaining_s

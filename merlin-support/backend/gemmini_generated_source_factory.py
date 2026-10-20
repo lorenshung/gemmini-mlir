@@ -12,13 +12,23 @@ def restore_registry(inputs, *, work_root):
 
 
 def original_factory(inputs, *, sources=()):
-    leaves = tuple(
-        Path(module_source_path(name))
-        for name in (
-            "gemmini_generated_source_diagnostic",
-            "gemmini_generated_source_trace",
+    names = ("gemmini_generated_source_diagnostic", "gemmini_generated_source_trace")
+    protocol = inputs.get("source_memory_effects_protocol")
+    if protocol is not None:
+        from gemmini_whole_program_memory_effects import require_protocol
+
+        require_protocol(protocol)
+        if inputs.get("source_binding_protocol", "whole_program") != "whole_program":
+            raise ValueError(
+                "selected source memory effects require whole_program binding"
+            )
+        names += (
+            "gemmini_whole_program_memory_effects",
+            "gemmini_load_streams",
+            "gemmini_zero_fill",
+            "gemmini_private_zero_storage",
         )
-    )
+    leaves = tuple(Path(module_source_path(name)) for name in names)
     return OriginalPassFactory(
         restore_registry,
         inputs,
