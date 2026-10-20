@@ -334,3 +334,35 @@ def test_imported_checker_source_and_original_owner_method_remain_live(monkeypat
     monkeypatch.setattr(live.SelectedLoadStreams, "revalidate", lambda self: None)
     with pytest.raises(ValueError, match="bound callback"):
         live._original_methods(owner)
+
+
+def test_selected_copied_dram_pointer_normalization_includes_private_zero():
+    before = program([(0, 0), (0, 2), (2, 0), (2, 2)])
+    after = program([(0, 0), (2, 0), (0, 2), (2, 2)], omit=True)
+    normalized = []
+    for stream, relocation in [(before, 0), (after, 0x10000)]:
+        rows = []
+        for event, original in stream:
+            command = copy.deepcopy(original)
+            if event[0] in PORTS or event[0] == "MVOUT":
+                command["rs1"]["raw"] += relocation
+                command["decoded"]["dram"] = copy.deepcopy(command["rs1"])
+                previous = copy.deepcopy(command)
+                command = live._normalized_pointer_copies(command, event[1], ("dram",))
+                assert previous["decoded"]["dram"] == previous["rs1"]
+                assert command["decoded"]["dram"] == {
+                    "kind": "linked_symbol_offset",
+                    "symbol": event[1][0],
+                    "offset": event[1][1],
+                }
+            rows.append((event, command))
+        normalized.append(tuple(rows))
+    assert check(*normalized)["actual_rhs_loads_removed"] == 2
+    bad = row(
+        "MVIN", ("rhs", 0), packed(2, 2, 2), addr=2, rows=2, cols=2, is_acc_addr=False
+    )[1]
+    bad["decoded"]["dram"] = {"raw": bad["rs1"]["raw"] + 1}
+    with pytest.raises(ValueError, match="copied pointer"):
+        live._normalized_pointer_copies(bad, ("rhs", 0), ("dram",))
+    with pytest.raises(ValueError, match="copied pointer"):
+        live._normalized_pointer_copies(bad, ("private_zero", 0), ("missing",))

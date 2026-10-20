@@ -21,6 +21,11 @@ The original framing parser and selected operand decoder recover actual
 commands. Every selected MVIN port, including MVIN2/MVIN3, and MVOUT pointer is
 normalized through unique original linked symbols. Source ABI names remain
 exact; independently proved private zero objects receive a zero identity.
+Only rs1 pointer-copy fields explicitly declared by the selected operand
+protocol are normalized. Each decoded copy must first equal that command's
+actual raw rs1 operand; the original unique linked symbol/offset supplies its
+replacement. This covers displaced ABI and private-zero storage without
+discarding any other decoded field or accepting inconsistent copied addresses.
 Actual command transport retains opcode/function/destination/xd bits, ignoring
 only compiler-allocated source-register numbers. Actual full FENCE words stay
 in the comparison, including predecessor/successor bits. No instruction count,

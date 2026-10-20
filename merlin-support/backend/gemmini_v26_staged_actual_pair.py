@@ -88,6 +88,51 @@ def _transport(log, opcode):
     return result
 
 
+def _pointer_fields(selected, ports):
+    classes = selected._documents()[2]["protocol"]["roles"]["classes"]
+    result = {}
+    for kind in (*ports, "MVOUT"):
+        fields = tuple(
+            row["name"]
+            for row in classes[kind]["fields"]
+            if row.get("as") == "operand" and row.get("operand") == "rs1"
+        )
+        if (
+            not fields
+            or len(fields) > 8
+            or len(set(fields)) != len(fields)
+            or any(type(name) is not str or not name for name in fields)
+        ):
+            raise ValueError(
+                "actual staged DMA lacks original declared rs1 pointer-copy fields"
+            )
+        result[kind] = fields
+    return result
+
+
+def _normalized_pointer_copies(command, first, fields):
+    if (
+        type(first) is not tuple
+        or len(first) != 2
+        or type(first[0]) is not str
+        or type(first[1]) is not int
+        or first[1] < 0
+    ):
+        raise ValueError("actual staged pointer has no unique linked symbol/offset")
+    result = copy.deepcopy(command)
+    for name in fields:
+        if result["decoded"].get(name) != result["rs1"]:
+            raise ValueError(
+                "actual staged copied pointer differs from original raw rs1"
+            )
+        result["decoded"][name] = {
+            "kind": "linked_symbol_offset",
+            "symbol": first[0],
+            "offset": first[1],
+        }
+    return result
+
+
 def _decode_arm(owner, binding):
     observed = invocation_record.verify(owner._paths["trace_invocation"])
     log_path = Path(observed["stderr"]["path"])
@@ -116,6 +161,7 @@ def _decode_arm(owner, binding):
             "actual staged pair lost complete command/fence transport framing"
         )
     ports = dict(owner._selected.operand_observer().load_states.ports)
+    pointer_fields = _pointer_fields(owner._selected, ports)
     abi = {
         f"tensor_{i}": name
         for i, name in enumerate(cb["compiler_pointer_abi"]["arguments"])
@@ -145,6 +191,9 @@ def _decode_arm(owner, binding):
                 raise ValueError(
                     "actual staged pair DMA lacks original ABI/zero ownership"
                 )
+            command = _normalized_pointer_copies(
+                command, first, pointer_fields[event[0]]
+            )
         command["transport"] = transport
         stream.append(((event[0], first, command["rs2"]["raw"]), command))
     if next(commands, None) is not None:
@@ -486,6 +535,8 @@ _FUNCTIONS = tuple(
         "_original_methods",
         "_current_implementation",
         "_transport",
+        "_pointer_fields",
+        "_normalized_pointer_copies",
         "_decode_arm",
         "_field_reader",
         "_logical",
