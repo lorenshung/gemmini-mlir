@@ -140,6 +140,21 @@ def _arm(owner, state, workspace, pins, deadline):
     return source_owner, binding, source, result_path
 
 
+def _pair_choices(arms):
+    baseline, candidate = (arm[1]["policy"] for arm in arms)
+    if baseline != {
+        "enabled": True,
+        "rewrite_policy": "verify_only",
+    } or candidate not in (
+        {"enabled": True, "rewrite_policy": "verify_only"},
+        {"enabled": True, "rewrite_policy": "n_before_m_rhs"},
+    ):
+        raise ValueError(
+            "finite pair needs original finite baseline and explicit bounded candidate"
+        )
+    return copy.deepcopy((baseline, candidate))
+
+
 def _check_source_pair(
     owner, state, *, baseline_workspace, candidate_workspace, capsule, remaining_s
 ):
@@ -161,13 +176,7 @@ def _check_source_pair(
         _arm(owner, state, workspace, pins, deadline)
         for workspace in (baseline_workspace, candidate_workspace)
     ]
-    if arms[0][1]["policy"] != {
-        "enabled": True,
-        "rewrite_policy": "verify_only",
-    } or arms[1][1]["policy"] != {"enabled": True, "rewrite_policy": "n_before_m_rhs"}:
-        raise ValueError(
-            "finite pair needs original finite baseline and retained rewrite candidate"
-        )
+    baseline_policy, candidate_policy = _pair_choices(arms)
     capdir = Path(capsule["__dir__"])
     source = capdir / "capsule.interface.mlir"
     pins[str(source)] = _pin(source)
@@ -191,6 +200,8 @@ def _check_source_pair(
         "status": "PASS",
         "actual_pair": relation,
         "compiler_bindings": [arm[1] for arm in arms],
+        "baseline_policy": baseline_policy,
+        "candidate_policy": candidate_policy,
         "ordinary_products": pins,
         "shared_pass_invocation_proven": False,
         "hardware_execution_qualified": False,
@@ -222,6 +233,7 @@ _FUNCTIONS = tuple(
         "_read",
         "_one",
         "_arm",
+        "_pair_choices",
         "_check_source_pair",
         "check_source_pair",
         "_implementation",

@@ -55,3 +55,7 @@ queue report. This still supplies no formal grade, required L3, physical
 overlap/completion qualification, native timing domain or performance promotion.
 An actual finite baseline/rewrite pair and independent tail remain required;
 host unit tests and shared-pass availability do not satisfy that gate.
+The baseline policy must be enabled `verify_only`. The candidate may be enabled
+`verify_only` for an unchanged control or `n_before_m_rhs` for the retained
+rewrite. The report records both actual choices; the strict decoded relation
+still checks every command and cannot infer an unchanged program from a policy.

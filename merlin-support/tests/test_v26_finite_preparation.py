@@ -513,3 +513,41 @@ def test_own_imported_source_pin_remains_required_before_new_issuance(
     )
     with pytest.raises(ValueError, match="original implementation changed"):
         module.FiniteV26PreparationOwner(type(registry)((registry._capabilities[0],)))
+
+
+@pytest.mark.parametrize("candidate", ["verify_only", "n_before_m_rhs"])
+def test_original_control_and_retained_policy_are_explicit_pair_choices(candidate):
+    from gemmini_v26_finite_pair import _pair_choices
+
+    b = {"enabled": True, "rewrite_policy": "verify_only"}
+    c = {"enabled": True, "rewrite_policy": candidate}
+    assert _pair_choices([(None, {"policy": b}), (None, {"policy": c})]) == (b, c)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "baseline_rewrite",
+        "baseline_disabled",
+        "candidate_disabled",
+        "candidate_unknown",
+        "extra",
+    ],
+)
+def test_missing_or_unbounded_actual_pair_choices_refuse(fault):
+    from gemmini_v26_finite_pair import _pair_choices
+
+    b = {"enabled": True, "rewrite_policy": "verify_only"}
+    c = {"enabled": True, "rewrite_policy": "n_before_m_rhs"}
+    if fault == "baseline_rewrite":
+        b["rewrite_policy"] = "n_before_m_rhs"
+    elif fault == "baseline_disabled":
+        b["enabled"] = False
+    elif fault == "candidate_disabled":
+        c["enabled"] = False
+    elif fault == "candidate_unknown":
+        c["rewrite_policy"] = "unknown"
+    else:
+        c["foreign"] = True
+    with pytest.raises(ValueError, match="explicit bounded candidate"):
+        _pair_choices([(None, {"policy": b}), (None, {"policy": c})])
