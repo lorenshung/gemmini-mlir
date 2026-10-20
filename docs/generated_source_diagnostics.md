@@ -73,6 +73,17 @@ block stride remain required. The whole-program checker's default state-zero
 interpretation is unchanged. This functional correspondence grants no DMA
 timing, overlap or physical-transaction claim.
 
+An additional direct-route zero-fill owner handles a selected zero-address
+accumulator initialization as a command effect, never as a read of memory at
+address zero. It requires the original live arithmetic/runtime owner, checks the
+selected FIR zero predicate and dedicated zero-writer storage/extent routing,
+and reviews the selected functional receiver's zero/overwrite implementation.
+Only a raw zero source and accumulator overwrite can consume that evidence;
+identity configuration, row/column bounds and all later products/readouts remain
+independently required. Accumulating flags, nonzero sources and other storage
+refuse. This is functional source evidence, not an asynchronous-completion or
+hardware execution qualification.
+
 `gemmini_generated_source_native.GeneratedSourceNativeCorrespondenceOwner.bind`
 accepts only the exact live generated-source capability and original
 `CountHardwareCorrespondenceOwner` capability. It keeps composite software and

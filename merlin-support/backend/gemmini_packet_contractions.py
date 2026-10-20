@@ -42,6 +42,7 @@ def check_packets(
     preload_shape,
     load_configuration,
     load_streams=None,
+    zero_fill=None,
 ):
     """Check a complete observed stream under original source/effect callbacks.
 
@@ -167,11 +168,16 @@ def check_packets(
             base = local(fields["addr"], accumulator=is_acc)
             if base + rows > (acc_rows if is_acc else spad_rows):
                 raise ValueError("actual transfer crosses private storage boundary")
+            generated_zero = False if zero_fill is None else zero_fill(command)
+            if type(generated_zero) is not bool or generated_zero and not is_acc:
+                raise ValueError("selected zero fill lacks accumulator ownership")
             for row in range(rows):
                 for col in range(cols):
                     address = raw1 + row * load + col * (4 if is_acc else 1)
                     if is_acc:
-                        if load != 0 or not zero_cell(address, 4):
+                        if not generated_zero and (
+                            load != 0 or not zero_cell(address, 4)
+                        ):
                             raise ValueError(
                                 "accumulator initialization is not independently proven zero"
                             )

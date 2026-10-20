@@ -100,6 +100,7 @@ def check_direct_execution_packets(
     input_values,
     expected_trace_argv,
     entry_symbol,
+    zero_fill=None,
 ):
     """Use the exact typed direct-source binding; never invent a global plan."""
     from gemmini_load_streams import SelectedLoadStreams
@@ -108,6 +109,17 @@ def check_direct_execution_packets(
     )
 
     load_streams = SelectedLoadStreams(selected)
+    if zero_fill is not None:
+        from gemmini_zero_fill import SelectedAccumulatorZeroFill
+
+        if (
+            type(zero_fill) is not SelectedAccumulatorZeroFill
+            or zero_fill.selected is not selected
+        ):
+            raise TypeError(
+                "direct zero fill requires its original live selected owner"
+            )
+        zero_fill.revalidate()
 
     contraction = Contraction(
         **bind_direct_source_contraction(source, command_buffer, proof)
@@ -127,6 +139,7 @@ def check_direct_execution_packets(
         abi=abi,
         command_buffer=command_buffer,
         load_streams=load_streams,
+        zero_fill=zero_fill,
     )
     # Complete products/readouts are established first. The same full trace
     # must additionally veto host answer stores during the one real call.
@@ -165,6 +178,8 @@ def check_direct_execution_packets(
     )
     invocation_record.verify(Path(invocation))
     report["selected_load_streams"] = load_streams.record()
+    if zero_fill is not None:
+        report["selected_accumulator_zero_fill"] = zero_fill.record()
     return report
 
 
@@ -180,6 +195,7 @@ def _check_bound_execution_packets(
     abi,
     command_buffer,
     load_streams=None,
+    zero_fill=None,
 ):
     declaration = invocation_record.verify(Path(invocation))
     if declaration["argv"] != expected_trace_argv:
@@ -362,6 +378,7 @@ def _check_bound_execution_packets(
         preload_shape=lambda raw: shape("PreloadRs", raw),
         load_configuration=load,
         load_streams=None if load_streams is None else load_streams.ports,
+        zero_fill=None if zero_fill is None else zero_fill.accepts,
     )
     invocation_record.verify(Path(invocation))
     return report

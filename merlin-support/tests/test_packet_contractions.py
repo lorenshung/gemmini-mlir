@@ -91,7 +91,13 @@ def stream(k=3, *, reuse=False):
 
 
 def check(
-    packet, commands, *, k=3, zero=lambda a, w: 4000 <= a < 4008, load_streams=None
+    packet,
+    commands,
+    *,
+    k=3,
+    zero=lambda a, w: 4000 <= a < 4008,
+    load_streams=None,
+    zero_fill=None,
 ):
     def memory(address, width):
         for start, count, name, element in (
@@ -126,6 +132,7 @@ def check(
         preload_shape=lambda raw: (raw >> 16, raw >> 8 & 255),
         load_configuration=lambda row: None,
         load_streams=load_streams,
+        zero_fill=zero_fill,
     )
 
 
@@ -269,3 +276,55 @@ def test_selected_stream_state_or_mapping_mutations_refuse(packet, fault):
 def test_legacy_default_does_not_admit_additional_load_opcodes(packet):
     with pytest.raises(ValueError):
         check(packet, banked_stream())
+
+
+def generated_zero_stream():
+    commands = banked_stream()
+    for row in commands:
+        if row["class"] == "MVIN3":
+            row["rs1"]["raw"] = 0
+    return commands
+
+
+def test_explicit_selected_zero_generator_is_separate_from_elf_zero_memory(packet):
+    commands = generated_zero_stream()
+    mapping = {"MVIN": 0, "MVIN2": 1, "MVIN3": 2}
+    with pytest.raises(ValueError, match="independently proven zero"):
+        check(packet, commands, load_streams=mapping, zero=lambda a, w: False)
+    report = check(
+        packet,
+        commands,
+        load_streams=mapping,
+        zero=lambda a, w: False,
+        zero_fill=lambda row: (
+            row["rs1"]["raw"] == 0 and row["decoded"]["is_acc_addr"] is True
+        ),
+    )
+    assert report["products"] == 18 and report["raw_i32_values"] == 6
+
+
+@pytest.mark.parametrize(
+    "fault", ["nonzero_address", "accumulate", "scratchpad", "untyped_grant"]
+)
+def test_zero_fill_cannot_initialize_foreign_or_accumulating_storage(packet, fault):
+    commands = generated_zero_stream()
+    zero = next(row for row in commands if row["class"] == "MVIN3")
+    callback = lambda row: (
+        row["rs1"]["raw"] == 0 and row["decoded"]["is_acc_addr"] is True
+    )
+    if fault == "nonzero_address":
+        zero["rs1"]["raw"] = 1
+    elif fault == "accumulate":
+        zero["decoded"]["addr"] |= 64
+    elif fault == "scratchpad":
+        callback = lambda row: True
+    else:
+        callback = lambda row: 1
+    with pytest.raises(ValueError):
+        check(
+            packet,
+            commands,
+            zero=lambda a, w: False,
+            load_streams={"MVIN": 0, "MVIN2": 1, "MVIN3": 2},
+            zero_fill=callback,
+        )

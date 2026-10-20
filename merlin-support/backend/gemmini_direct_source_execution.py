@@ -43,6 +43,7 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             "gemmini_direct_source_execution",
             "gemmini_primitive_host_scope",
             "gemmini_load_streams",
+            "gemmini_zero_fill",
             "merlin.llvmlower.direct_source_contraction",
             "merlin.targetgen.native_pointer_source_binding",
             "merlin.targetgen.native_pointer_source_execution",
@@ -213,6 +214,8 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
             raise ValueError(
                 "direct source scope has no original selected entry symbol"
             )
+        from gemmini_zero_fill import SelectedAccumulatorZeroFill
+
         packets = check_direct_execution_packets(
             selected=self._selected,
             source=source_path,
@@ -229,6 +232,7 @@ class DirectSourceExecutionOwner(SourceExecutionOwner):
                 str(elf),
             ],
             entry_symbol=selection["entry_symbol"],
+            zero_fill=SelectedAccumulatorZeroFill(self._selected, self._arithmetic),
         )
         self.revalidate()
         return {
