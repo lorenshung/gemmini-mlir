@@ -58,6 +58,7 @@ from merlin_experiments.phase0.instruction_roles import (
     resolve_policy,
 )
 from source_admission_inputs import (
+    TARGET_SCHEMA,
     copy_compiler,
     native_loader_python_preflight,
     read_declaration,
@@ -306,6 +307,9 @@ def diagnostic(declaration, selected, unqualified, output):
 def execute(declaration, intake, selected, output, report, save):
     purpose = require_purpose(declaration, intake)
     report["native_loader_python"] = native_loader_python_preflight()
+    target_publication = declaration.get("schema") == TARGET_SCHEMA
+    if target_publication:
+        import source_admission_publication as publication
 
     def stage(name):
         require_purpose(declaration, intake)
@@ -317,6 +321,11 @@ def execute(declaration, intake, selected, output, report, save):
     with shared_compute_pool(timeout_s=60):
         entry, binding, unqualified = prepare(declaration, selected, output)
         capsule = diagnostic(declaration, selected, unqualified, output)
+        if target_publication:
+            with publication.target_binding(
+                declaration, selected, binding, capsule, intake
+            ) as (_, target_record):
+                report["target_publication"] = target_record
     stage("unchanged_original_compiler")
     with shared_compute_pool(timeout_s=60):
         baseline = output / "baseline-package"
@@ -404,7 +413,19 @@ def execute(declaration, intake, selected, output, report, save):
     with shared_compute_pool(timeout_s=60):
         with R.scoped_selection(selected["roles"]), Q.scoped_realization_owner(owner):
             published = staging.write_staged(
-                lambda root: writer._write_capsule(entry, binding, root),
+                (
+                    lambda root: publication.write(
+                        entry,
+                        binding,
+                        root,
+                        declaration=declaration,
+                        selected_inputs=selected,
+                        diagnostic=capsule,
+                        intake=intake,
+                    )
+                )
+                if target_publication
+                else (lambda root: writer._write_capsule(entry, binding, root)),
                 output / "publication",
                 member=entry["cat"] + "/" + entry["name"],
                 operator_exclusion=selected["private"],

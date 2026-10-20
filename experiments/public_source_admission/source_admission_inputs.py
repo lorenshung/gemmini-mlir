@@ -12,6 +12,7 @@ import shutil
 from pathlib import Path
 
 SCHEMA = "gemmini.public_source_admission.v1"
+TARGET_SCHEMA = "gemmini.public_source_admission.v2"
 FIELDS = {
     "schema",
     "readiness",
@@ -104,9 +105,28 @@ def require_fields(value, names, owner):
 def read_declaration(path, sha256, *, intake=None):
     intake = intake or Intake()
     document = intake.document({"path": str(Path(path).absolute()), "sha256": sha256})
-    require_fields(document, FIELDS, "source admission declaration")
-    if document["schema"] != SCHEMA:
+    if (
+        type(document) is not dict
+        or type(document.get("schema")) is not str
+        or document.get("schema")
+        not in {
+            SCHEMA,
+            TARGET_SCHEMA,
+        }
+    ):
         raise ValueError("unknown source admission declaration version")
+    target_publication = document["schema"] == TARGET_SCHEMA
+    require_fields(
+        document,
+        FIELDS | ({"publication"} if target_publication else set()),
+        "source admission declaration",
+    )
+    if target_publication:
+        require_fields(
+            document["publication"], {"scope"}, "selected target publication"
+        )
+        if document["publication"]["scope"] != "selected_target_v1":
+            raise ValueError("unknown selected target publication scope")
     require_fields(document["source"], SOURCE_FIELDS, "selected source")
     require_fields(
         document["roles"], {"profile", "private_exclusion"}, "original operator roles"

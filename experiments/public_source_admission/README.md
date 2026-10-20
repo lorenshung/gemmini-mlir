@@ -111,3 +111,20 @@ revalidated. A new source release and fresh execution evidence are required;
 old refusals and owners are never repinned or upgraded. This interface does not
 qualify scheduling capabilities, hardware execution or timing, and does not
 change the compiler package or the selected numerical policy.
+
+
+A new declaration may explicitly choose `gemmini.public_source_admission.v2`
+with one additional closed field: `publication: {scope: selected_target_v1}`.
+V1 retains its original source-only publication. V2 derives the final writer's
+accelerator requirements from the selected current facts, execution contract,
+descriptor and checked typed source. It preserves the source integer policy,
+complete tensors and positional ABI. The same original live realization,
+role and exclusion owners must pass before ordinary staging can publish.
+
+V2 checks derivability before compilation and rechecks selected inputs and
+final instruction/tier obligations before staging commits. It refuses missing
+capabilities, empty instruction demand, mismatched selections, changed source
+or numerical policy, and lost obligations. This selects stronger publication
+requirements; it issues no qualification and upgrades no historical capsule.
+Its diagnostic preflight and synthetic unit controls are separate from a fresh
+execution through the original writer.
