@@ -15,14 +15,15 @@ an existing managed task; use the receiving server's resource admission tools.
 | https://github.com/copparihollmann/riscv-isa-sim-gemmini.git | recorded standalone packager/build helper at `dea21091bc2164989eaacd0c7acf62c79d004ee8` |
 | https://github.com/llvm/llvm-project.git | LLVM/MLIR23 `a47bddccec30255619bb8c37fa59700e661d4e66` |
 
-The separate published Merlin `shared-scheduling` branch is
-`dbc762306e87af176104c348ccace0263937d1b9`. It is not claimed merged into the
-published f8a43c6 branch. Our combined EL4/Phase2 integration and new preparation,
-queue and native-owner fixes are local commits awaiting publication; another
-server cannot obtain them merely by fetching either published branch. The newly
-reported shared-session `08570e926` is unpushed and unavailable locally, so this
-guide assigns it no source, API or qualification claims. Request reviewed commits
-or an explicit source bundle before requiring those additional interfaces.
+The original published Merlin `shared-scheduling` selection is
+`dbc762306e87af176104c348ccace0263937d1b9`. The combined integration is delivered
+on `feat/el4-experiment` in both Merlin and gemmini-mlir, including that shared
+release, Phase 2 preparation/queue support and portable public inputs. Select
+and record the actual integration commit; it is a different harness from the
+historical Phase 1 `f8a43c657` source, with separately selected access and fresh
+qualification requirements. The newly reported shared-session `08570e926` was
+unpushed and unavailable during this integration, so it is not included.
+The dated V26 experiment branch is unchanged.
 
 The helper's `examples/gemmini/functional_baseline/build.py` matches the actual
 source package builder SHA `10c6529b7fedebc7410a0d9a9ea3cee7bb94689d802a06187a154f24228d2468`.
@@ -38,14 +39,28 @@ Two authoring reports account for the difference. Hash algorithm is sorted relat
 POSIX path + NUL + complete file bytes + NUL, SHA-256. Never label the projection
 with the full-package digest.
 
-Full16 is retained by local OOT import `b23ff7e83532f742911bc3a86fcd767deb91d94a`,
-integrated into local EL4 `6173b15f0934437cb8f4f604f01e3b1fec2bda8d`, at
+Full16 is retained by OOT import `b23ff7e83532f742911bc3a86fcd767deb91d94a`,
+included in the `feat/el4-experiment` integration, at
 `phase1_generated/el4_fire_aligned_v26_original_29213759/package`.
-**Those local commits are not asserted published.** An operator must provide this
-exact source bundle or publish reviewed commits before the remote session can use
-it. The original native checkpoint is `38579f414f516e884d381cfc23683fdf43d54a6b`;
+The portable public fixtures also contain this exact compiler under
+`examples/phase2/public_pass_inputs_v26/compiler`. Preserve either origin and
+prepare separate candidate copies. The original native checkpoint is
+`38579f414f516e884d381cfc23683fdf43d54a6b`;
 it is not assumed reachable from the cleaned publication. Adjacent provenance
 binds all16 hashes and the original clean source snapshot.
+
+After provisioning the reviewed integration checkout, verify its portable inputs:
+
+```sh
+cd "$OOT_REPO/examples/phase2/public_pass_inputs_v26"
+python3 -B verify.py
+cd "$OOT_REPO/docs/v26/inputs"
+sha256sum -c SHA256SUMS
+```
+
+These checks compare preserved bytes and references; they do not compile or
+execute a target. See `docs/phase2_changes_and_baseline_integrity.md` for the
+separation between Phase 1 artifacts, Phase 2 support and candidate compilers.
 
 For the published projection, with existing local checkouts:
 
