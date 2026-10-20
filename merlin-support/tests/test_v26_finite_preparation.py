@@ -195,7 +195,7 @@ def test_real_prepared_hook_executes_original_emitter_and_public_shared_passes(
     hook = importlib.import_module("finite_staged_hook")
     before = hook.emit_if_selected(original["source"], original["command_buffer"])
     (package / "finite_staged_policy.py").write_text(
-        "ENABLED = True\nREWRITE_POLICY = 'n_before_m_rhs'\n"
+        "def choose_finite_policy():\n    return {'enabled': True, 'rewrite_policy': 'n_before_m_rhs'}\n"
     )
     monkeypatch.delitem(sys.modules, "finite_staged_policy")
     after = hook.emit_if_selected(original["source"], original["command_buffer"])
@@ -260,11 +260,11 @@ def test_actual_prepared_package_mutations_refuse(selected, tmp_path, damage):
         (package / "finite-staged-public.json").write_text("{}")
     elif damage == "policy_code":
         (package / "finite_staged_policy.py").write_text(
-            "ENABLED=True\nREWRITE_POLICY=__import__('os')\n"
+            "def choose_finite_policy():\n    return __import__('os')\n"
         )
     elif damage == "policy_unknown":
         (package / "finite_staged_policy.py").write_text(
-            "ENABLED=True\nREWRITE_POLICY='all'\n"
+            "def choose_finite_policy():\n    return {'enabled': True, 'rewrite_policy': 'all'}\n"
         )
     else:
         (package / "selected-shared-library.json").write_text("{}")
@@ -551,3 +551,52 @@ def test_missing_or_unbounded_actual_pair_choices_refuse(fault):
         c["foreign"] = True
     with pytest.raises(ValueError, match="explicit bounded candidate"):
         _pair_choices([(None, {"policy": b}), (None, {"policy": c})])
+
+
+def test_actual_original_edit_authority_allows_only_the_declared_policy_function(
+    selected, tmp_path
+):
+    from merlin.perf.compiler_edit_scope import (
+        inspect_compiler_edits,
+        validate_edit_contract,
+    )
+    from merlin.perf.phase2_edit_contract import seal
+    from merlin.targetgen.compiler_pass_selection import copy_compiler_source
+
+    _, _, _, _, owner, _ = selected
+    seed, candidate = tmp_path / "seed", tmp_path / "candidate"
+    owner.prepare_compiler(
+        PACKAGE, seed, policy={"enabled": True, "rewrite_policy": "verify_only"}
+    )
+    contract = seal(
+        {
+            "schema": "compiler_edit_contract_v1",
+            "existing_symbols": [
+                {
+                    "path": "finite_staged_policy.py",
+                    "symbol": "choose_finite_policy",
+                    "surface_id": "finite_staged_rewrite_choice",
+                }
+            ],
+            "helper_extensions": [],
+        }
+    )
+    validate_edit_contract(contract, seed)
+    copy_compiler_source(seed, candidate)
+    policy = candidate / "finite_staged_policy.py"
+    policy.write_text(policy.read_text().replace("verify_only", "n_before_m_rhs"))
+    checked = inspect_compiler_edits(seed, candidate, contract)
+    assert checked["status"] == "allowed"
+    policy.write_text(policy.read_text() + "FOREIGN = True\n")
+    assert inspect_compiler_edits(seed, candidate, contract)["status"] == "refused"
+
+
+def test_original_mapping_constants_cannot_change_during_live_preparation(
+    selected, monkeypatch
+):
+    module, _, _, _, owner, _ = selected
+    monkeypatch.setitem(
+        module._LEAVES, "finite_staged_hook.py", "gemmini_v26_finite_pair"
+    )
+    with pytest.raises(ValueError, match="original implementation changed"):
+        owner.revalidate()

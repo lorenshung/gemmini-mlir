@@ -12,7 +12,10 @@ with `mechanisms=("diagnostic_v26_finite_preparation",)`. The ordinary
 `CompilerPassPreparation` must prepare **both seeds** with
 `{"enabled": true, "rewrite_policy": "verify_only"}`. Only after original
 source/edit freezing may an explicitly retained edit change the candidate's
-`finite_staged_policy.py` value to `"n_before_m_rhs"`. `enabled=false` leaves the
+`finite_staged_policy.py:choose_finite_policy` literal return value to
+`"n_before_m_rhs"`. This actual function is the explicit existing-symbol edit
+surface; changing module-level globals is not authorized by the original AST
+edit checker. `enabled=false` leaves the
 original lowering call intact. The original 16-file compiler hash
 `29213759089b71de26f8a5ab26ca6ef1b8071dc0bb690041eb7de5d0efb53f24`
 is preserved and recorded separately from the finite baseline and candidate.
@@ -31,7 +34,7 @@ the candidate hook.
 
 `check_compiler_binding(package)` reopens all original compiler bytes, the exact
 mechanical hook/copy, public contract and SDK record, allowing only the two
-bounded literal policy assignments. The literal DIM16/packing compatibility
+bounded literal return mapping. The literal DIM16/packing compatibility
 checks in the existing finite emitter bind this reviewed original emitter;
 they do not derive hardware qualification from a model or shape name.
 

@@ -141,7 +141,7 @@ def _policy(value):
         or value["rewrite_policy"] not in {"verify_only", "n_before_m_rhs"}
     ):
         raise ValueError("finite preparation needs explicit bounded policy choices")
-    return f"ENABLED = {value['enabled']!r}\nREWRITE_POLICY = {value['rewrite_policy']!r}\n"
+    return "def choose_finite_policy():\n    return " + repr(value) + "\n"
 
 
 def _read_policy(path):
@@ -149,18 +149,26 @@ def _read_policy(path):
     if len(raw) > 1024:
         raise ValueError("finite candidate policy exceeds its bound")
     module = ast.parse(raw)
-    if len(module.body) != 2 or any(
-        type(row) is not ast.Assign
-        or len(row.targets) != 1
-        or type(row.targets[0]) is not ast.Name
-        for row in module.body
-    ):
+    if len(module.body) != 1 or type(module.body[0]) is not ast.FunctionDef:
         raise ValueError("finite candidate policy has executable or foreign statements")
-    names = [row.targets[0].id for row in module.body]
-    if names != ["ENABLED", "REWRITE_POLICY"]:
+    function = module.body[0]
+    if (
+        function.name != "choose_finite_policy"
+        or function.decorator_list
+        or function.returns
+        or function.args.posonlyargs
+        or function.args.args
+        or function.args.vararg is not None
+        or function.args.kwonlyargs
+        or function.args.kwarg is not None
+        or function.args.defaults
+        or function.args.kw_defaults
+        or getattr(function, "type_params", ())
+        or len(function.body) != 1
+        or type(function.body[0]) is not ast.Return
+    ):
         raise ValueError("finite candidate policy changed its original choices")
-    values = [ast.literal_eval(row.value) for row in module.body]
-    policy = dict(zip(("enabled", "rewrite_policy"), values, strict=True))
+    policy = ast.literal_eval(function.body[0].value)
     _policy(policy)
     return policy
 
@@ -479,6 +487,16 @@ def with_finite_preparation(registry):
 def _implementation():
     if (
         _pin(__file__) != _IMPORTED_SOURCE
+        or _digest(
+            [
+                MECHANISM,
+                ORIGINAL_SHA256,
+                _ORIGINAL_BOUNDARY,
+                _SELECTED_BOUNDARY,
+                _LEAVES,
+            ]
+        )
+        != _CONSTANTS
         or generated._STATE is not _SOURCE_STATE
         or _SOURCE_STATE.__code__ is not _SOURCE_CODE
         or FiniteV26PreparationOwner.identity.fget is not _IDENTITY
@@ -497,6 +515,9 @@ def _implementation():
 
 
 _SOURCE_STATE, _SOURCE_CODE = generated._STATE, generated._STATE.__code__
+_CONSTANTS = _digest(
+    [MECHANISM, ORIGINAL_SHA256, _ORIGINAL_BOUNDARY, _SELECTED_BOUNDARY, _LEAVES]
+)
 _IMPORTED_SOURCE = _pin(__file__)
 _ORIGINAL_API = tuple(
     (

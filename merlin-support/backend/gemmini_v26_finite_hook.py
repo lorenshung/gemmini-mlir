@@ -12,11 +12,16 @@ from merlin.compile.scheduling.staged_dense import StagedDenseContract
 def emit_if_selected(source, command_buffer):
     # This module is copied into the compiler. It cannot import original owners,
     # references, capture implementations or native/trace checkers.
-    from finite_staged_policy import ENABLED, REWRITE_POLICY
+    from finite_staged_policy import choose_finite_policy
 
-    if type(ENABLED) is not bool:
-        raise ValueError("finite source selection needs an explicit Boolean")
-    if not ENABLED:
+    policy = choose_finite_policy()
+    if (
+        type(policy) is not dict
+        or set(policy) != {"enabled", "rewrite_policy"}
+        or type(policy["enabled"]) is not bool
+    ):
+        raise ValueError("finite source selection needs explicit bounded policy data")
+    if not policy["enabled"]:
         return None
     from finite_staged_emitter import emit_v26_staged_dense
 
@@ -49,6 +54,6 @@ def emit_if_selected(source, command_buffer):
         command_buffer=command_buffer,
         contract=StagedDenseContract(**declaration["contract"]),
         enabled=True,
-        rewrite_policy=REWRITE_POLICY,
+        rewrite_policy=policy["rewrite_policy"],
     )
     return llvm
