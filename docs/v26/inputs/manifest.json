@@ -1,0 +1,44 @@
+{
+  "schema": "merlin.v26_public_input_copies.v1",
+  "files": [
+    {
+      "path": "facts-v6.json",
+      "bytes": 130008,
+      "sha256": "b8ff28edc096392cec356f9fececdf17ba70cd3e4b02e6c5931aedc43bb117af",
+      "scope": "public RTL-derived hardware facts and source citations",
+      "historical_source": "/work/merlin/tasks/phase1-harness-v2/merlin/out/artifacts/probes/gemmini/fire-aligned-30mhz/input/facts-v6.json"
+    },
+    {
+      "path": "software-spec.yaml",
+      "bytes": 8992,
+      "sha256": "3c1b8aa1c77775e1c0e590af871f05e038743d7000a99860fb12843f7053372f",
+      "scope": "public software specification; exactly matches published Merlin f8a43c657 file",
+      "historical_source": "/work/merlin/tasks/phase1-harness-v2/.sub/agent-a754baf87337521b4/merlin/examples/gemmini/target/software-spec.yaml"
+    },
+    {
+      "path": "target_contract.yaml",
+      "bytes": 22812,
+      "sha256": "bfbfac9e98ff028aa184b5b13ea44e7421afeac2c35e1d3bb572fd0cbad5aa55",
+      "scope": "public selected hardware/runner/toolchain declaration",
+      "historical_source": "/work/merlin/tasks/phase1-harness-v2/.sub/agent-a754baf87337521b4/merlin/out/artifacts/protocols/gemmini/phase0-closure-20261019-v26/payload/experiment/contracts/target_contract.yaml"
+    },
+    {
+      "path": "fire-aligned.dts",
+      "bytes": 3808,
+      "sha256": "c4a2009a405945ea98f731713e0f4e7dc483031ab8cd5156d871e4eb7594f1df",
+      "scope": "public generated hardware device tree",
+      "historical_source": "/work/merlin/tasks/phase1-harness-v2/.tmp/chipyard-fire-aligned/sims/firesim-staging/generated-src/firechip.chip.FireSim.FireSimGemminiRocketConfig/firechip.chip.FireSim.FireSimGemminiRocketConfig.dts"
+    },
+    {
+      "path": "target_experiment.yaml",
+      "bytes": 4560,
+      "sha256": "7b3a28319b3e0f6e6d873238f706e2ab9461ff3c95144f2a0dd5ae1aaf651320",
+      "scope": "public descriptor declarations; public capstone/model/stage names and aggregate hidden count only, no hidden names or programs",
+      "historical_source": "/work/merlin/tasks/phase1-harness-v2/.sub/agent-a754baf87337521b4/merlin/out/artifacts/protocols/gemmini/phase0-closure-20261019-v26/payload/experiment/target_experiment.yaml"
+    }
+  ],
+  "total_input_bytes": 170180,
+  "path_rendering": false,
+  "live_qualification_or_authority": false,
+  "excluded": "No model configuration, numerics bundle, corpus members, model/capture/reference arrays, hidden test identity, private exclusion policy, or credentials are included."
+}

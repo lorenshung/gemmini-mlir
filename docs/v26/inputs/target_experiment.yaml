@@ -1,0 +1,162 @@
+target: gemmini
+numeric_profile: examples/gemmini/phase0/recipe.yaml
+rtl:
+  via: mlc
+hardware_spec:
+  target_contract: /work/merlin/tasks/phase1-harness-v2/.sub/agent-a754baf87337521b4/merlin/out/artifacts/protocols/gemmini/phase0-closure-20261019-v26/payload/experiment/contracts/target_contract.yaml
+capsule_corpus: /work/merlin/tasks/phase1-harness-v2/.sub/agent-a754baf87337521b4/merlin/out/artifacts/protocols/gemmini/phase0-closure-20261019-v26/payload/corpus/isa
+grading:
+  resource_bound:
+    policy: representative_l3_capstones_v1
+    required_admitted_models:
+    - SY_micro_model
+    - SY_source_causal_decoder
+    - SY_source_causal_decoder_decode_step
+    - SY_source_coverage_mlp
+    - SY_source_multimodal_policy
+    - SY_source_residual_cnn
+  capability_exclude_capsules: []
+  expected_cohort:
+    source_capsules: 153
+    admitted_capsules: 153
+  hidden_capability_admission:
+    source_capsules: 8
+    admitted_capsules: 8
+phase1_gates:
+  private_full_models:
+    required: true
+    models:
+    - resnet50
+    - smolvla
+    - tiny_llama
+    programs:
+      resnet50:
+      - model
+      smolvla:
+      - prefix_encode
+      - flow_denoise
+      - action_decode
+      tiny_llama:
+      - prefill
+      - decode
+    source_workload_dirs:
+      resnet50: resnet50_v1_5
+      smolvla: smolvla
+      tiny_llama: tiny_llama
+    required_selected_roles:
+      resnet50:
+      - checkpoint
+      smolvla:
+      - checkpoint
+      - input
+      tiny_llama:
+      - checkpoint
+    deployment_dtypes:
+      resnet50: int8
+      smolvla: int8
+      tiny_llama: int8
+    require_integer_contractions: true
+    required_loader_env:
+      resnet50:
+        M2M_RESNET_PRETRAINED: '1'
+      smolvla:
+        M2M_SMOLVLA_SESSION: e2e
+        M2M_SMOLVLA_PRETRAINED: '1'
+        M2M_SMOLVLA_PAPER_READY: '1'
+      tiny_llama:
+        M2M_LLAMA_SESSION: e2e
+    forbidden_loader_env:
+      smolvla:
+      - M2M_SMOLVLA_VLM_LAYERS
+      - M2M_SMOLVLA_EXPERT_LAYERS
+      - M2M_SMOLVLA_TAP
+      tiny_llama:
+      - M2M_LLAMA_LAYERS
+  public_codegen_scalability:
+    schema: merlin.public_codegen_resource_policy.v1
+    required: true
+    timeout_s: 120
+    capsules:
+    - SY_conv_k3x3_s1x1_d1x1_pad1x1
+    device_ir_budget:
+      mode: enforce
+      max_code_bytes: 1048576
+answer_surfaces:
+  prior_backends:
+  - merlin_native_v0
+  - hand_smoke_oot
+  - agent_spec_v0_mlir_oot
+  - agent_spec_v1_mlir_oot
+  prior_backend_exemptions: []
+performance:
+  global_objective_capsule: M2_microvit_gemmini
+toolchain:
+  sim_via: chipyard
+oracle_resources:
+  L5:
+    exclusive_resource: firesim_fpga_queue
+    batched: true
+    queue_wall_limit_s: 43200
+host:
+  board: gemmini_rocket_verilator
+  catalog: examples/gemmini/platform/board-catalog.yaml
+workload_spec:
+  models:
+  - resnet50
+  - tiny_llama
+  - smolvla
+  claim_objective_variants:
+    smolvla:
+      int8attn:
+        quant_scheme: int8_dyn_act_int8_weight
+        quant_activation_contractions: true
+      int8full:
+        quant_scheme: int8_dyn_act_int8_weight
+        quant_activation_contractions: true
+        quant_integer_nonlinear: true
+  applications:
+  - coverage_mlp
+  - residual_cnn
+  - causal_decoder
+  - causal_decoder_decode_step
+  - multimodal_policy
+  performance_applications:
+  - residual_cnn_scale
+  - decoder_scale
+  - decoder_step_scale
+  - vit_scale
+  historical_application_suites:
+    model_scale:
+    - deepjscc_int8_consistent
+    - lstmnetvit_fp8_consistent
+    - lstmnetvit_int8_consistent
+    - lstmnetvit_int8_w8a8_consistent
+  cert_budget_s: 300
+  certification_floor: L3
+  precision_preference:
+  - int8
+  - fp8_e4m3
+  - mxfp8
+  - fp16
+  - bf16
+  - fp32
+  max_synthesized_capsules: 160
+host_lane:
+  capability_spec: examples/gemmini/platform/host-capabilities.yaml
+  host_isa: rv64imafdcbzicsr_zifencei_zihpm_zfh_zba_zbb_zbs_xrocket
+  description: Generated scalar int8 package for the non-vector Rocket host. The package
+    ISA fits the selected DTS; a saved dequantization capture passed Spike. These
+    are not Rocket RTL/FireSim execution or blanket host-operation qualifications.
+    Each claimed host route still needs its own emitted lowering and numerical checks
+    before a partitioned model can pass.
+  repo_canonical: https://github.com/ucb-bar/merlin.git
+  dtype_strategy: int8_w8a8
+  provenance: in_tree_minted
+  package: out/artifacts/targets/host/gemmini_rocket_scalar_int8_v0
+  requires_paths:
+  - manifest.yaml
+  - knobs.yaml
+  read_only:
+  - out/artifacts/targets/host/gemmini_rocket_scalar_int8_v0/
+  deny_modification:
+  - merlin/python/merlin/llvmlower/
