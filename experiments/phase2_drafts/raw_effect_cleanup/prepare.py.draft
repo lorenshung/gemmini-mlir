@@ -1,0 +1,98 @@
+"""Compose an explicit raw-cleanup candidate; no compiler or target execution."""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import hashlib
+import json
+from pathlib import Path
+
+ANCHOR = "    def finish(self):\n        self.emit('ret void')\n"
+REPLACEMENT = (
+    "    def finish(self):\n"
+    "        from passes.gemmini_raw_effect_cleanup import optimize_lines\n"
+    "        self.lines, _cleanup_report = optimize_lines(self.lines)\n"
+    "        self.emit('ret void')\n"
+)
+EXPECTED_BUILDER = "6ef98c486e55c84bf0b946f3174e74c66d11d2e70ee724c7e28c4937081894b0"
+
+
+def pin(path):
+    raw = Path(path).read_bytes()
+    return {"path": str(Path(path).resolve()), "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+
+
+def inventory(root):
+    root = Path(root)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("candidate root must be a real owned directory")
+    rows, digest = [], hashlib.sha256()
+    for path in sorted(root.rglob("*")):
+        if path.is_symlink() or not (path.is_dir() or path.is_file()):
+            raise ValueError("candidate links and special entries are refused")
+        if path.is_file():
+            if path.stat().st_nlink != 1 or path.stat().st_size > 64 << 20:
+                raise ValueError("candidate file aliases or excessive bytes")
+            raw = path.read_bytes()
+            name = path.relative_to(root).as_posix()
+            digest.update(name.encode() + b"\0" + raw + b"\0")
+            rows.append({"path": name, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)})
+    if len(rows) > 64:
+        raise ValueError("candidate source inventory exceeds explicit bound")
+    return digest.hexdigest(), rows
+
+
+def apply_to_package(candidate, *, merlin_root):
+    """Patch only original Builder.finish; preserve prior contraction/panel edits."""
+    candidate, merlin_root = Path(candidate), Path(merlin_root)
+    before_sha, before = inventory(candidate)
+    builder = candidate / "builder.py"
+    source = builder.read_text()
+    if pin(builder)["sha256"] != EXPECTED_BUILDER or source.count(ANCHOR) != 1:
+        raise ValueError("original Builder or unique finish anchor changed")
+    target = Path(__file__).resolve().parents[2] / "merlin-support/backend/gemmini_raw_effect_cleanup.py"
+    generic = merlin_root / "src/merlin/compile/scheduling/effect_cleanup.py"
+    public = candidate / "passes"
+    additions = {public / "__init__.py": b"", public / "effect_cleanup.py": generic.read_bytes(),
+                 public / "gemmini_raw_effect_cleanup.py": target.read_bytes().replace(
+                     b"from merlin.compile.scheduling.effect_cleanup import ", b"from passes.effect_cleanup import ")}
+    if any(p.exists() or p.is_symlink() for p in additions):
+        raise ValueError("explicit cleanup helpers already exist")
+    for path, payload in additions.items():
+        ast.parse(payload, filename=str(path))
+    updated = source.replace(ANCHOR, REPLACEMENT)
+    ast.parse(updated)
+    public.mkdir(exist_ok=True)
+    for path, payload in additions.items():
+        path.write_bytes(payload)
+    builder.write_text(updated)
+    after_sha, after = inventory(candidate)
+    old = {r["path"]: r for r in before}
+    new = {r["path"]: r for r in after}
+    if [name for name in old if old[name] != new[name]] != ["builder.py"]:
+        raise ValueError("composition changed an unrelated existing source")
+    return {"schema": "gemmini.raw_effect_cleanup_candidate.v1", "input_sha256": before_sha,
+            "candidate_sha256": after_sha, "input_inventory": before, "candidate_inventory": after,
+            "implementation_sources": {"generic": pin(generic), "adapter": pin(target)},
+            "changed_existing_files": ["builder.py"], "added_files": sorted(set(new) - set(old)),
+            "new_explicit_import_closure": True, "old_SDK_or_edit_authority_extended": False,
+            "source_effect_qualification": "NOT_ISSUED", "target_execution": "NOT_RUN", "timing": "UNKNOWN"}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--candidate", type=Path, required=True)
+    parser.add_argument("--merlin-root", type=Path, required=True)
+    parser.add_argument("--report", type=Path, required=True)
+    args = parser.parse_args()
+    if args.report.exists():
+        raise ValueError("report must be fresh")
+    report = apply_to_package(args.candidate, merlin_root=args.merlin_root)
+    with args.report.open("x") as stream:
+        json.dump(report, stream, indent=2)
+        stream.write("\n")
+
+
+if __name__ == "__main__":
+    main()

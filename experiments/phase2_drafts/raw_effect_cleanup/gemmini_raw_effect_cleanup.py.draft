@@ -1,0 +1,93 @@
+"""Conservative raw LLVM cleanup proposal for the explicitly selected V26 ISA.
+
+No owner, receipt, numerical proof or qualification is issued here. The selected
+original source/effect checkers must independently recheck the eventual program.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+
+from merlin.compile.scheduling.effect_cleanup import Effect, cleanup_indices, verify_cleanup
+
+SCHEMA = "gemmini.raw_effect_cleanup.v1"
+FENCE = '  call void asm sideeffect "fence", "~{memory}"()'
+COMMAND = re.compile(
+    r'  call void asm sideeffect "\.insn r 0x7b, 3, ([0-9]+), x0, \$0, \$1", '
+    r'"r,r,~\{memory\}"\(i64 (-?[0-9]+|%[A-Za-z0-9_.$]+), '
+    r'i64 (-?[0-9]+|%[A-Za-z0-9_.$]+)\)'
+)
+PURE = re.compile(
+    r'  %[A-Za-z0-9_.$]+ = (?:getelementptr|ptrtoint|inttoptr|zext|sext|trunc|'
+    r'add|sub|mul|and|or|xor|shl|lshr|ashr|udiv|urem|sdiv|srem|icmp|select) '
+    r'[A-Za-z0-9_.$% @,*+\-\[\]]+'
+)
+ONE = 0x3F800000
+
+
+def _configuration(rs1, rs2):
+    if not (0 <= rs1 < 1 << 64 and 0 <= rs2 < 1 << 64):
+        return None
+    # Complete EX raw WS identity setup; no activation, transpose or set-only.
+    if (rs1, rs2) == (4 | (1 << 16) | (ONE << 32), 1 << 48):
+        return "EX", (rs1, rs2)
+    # Complete LD settings: identity scale, pixel repeat one, SRAM stride16,
+    # no shrink, one of the three independently selected load states.
+    for state in range(3):
+        expected = (ONE << 32) | (16 << 16) | (1 << 8) | (state << 3) | 1
+        if rs1 == expected and rs2 <= 0xFFFFFFFF:
+            return "LD" + str(state), (rs1, rs2)
+    # Raw i32 identity store mode only; no sentinel, pooling or activation.
+    if rs1 == 2 and rs2 >> 32 == ONE and 0 < (rs2 & 0xFFFFFFFF) <= 0xFFFFFFFC:
+        return "ST", (rs1, rs2)
+    return None
+
+
+def project(lines):
+    """Decode exact full statements; unknown syntax/effects reset all state."""
+    if type(lines) is not list or len(lines) > 65536 or any(
+        type(line) is not str or "\n" in line or "\r" in line for line in lines
+    ):
+        raise ValueError("raw cleanup needs bounded individual LLVM statements")
+    barriers = [i for i, line in enumerate(lines) if line == FENCE]
+    protected = {barriers[0], barriers[-1]} if barriers else set()
+    effects = []
+    for index, line in enumerate(lines):
+        if line == FENCE:
+            effect = Effect("barrier", protected=index in protected)
+        elif PURE.fullmatch(line):
+            effect = Effect("pure")
+        elif match := COMMAND.fullmatch(line):
+            funct, left, right = match.groups()
+            funct = int(funct)
+            if funct == 0 and left.lstrip("-").isdigit() and right.lstrip("-").isdigit():
+                decoded = _configuration(int(left), int(right))
+                effect = Effect("configuration", *decoded) if decoded else Effect("unknown")
+            elif funct in (1, 2, 3, 4, 5, 6, 14):
+                effect = Effect("activity")
+            else:
+                effect = Effect("unknown")
+        else:
+            effect = Effect("unknown")
+        effects.append(effect)
+    return tuple(effects)
+
+
+def optimize_lines(lines, *, enabled=True):
+    """Propose omissions only; entry/final fences and every payload stay exact."""
+    if type(enabled) is not bool:
+        raise ValueError("raw cleanup requires an explicit boolean")
+    effects = project(lines)
+    retained = cleanup_indices(effects) if enabled else tuple(range(len(lines)))
+    checked = verify_cleanup(effects, retained)
+    result = [lines[i] for i in retained]
+    digest = lambda value: hashlib.sha256(json.dumps(value, separators=(",", ":")).encode()).hexdigest()
+    return result, dict(
+        schema=SCHEMA, enabled=enabled, source_sha256=digest(lines), output_sha256=digest(result),
+        removed_configurations=sum(effects[i].kind == "configuration" for i in set(range(len(lines))) - set(retained)),
+        removed_fences=sum(effects[i].kind == "barrier" for i in set(range(len(lines))) - set(retained)),
+        protected_entry_and_final_fences=True, check=checked,
+        numerical_validation="NOT_RUN", target_execution_qualification="NOT_ESTABLISHED", timing="UNKNOWN",
+    )

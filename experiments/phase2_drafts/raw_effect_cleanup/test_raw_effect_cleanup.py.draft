@@ -1,0 +1,149 @@
+"""Host emission/induction controls, never target qualification."""
+
+import importlib.util
+import sys
+from pathlib import Path
+
+import pytest
+
+
+def load(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture
+def adapter():
+    return load(Path(__file__).resolve().parents[1] / "backend/gemmini_raw_effect_cleanup.py", "raw_cleanup_test")
+
+
+@pytest.fixture
+def builder():
+    # The exact original public compiler emitter is read only, not reimplemented.
+    root = Path(__file__).resolve().parents[2]
+    path = root / "phase1_generated/el4_fire_aligned_v26_original_29213759/package/builder.py"
+    return load(path, "original_raw_builder_test").Builder
+
+
+def test_actual_builder_stream_payload_and_completion_are_preserved(adapter, builder):
+    b = builder([])
+    b.rocc(0, 2, (adapter.ONE << 32) | 128)
+    b.fence()
+    b.rocc(0, 2, (adapter.ONE << 32) | 128)
+    b.fence()
+    b.rocc(2, "%a", 123)
+    b.fence()
+    b.fence()
+    b.rocc(6, 456, 789)
+    b.rocc(4, 123, 789)
+    b.fence()
+    b.rocc(3, "%out", 456)
+    b.fence()
+    original = list(b.lines)
+    after, report = adapter.optimize_lines(original)
+    assert report["removed_configurations"] == 1
+    assert report["removed_fences"] == 2
+    assert original == b.lines
+    assert after[0:2] == original[0:2] and after[-1] == original[-1]
+    assert [line for line in after if '0x7b, 3, 0,' not in line and line != adapter.FENCE] == [
+        line for line in original if '0x7b, 3, 0,' not in line and line != adapter.FENCE]
+    assert report["target_execution_qualification"] == "NOT_ESTABLISHED"
+
+
+@pytest.mark.parametrize("middle", [
+    "other:", "  br label %other", "  store i8 1, ptr %a, align 1",
+    "  %v = load i8, ptr %a, align 1", "  call void @unknown()",
+    '  call void asm sideeffect "fence", ""()',
+])
+def test_unknown_cpu_memory_cfg_and_nonoriginal_barriers_forget_config(adapter, builder, middle):
+    b = builder([])
+    b.rocc(0, 2, (adapter.ONE << 32) | 128)
+    b.fence()
+    b.lines.append(middle)
+    b.rocc(0, 2, (adapter.ONE << 32) | 128)
+    b.fence()
+    assert adapter.optimize_lines(b.lines)[0] == b.lines
+
+
+@pytest.mark.parametrize("rs1,rs2", [(6, (0x3F800000 << 32) | 128),
+    (2, (0x3F000000 << 32) | 128), (2, (0xFFFFFFFF << 32) | 128),
+    (2, 0x3F800000 << 32), (3, 128), (2, "%stride")])
+def test_changed_activation_scale_pooling_norm_dynamic_or_zero_stride_retained(adapter, builder, rs1, rs2):
+    b = builder([])
+    b.rocc(0, rs1, rs2)
+    b.rocc(0, rs1, rs2)
+    b.fence()
+    assert adapter.optimize_lines(b.lines)[0] == b.lines
+
+
+def test_all_load_states_distinct_changed_stride_and_unknown_raw_clobber(adapter, builder):
+    b = builder([])
+    for state in range(3):
+        value = (adapter.ONE << 32) | (16 << 16) | (1 << 8) | (state << 3) | 1
+        b.rocc(0, value, 17)
+        b.rocc(0, value, 31)
+        b.rocc(0, value, 31)
+    b.rocc(8, 0, 0)  # never deleted or interpreted as supported FSM.
+    b.rocc(0, value, 31)
+    b.fence()
+    after, report = adapter.optimize_lines(b.lines)
+    assert report["removed_configurations"] == 3
+    assert any('0x7b, 3, 8,' in line for line in after)
+    assert after[-2:] == b.lines[-2:]
+
+
+def test_config_needs_its_own_completion_and_pure_ssa_does_not_change_state(adapter, builder):
+    b = builder([])
+    b.fence()
+    b.rocc(0, 2, (adapter.ONE << 32) | 128)
+    b.fence()
+    b.lines.append("  %p = getelementptr i8, ptr %a, i64 1")
+    b.rocc(0, 2, (adapter.ONE << 32) | 128)
+    b.fence()
+    b.rocc(2, "%p", 123)
+    b.fence()
+    after, report = adapter.optimize_lines(b.lines)
+    assert report["removed_configurations"] == 1
+    assert after[-2:] == b.lines[-2:]
+    assert after.count(adapter.FENCE) == 3  # entry, real CONFIG completion, payload completion.
+
+
+def test_composition_preserves_existing_contraction_and_vendors_exact_algorithm(tmp_path, builder):
+    import shutil
+    root = Path(__file__).resolve().parents[2]
+    prep = load(root / "experiments/raw_effect_cleanup/prepare.py", "raw_cleanup_prepare_test")
+    original = root / "phase1_generated/el4_fire_aligned_v26_original_29213759/package"
+    candidate = tmp_path / "candidate"
+    shutil.copytree(original, candidate)
+    for path in [candidate, *candidate.rglob("*")]:
+        path.chmod(0o700 if path.is_dir() else 0o600)
+    contraction = candidate / "contraction.py"
+    contraction.write_text(contraction.read_text() + "\n# previously composed A/C scheduling change\n")
+    before = contraction.read_bytes()
+    merlin_root = Path(__import__("merlin").__path__[0]).parents[1]
+    report = prep.apply_to_package(candidate, merlin_root=merlin_root)
+    assert contraction.read_bytes() == before
+    assert report["changed_existing_files"] == ["builder.py"]
+    assert (candidate / "passes/effect_cleanup.py").read_bytes() == (
+        merlin_root / "src/merlin/compile/scheduling/effect_cleanup.py").read_bytes()
+    with pytest.raises(ValueError, match="Builder"):
+        prep.apply_to_package(candidate, merlin_root=merlin_root)
+    # Run the actual patched finish and its actual private helper imports.
+    sys.path.insert(0, str(candidate))
+    try:
+        patched = load(candidate / "builder.py", "patched_raw_builder_test").Builder([])
+        patched.fence()
+        patched.fence()
+        patched.rocc(2, "%a", 123)
+        patched.fence()
+        ir = patched.finish()
+        assert 'kernel_complete:\\0Afence\\0Aret' in ir
+        assert ir.count(adapter_fence := 'call void asm sideeffect "fence", "~{memory}"()') == 2
+        assert patched.lines[-1] == "  ret void"
+    finally:
+        sys.path.remove(str(candidate))
+        for name in ("passes.gemmini_raw_effect_cleanup", "passes.effect_cleanup", "passes"):
+            sys.modules.pop(name, None)

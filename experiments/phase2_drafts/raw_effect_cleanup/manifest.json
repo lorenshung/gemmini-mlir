@@ -1,0 +1,32 @@
+{
+  "candidate_package_created": false,
+  "files": [
+    {
+      "bytes": 4172,
+      "intended_source_path": "merlin-support/backend/gemmini_raw_effect_cleanup.py",
+      "sha256": "55b2d0172478bac0c8a931e5829c0f410b41d2c71d3a53a421374ae0bccab124",
+      "snapshot": "gemmini_raw_effect_cleanup.py.draft",
+      "status": "DISABLED_UNTESTED_DRAFT"
+    },
+    {
+      "bytes": 5898,
+      "intended_source_path": "merlin-support/tests/test_raw_effect_cleanup.py",
+      "sha256": "4f23dbf174dfa3efe31074783e3449fc689ba4bf11f80c61a179e275cd038a2c",
+      "snapshot": "test_raw_effect_cleanup.py.draft",
+      "status": "DISABLED_UNTESTED_DRAFT"
+    },
+    {
+      "bytes": 4614,
+      "intended_source_path": "experiments/raw_effect_cleanup/prepare.py",
+      "sha256": "5f4114d6e94c64e3827eabe15dac60a1270de8e1ac9ed540ddf19cea34813dfe",
+      "snapshot": "prepare.py.draft",
+      "status": "DISABLED_UNTESTED_DRAFT"
+    }
+  ],
+  "original_effect_qualification_issued": false,
+  "schema": "gemmini.disabled_source_draft_snapshot.v1",
+  "source_repo_head": "d28d214092375be95e2caed88012d53bbb1a435d",
+  "status": "PAUSED_UNTESTED_NOT_ENABLED",
+  "target_jobs": 0,
+  "tests_run": 0
+}
