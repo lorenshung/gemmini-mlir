@@ -264,7 +264,6 @@ def analyse_body(block: Block, n_in: int, consts: dict[int, float]) -> Body | No
     env: dict = {}
     for i, a in enumerate(block.args[:n_in]):
         env[a] = Fraction(consts[i]) if i in consts else Lin({i: Fraction(1)}, Fraction(0))
-    relu_of = {}
     widen = False
     for op in block.ops:
         nm = op.name
@@ -530,8 +529,7 @@ def match_elementwise(op: Operation) -> Match | None:
                 aten = "aten.neg.default" if w == -1.0 else "aten.mul.Scalar"
                 k = ops.scale_map(aten, oshape, w, s_x=q.scale, s_out=s_o)
         elif c == 0 and body.relu:
-            if w <= 0:
-                pass # ReLU is evaluated exactly in the host epilogue
+            # Any sign of w is exact: the ReLU is evaluated in the host epilogue.
             aten, k = "aten.relu.default", ops.relu(oshape, s_x=Fraction(w) * Fraction(q.scale), s_out=s_o)
         else:
             aten = "aten.add.Scalar" if c > 0 else "aten.sub.Scalar"
@@ -664,16 +662,12 @@ def follow_chain(v: SSAValue) -> Chain:
                 raise Decline("bias is neither dequantized nor a dense constant")
             ch.bias = (src, body.lin.terms[i] * k_b, maps[i])
             ch.ops.extend(extra)
-        if ch.bias is not None and k != 1.0 and others:
-            # a later scale also scales the bias term
-            src, wb, m = ch.bias
-            ch.bias = (src, wb, m)
         ch.relu = body.relu
         ch.ops.append(u)
         ch.final = u.results[0]
 
 
-def _bias_operand(ch: Chain, s_acc: float, n: int, broadcast_dim_ok, full_ok=None):
+def _bias_operand(ch: Chain, n: int, broadcast_dim_ok, full_ok=None):
     """('arg', QIn, repeat, full) for a runtime int32 bias whose weight is a small positive integer
     in accumulator units, ('const', int32 array, 1, full) for a compile-time bias, or None."""
     if ch.bias is None:
@@ -775,9 +769,7 @@ def match_contraction(op: Operation) -> Match | None:
     if ch.perm is not None:
         raise Decline("contraction result is transposed")
     q = _sandwich_out(ch.final)
-    s_acc = Fraction(qa.scale) * Fraction(qb.scale)
-    out_shape = shape(q.value)
-    bias = _bias_operand(ch, s_acc, N, lambda m: trailing_block(m) == m.num_dims - 1,
+    bias = _bias_operand(ch, N, lambda m: trailing_block(m) == m.num_dims - 1,
                          full_ok=(lambda m: identity_map(m)) if not batched else None)
     if ch.c:
         raise Decline("constant epilogue offset")
@@ -792,7 +784,7 @@ def match_contraction(op: Operation) -> Match | None:
     if bias and bias[0] == "arg":
         operands.append(("bias", bias[1].value))
     consumed = [op, *ch.ops, q.op, qa.dq, qb.dq] + ([bias[1].dq] if bias and bias[0] == "arg" else [])
-    return Match(aten, ch.final.owner if False else q.op, consumed, operands, ("out", q.value), k,
+    return Match(aten, q.op, consumed, operands, ("out", q.value), k,
                  numeric=dict(s_a=qa.scale, s_b=qb.scale, s_out=q.scale, alpha=ch.w, relu=ch.relu))
 
 
@@ -827,7 +819,7 @@ def _im2col(v: SSAValue, num_dims: int = 6):
 
 def _nchw_convolution(g, ch, q, qx, qw, bias_ok, head, tail=()):
     """Kernel, host bias and Match of a proven im2col convolution; consumed = head, epilogue, Q/DQ, tail, bias DQ."""
-    bias = _bias_operand(ch, Fraction(qx.scale) * Fraction(qw.scale), g.cout, bias_ok)
+    bias = _bias_operand(ch, g.cout, bias_ok)
     if ch.c:
         raise Decline("constant epilogue offset")
     k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
@@ -973,7 +965,6 @@ def match_mean(op: Operation) -> Match | None:
         raise Decline(str(exc))
     if int(np.prod(k.args[-1].shape)) != int(np.prod(shape(q.value))):
         raise Decline("reduction output view")
-    k.args[-1]
     return Match(aten, q.op, [op, *ch.ops, q.op, qx.dq], [("x", qx.value)], ("y", q.value), k,
                  numeric=dict(s_x=qx.scale, s_out=q.scale, dims=dims, w=ch.w))
 
@@ -1126,8 +1117,6 @@ def _conv_input_two_stage(op, q0, root, qg, qw):
     pairs = np.stack((lm.out,lm.idx),axis=1)
     if expected != lm.out.size or len(np.unique(pairs,axis=0)) != expected:
         raise Decline('transposed scatter does not cover each contribution exactly once')
-    if found is None:
-        raise Decline("scatter is not a transposed convolution of a square geometry")
     k = ops.conv_backward_input(found, s_g=qg.scale, s_w=qw.scale, s_out=q0.scale,
                                 constants=_literal_codes([("g",qg),("w",qw)]))
     _pack_inputs(k,[("g",qg),("w",qw)])
@@ -1249,8 +1238,7 @@ def match_movement(op: Operation) -> Match | None:
                 lo = offs[d] - lo_crop[d]
                 hi = os_[d] - xs[d] - lo
                 pad += [lo, hi]
-            val = value if q.dq is not None else value
-            k = ops.constant_pad_nd(xs, pad, val, s_x=q.scale, s_out=out[1])
+            k = ops.constant_pad_nd(xs, pad, value, s_x=q.scale, s_out=out[1])
             if out[2]:
                 cons += [out[2], q.dq]
             return Match("aten.constant_pad_nd.default", op, cons, [("x", q.value)], ("y", out[0]), k,
