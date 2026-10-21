@@ -25,13 +25,7 @@ CASES = C.cases()
 def test_extension_opcode_matches_merlin_reference(name):
     cb = CASES[name]
     inputs = C.stimulus(cb, list(CASES).index(name))
-    from mlir_oot.core_aten.iface import IfaceDecline
-    from mlir_oot.core_aten.match import Decline
-    try:
-        merlin_cb, (ours, _, stream) = R.lower(cb)
-    except (IfaceDecline, Decline) as exc:
-        assert 'exact arithmetic' in str(exc)
-        return
+    merlin_cb, (ours, _, stream) = R.lower(cb)   # every extension case must lower; a decline fails
     ref = R.reference(merlin_cb, inputs)
     model = simulate(stream, inputs)
     for k, v in ref.items():
