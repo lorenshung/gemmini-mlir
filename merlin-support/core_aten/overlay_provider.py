@@ -29,7 +29,9 @@ _ISA_HEADERS_PIN = "gemmini_isa_headers"
 _ABI_HEADER = "include/gemmini_params.h"
 _SUPPORT_ROOT = Path(__file__).resolve().parents[1]
 _TARGET_CONTRACT = Path("contracts/target_contract.yaml")
-_CONFORMANCE = Path("core_aten/resources/conformance.yaml")
+#: Merlin's derived Gemmini conformance spec, read in place and pinned by content.
+_CONFORMANCE = Path("experiments/reference-data/phase0/conformance/gemmini.yaml")
+_CONFORMANCE_SHA256 = "7d5f435e1033863fbcf44ad241a5ae4c864a001ceae6bbea4e222551cdf48aa4"
 
 
 def _sha256(path: Path) -> str:
@@ -56,6 +58,7 @@ def gemmini_profile(header_root: Path | None = None) -> dict[str, Any]:
     root), and must match the pinned bytes; an unselected or off-pin header refuses.
     """
     from merlin.common import provenance
+    from merlin.common.paths import repo_root
 
     pin = provenance.pin(_ISA_HEADERS_PIN)
     root = Path(header_root) if header_root is not None else pin.checkout()
@@ -64,7 +67,9 @@ def gemmini_profile(header_root: Path | None = None) -> dict[str, Any]:
     provenance.require(_ISA_HEADERS_PIN, checkout=root, reads=[_ABI_HEADER])
     header_path = root / _ABI_HEADER
     contract_path = _SUPPORT_ROOT / _TARGET_CONTRACT
-    conformance_path = _SUPPORT_ROOT / _CONFORMANCE
+    conformance_sha256 = _sha256(repo_root() / _CONFORMANCE)
+    if conformance_sha256 != _CONFORMANCE_SHA256:
+        raise RuntimeError(f"Merlin {_CONFORMANCE} does not match its pinned sha256 {_CONFORMANCE_SHA256}")
     header = header_path.read_text(encoding="utf-8")
     facts = {
         "tile_edge": _macro(header, "DIM"),
@@ -91,7 +96,7 @@ def gemmini_profile(header_root: Path | None = None) -> dict[str, Any]:
         "sources": [
             {"pin": _ISA_HEADERS_PIN, "commit": pin.commit, "path": _ABI_HEADER, "sha256": _sha256(header_path)},
             {"path": str(_TARGET_CONTRACT), "sha256": _sha256(contract_path)},
-            {"path": str(_CONFORMANCE), "sha256": _sha256(conformance_path)},
+            {"path": str(_CONFORMANCE), "sha256": conformance_sha256},
         ],
         "scope": (
             "additive Gemmini contraction boundary witnesses; never a replacement for portable Core ATen obligations"

@@ -152,8 +152,10 @@ Overlay geometry is parsed from the verified `gemmini_isa_headers` hardware pin
 (`7c540b3adf1b86ad93d07f893abe3a73489b568e`), with positive geometry required.
 There is no second literal tile/bank/row/DMA configuration check. The i8/i32
 ABI remains an explicit datapath qualification tied to that pin; other datatypes
-require a new provider qualification. Contract and conformance bytes come from
-this support package, never Merlin's target-specific examples. Tests include a
+require a new provider qualification. Contract bytes come from this support
+package, never Merlin's target-specific examples. Conformance is read from
+Merlin's derived `experiments/reference-data/phase0/conformance/gemmini.yaml`
+and must match the sha256 pinned in `overlay_provider.py`. Tests include a
 synthetic facts fixture and do not certify hardware.
 
 The older `phase1-support-baseline` changes (7e7a883 and c5b94f1) are already

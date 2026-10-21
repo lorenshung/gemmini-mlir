@@ -134,3 +134,21 @@ def test_profile_refuses_unverified_header(tmp_path, monkeypatch):
     monkeypatch.setattr(provenance, "require", refuse)
     with pytest.raises(RuntimeError, match="off the selected hardware pin"):
         gemmini_profile(tmp_path)
+
+
+def test_profile_refuses_a_conformance_spec_off_its_pinned_sha(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from merlin.common import paths, provenance
+
+    header = tmp_path / "include/gemmini_params.h"
+    header.parent.mkdir()
+    header.write_text("#define DIM 8\n")
+    conformance = tmp_path / "experiments/reference-data/phase0/conformance/gemmini.yaml"
+    conformance.parent.mkdir(parents=True)
+    conformance.write_text("schema: edited\n")
+    monkeypatch.setattr(provenance, "pin", lambda _: SimpleNamespace(commit="synthetic-pin"))
+    monkeypatch.setattr(provenance, "require", lambda name, **kwargs: None)
+    monkeypatch.setattr(paths, "repo_root", lambda: tmp_path)
+    with pytest.raises(RuntimeError, match="does not match its pinned sha256"):
+        gemmini_profile(tmp_path)
