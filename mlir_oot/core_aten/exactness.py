@@ -28,8 +28,9 @@ def require(condition, reason):
         raise Decline('exact arithmetic: ' + reason)
 
 
-def quantized(value, lo=-128, hi=127):
-    return min(hi, max(lo, round(value)))
+def quantized(value, lo=-128, hi=127, zero_point=0):
+    """The one exact readout rule: round half to even, add the zero point, clamp."""
+    return min(hi, max(lo, round(value) + zero_point))
 
 
 def accumulator_bound(bound):

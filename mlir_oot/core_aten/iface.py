@@ -26,7 +26,7 @@ import numpy as np
 from xdsl.dialects.builtin import ArrayAttr, FloatAttr, IntegerAttr, IntegerType, StringAttr, TensorType
 
 from . import linmatch, ops
-from .exactness import rational as Q, prove_affine, accumulator_bound
+from .exactness import rational as Q, prove_affine, accumulator_bound, quantized
 from .emit import build_module
 from .linmap import LinearMap
 from .match import Decline
@@ -106,7 +106,7 @@ def _gather_map(out_tags: np.ndarray, ratios: dict, fill_codes: np.ndarray | Non
 def _requant_code(code: int, scale) -> int:
     if scale is None:
         return code
-    return int(min(127, max(-128, round(Q(code) * Q(scale)))))
+    return int(quantized(Q(code) * Q(scale)))
 
 
 def _check_range(attrs, dtype, op):

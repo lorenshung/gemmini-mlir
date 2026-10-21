@@ -10,6 +10,7 @@ from math import prod
 import numpy as np
 
 from . import linmap, ops
+from .exactness import quantized
 from .bitwise import Selectors
 from .match import (Match, dequant, name_of, producer, quant_sink,
                     shape, _prop_int, _region_closed)
@@ -107,7 +108,7 @@ def structural(op, qout, ordinals):
             continue
         target = 'y' if value is root_value else scratch(f'layout_{number}','i8',shape(value))
         if constant is not None:
-            code=min(qout.qmax,max(qout.qmin,round(Fraction(constant)/so)+qout.zero_point))
+            code=quantized(Fraction(constant)/so,qout.qmin,qout.qmax,qout.zero_point)
             layout.fill(s,target,prod(shape(value)),code)
         for v,mapping in zip(values,maps):
             sh,ss,offset,ds,*source_offset=mapping
@@ -202,7 +203,7 @@ def match(op, ordinals):
         scale = Fraction(int(output['scale_numerator']), int(output['scale_denominator']))
         codes = np.zeros(n, np.uint8)
         for p in np.flatnonzero(which < 0):
-            code = min(qout.qmax, max(qout.qmin, round(Fraction(constants[p]) / scale) + qout.zero_point))
+            code = quantized(Fraction(constants[p]) / scale, qout.qmin, qout.qmax, qout.zero_point)
             codes[p] = code & 255
         s.const('literal', codes.view(np.int8))
         if not identical:

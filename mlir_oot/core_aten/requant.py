@@ -10,6 +10,8 @@ from fractions import Fraction
 
 import numpy as np
 
+from .exactness import quantized
+
 
 @dataclass
 class Readout:
@@ -60,7 +62,7 @@ def evaluate(
         real = int(x) * factor
         if relu:
             real = max(real, 0)
-        return min(quant_max, max(quant_min, round(real) + zero_point))
+        return quantized(real, quant_min, quant_max, zero_point)
 
     dt = np.uint8 if quant_min >= 0 else np.int8
     a = np.asarray(values)
@@ -90,7 +92,7 @@ def apply(stream, buffers, readouts=None):
                 values += by_name[name].reshape(-1)[positions].astype(object)*factor
             if readout.relu:
                 values = np.maximum(values, 0)
-            out.reshape(-1)[positions] = [min(readout.quant_max,max(readout.quant_min,round(Fraction(v))+readout.zero_point)) for v in values]
+            out.reshape(-1)[positions] = [quantized(Fraction(v),readout.quant_min,readout.quant_max,readout.zero_point) for v in values]
             continue
         values = parameters(readout, readout.constant, out.shape).copy()
         for name, factor in readout.terms:
@@ -106,5 +108,5 @@ def apply(stream, buffers, readouts=None):
             values = np.maximum(values, 0)
         zps, lows, highs = [parameters(readout, v, out.shape) for v in
                            (readout.zero_point, readout.quant_min, readout.quant_max)]
-        out.flat[:] = np.array([min(int(hi), max(int(lo), round(Fraction(v))+int(zp)))
+        out.flat[:] = np.array([quantized(Fraction(v), int(lo), int(hi), int(zp))
                                      for v,zp,lo,hi in zip(values,zps,lows,highs)], dtype=np.int64).astype(out.dtype)
