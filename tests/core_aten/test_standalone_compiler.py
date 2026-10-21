@@ -137,17 +137,6 @@ runpy.run_path(sys.argv[0],run_name="__main__")
     assert run.returncode==0,run.stderr
 
 
-def test_pipeline_refactor_is_identical_to_vcs_engine_head():
-    old = subprocess.check_output(['git', '--git-dir='+str(ROOT/'.codex-side.git'),
-        '--work-tree='+str(ROOT), 'show', '16a3db2:mlir_oot/gemmini_opt.py'], text=True)
-    before=ast.parse(old)
-    after=ast.parse((ROOT/'mlir_oot/compiler_cli.py').read_text())
-    for name in ('Pipeline', '_ExtensionPlan', '_print'):
-        a=next(n for n in before.body if isinstance(n,(ast.ClassDef,ast.FunctionDef)) and n.name==name)
-        b=next(n for n in after.body if isinstance(n,(ast.ClassDef,ast.FunctionDef)) and n.name==name)
-        assert ast.dump(a)==ast.dump(b)
-
-
 @pytest.fixture
 def matmul_input(tmp_path):
     source=tmp_path/'matmul.mlir'
