@@ -18,11 +18,23 @@ FIXTURES = HERE.parent / "fixtures" / "core_aten"            # model2MLIR 9c8b69
 LEGACY = HERE.parent / "fixtures" / "core_aten_legacy"      # earlier gather-loop and LHS-weight forms of core_aten cases
 class TestRecipes(unittest.TestCase):
     def test_admitted_recipes_equal_exact_arithmetic(self):
-        for case in cases.paper_cases(representative=False):
+        for case in cases.paper_cases():
             with self.subTest(case.name):
                 model = simulate(case.kernel.stream, case.inputs)
                 for name, expected in case.reference.items():
                     self.assertTrue(np.array_equal(model[name], expected), case.name)
+
+    def test_runtime_seed_without_range_proof_is_refused(self):
+        from mlir_oot.core_aten import ops
+        from mlir_oot.core_aten.match import Decline
+        from mlir_oot.core_aten.recipes.conv import ConvGeom
+        refusals = {
+            "conv": lambda: ops.convolution(ConvGeom(1, 8, 8, 16, 16, 3, 3, 1, 1, 1, 1, 1, 1, 1), s_out=1.0, bias=True),
+            "addmm": lambda: ops.matmul("aten.addmm.default", 4, 16, 16, s_out=1.0, bias=True),
+        }
+        for name, build_kernel in refusals.items():
+            with self.subTest(name), self.assertRaisesRegex(Decline, "seed has no nonoverflow range proof"):
+                build_kernel()
 
 
 class TestCatalogOnCaptures(unittest.TestCase):

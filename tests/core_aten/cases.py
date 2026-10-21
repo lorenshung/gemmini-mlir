@@ -79,7 +79,8 @@ def addmm_case(M, K, N, seed=0, name=None, beta=1.0, alpha=1.0):
     bq = torch.round(beta * bias / (alpha * sa * sw)).to(torch.int32)
     y = A.addmm.default(dq(bq, sa * sw) * alpha, dq(aq, sa), dq(wq, sw), beta=1.0, alpha=alpha)
     so = scale_of(y)
-    k = ops.matmul("aten.addmm.default", M, K, N, s_a=sa, s_b=sw, s_out=so, alpha=alpha, bias=True)
+    k = ops.matmul("aten.addmm.default", M, K, N, s_a=sa, s_b=sw, s_out=so, alpha=alpha, bias=True,
+                   bias_range=(int(bq.min()), int(bq.max())))
     return Case(name or f"addmm_{M}x{K}x{N}", "aten.addmm.default", k,
                 {"a": _np(aq), "b": _np(wq), "bias": _np(bq)}, {"out": _np(q(y, so))})
 
@@ -95,23 +96,20 @@ def bmm_case(B, M, K, N, seed=0, name=None):
                 {"out": exact_quantize(_np(aq).astype(object) @ _np(bq).astype(object) * F(sa) * F(sb), so)})
 
 
-def conv_case(N, C, H, W, F, k, s=1, p=0, d=1, groups=1, bias=True, seed=0, name=None):
+def conv_case(N, C, H, W, cout, k, s=1, p=0, d=1, groups=1, seed=0, name=None):
+    """Without a seed: production refuses a runtime convolution seed (no nonoverflow range proof)."""
     x = _act((N, C, H, W), seed, relu_like=True)
-    w = _act((F, C // groups, k, k), seed + 1) * 0.1
-    b = _act((F,), seed + 2) * 0.5
+    w = _act((cout, C // groups, k, k), seed + 1) * 0.1
     sx, sw = scale_of(x), scale_of(w)
     xq, wq = q(x, sx), q(w, sw)
-    bq = torch.round(b / (sx * sw)).to(torch.int32)
-    y = A.convolution.default(dq(xq, sx), dq(wq, sw), dq(bq, sx * sw) if bias else None, [s, s], [p, p], [d, d],
-                              False, [0, 0], groups)
-    so = scale_of(y)
-    g = ConvGeom(N, H, W, C, F, k, k, s, s, p, p, d, d, groups)
-    kern = ops.convolution(g, s_x=sx, s_w=sw, s_out=so, bias=bias)
+    conv = lambda a, b: A.convolution.default(a, b, None, [s, s], [p, p], [d, d], False, [0, 0], groups)
+    so = scale_of(conv(dq(xq, sx), dq(wq, sw)))
+    acc = conv(xq.to(torch.float64), wq.to(torch.float64)).to(torch.int64)   # integer codes: exact in f64
+    g = ConvGeom(N, H, W, C, cout, k, k, s, s, p, p, d, d, groups)
+    kern = ops.convolution(g, s_x=sx, s_w=sw, s_out=so)
     inputs = {"x": _np(xq.permute(0, 2, 3, 1)), "w": _np(wq.permute(2, 3, 1, 0))}
-    if bias:
-        inputs["bias"] = _np(bq)
-    return Case(name or f"conv_{N}x{C}x{H}x{W}_k{k}s{s}p{p}_{F}", "aten.convolution.default", kern, inputs,
-                {"y": _np(q(y, so).permute(0, 2, 3, 1))})
+    return Case(name or f"conv_{N}x{C}x{H}x{W}_k{k}s{s}p{p}_{cout}", "aten.convolution.default", kern, inputs,
+                {"y": exact_quantize(_np(acc.permute(0, 2, 3, 1)).astype(object) * F(sx) * F(sw), so)})
 
 
 # ---------------------------------------------------------------------------------------------
@@ -255,10 +253,11 @@ def to_copy_case(shape, seed=0, name=None):
 
 
 # ---------------------------------------------------------------------------------------------
-# The paper subset: representative shapes (analysis/FINAL_LISTS.md) and small edge shapes
+# The paper subset: small edge shapes
 # ---------------------------------------------------------------------------------------------
 
-def paper_cases(representative: bool = True) -> list[Case]:
+def paper_cases() -> list[Case]:
+    """Every case must be admitted: a device refusal raises Decline instead of dropping the case."""
     out = [
         lambda: conv_case(1, 64, 9, 11, 48, 3, 1, 1, name="conv_k3s1p1_tails"),
         lambda: conv_case(1, 32, 12, 12, 40, 3, 2, 1, name="conv_k3s2p1"),
@@ -288,31 +287,4 @@ def paper_cases(representative: bool = True) -> list[Case]:
         lambda: full_like_case((37, 21), -1.7, s_out=0.05, name="full_like_tails"),
         lambda: to_copy_case((5, 10), name="to_copy_50"),
     ]
-    if representative:
-        out += [
-            lambda: conv_case(1, 256, 14, 14, 256, 3, 1, 1, name="conv_256x14x14_k3s1p1_256"),
-            lambda: addmm_case(1024, 768, 768, name="addmm_1024x768x768"),
-            lambda: mm_case(128, 2048, 2048, name="mm_128x2048x2048"),
-            lambda: bmm_case(32, 128, 64, 128, name="bmm_32x128x64x128"),
-            lambda: add_case("aten.sub.Tensor", (750, 32), name="sub_Tensor_750x32"),
-            lambda: scale_case("aten.neg.default", (4096, 32), 0, name="neg_4096x32"),
-            lambda: add_case("aten.add.Tensor", (128, 2048), name="add_Tensor_128x2048"),
-            lambda: scale_case("aten.mul.Scalar", (4096, 64), 0.125, name="mul_Scalar_4096x64"),
-            lambda: relu_case((256, 196), name="relu_256x196"),
-            lambda: mean_case((128, 2048), [-1], name="mean_dim_128x2048"),
-            lambda: clone_case((262144,), name="clone_262144"),
-            lambda: permute_case((128, 32, 64), (1, 0, 2), name="permute_128x32x64_0213"),
-            lambda: slice_scatter_case((750, 64), (750, 32), 1, 0, 32, 1, name="slice_scatter_750x64_c0"),
-            lambda: pad_case((3, 512, 512), [0, 0, 0, 0], 0.0, name="constant_pad_nd_3x512x512_p0"),
-            lambda: full_like_case((12, 1024, 1024), 0.0, s_out=0.1, name="full_like_12x1024x1024"),
-            lambda: cat_case([(4, 128, 64), (4, 1, 64)], 1, name="cat_kv_4x128x64"),
-            lambda: to_copy_case((50,), name="to_copy_50_rep"),
-        ]
-    from mlir_oot.core_aten.match import Decline
-    admitted = []
-    for factory in out:
-        try:
-            admitted.append(factory())
-        except Decline as exc:
-            print("device refusal:", exc)
-    return admitted
+    return [factory() for factory in out]
