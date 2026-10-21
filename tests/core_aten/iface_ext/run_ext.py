@@ -2,10 +2,10 @@
 
 Per case: Merlin's ``emit_interface_mlir`` renders the buffer, the backend parses and lowers it to
 one ``gemmini_kernel`` plus a command buffer, and the kernel's bit-level model must equal Merlin's
-``reference_outputs`` EXACTLY.  With ``--spike`` / ``--rtl`` every case is linked into one ELF that
+``reference_outputs`` EXACTLY.  With ``--spike`` every case is linked into one ELF that
 compares the device bytes with the reference (tolerance 0).
 
-    python run_ext.py [--rep] [--only name ...] [--spike] [--rtl] [--json out.json]
+    python run_ext.py [--rep] [--only name ...] [--spike] [--json out.json]
 """
 
 from __future__ import annotations
@@ -113,7 +113,6 @@ def main() -> int:
     ap.add_argument("--rep", action="store_true")
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--spike", action="store_true")
-    ap.add_argument("--rtl", action="store_true")
     ap.add_argument("--batch", default="iface_ext")
     ap.add_argument("--json", type=Path)
     a = ap.parse_args()
@@ -137,7 +136,7 @@ def main() -> int:
             row = dict(status="PASS" if not any(bad.values()) and not problems else "FAIL", mismatches=bad,
                        buffer_problems=problems, eager_float_divergence=dict(informational=True, diagnostics=divergence),
                        commands=[c["opcode"] for c in ours["commands"]], instructions=len(stream.ins))
-            if a.spike or a.rtl:
+            if a.spike:
                 sym = f"ifx{i}_{name}"
                 module, _ = build_module(stream, sym)
                 objects.append(Path(compile_to_object(module, wd, stem=sym)["object"]))
@@ -165,18 +164,15 @@ def main() -> int:
         print(f"{name:28s} {row['status']} {row.get('mismatches', row.get('error', ''))} {row.get('buffer_problems') or ''}",
               flush=True)
     result = {"model_vs_reference": rows}
-    if (a.spike or a.rtl) and calls:
+    if a.spike and calls:
         elf = runner.build_elf(runner.DeviceTest(a.batch, objects, buffers, calls, checks, outputs), wd)
         from mlir_oot.golden_device_catalog import final_elf_audit
         final_elf_audit(elf)
-        for engine, flag, fn in (("spike", a.spike, runner.run_spike), ("rtl", a.rtl, runner.run_rtl)):
-            if not flag:
-                continue
-            r = fn(elf)
-            result[engine] = dict(status=r.status, passed=len(r.passed), failed=r.failed, info=r.info,
-                                  seconds=round(r.seconds, 1), tail=None if r.ok else r.log[-3000:])
-            print(engine, r.status, len(r.passed), "checks passed", r.failed or "", flush=True)
-            ok &= r.ok
+        r = runner.run_spike(elf)
+        result["spike"] = dict(status=r.status, passed=len(r.passed), failed=r.failed, info=r.info,
+                               seconds=round(r.seconds, 1), tail=None if r.ok else r.log[-3000:])
+        print("spike", r.status, len(r.passed), "checks passed", r.failed or "", flush=True)
+        ok &= r.ok
     if a.json:
         a.json.write_text(json.dumps(result, indent=1) + "\n")
     return 0 if ok else 1

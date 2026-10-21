@@ -4,8 +4,6 @@ Environment (all explicit; nothing is guessed from the caller's checkout):
   GEMMINI_LLVM_BIN     LLVM/MLIR bin directory with mlir-translate and clang or llc
   GEMMINI_RISCV_TOOLS  riscv-tools prefix with riscv64-unknown-elf-gcc, spike, lib/libgemmini.so
   GEMMINI_ROCC_TESTS   gemmini-rocc-tests checkout (riscv-tests benchmarks common: crt.S, syscalls.c, test.ld)
-  GEMMINI_RTL_SIM      Verilator GemminiRocketConfig simulator (RTL runs only)
-  GEMMINI_DRAMSIM_INI  dramsim2_ini directory for the RTL simulator
   GEMMINI_TEST_WORK    scratch directory for build products (default: ./out/core_aten_device)
 """
 
@@ -14,7 +12,6 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -141,7 +138,7 @@ class RunResult:
         return self.status == "PASS"
 
 
-def parse(log: str, code: int, seconds: float, rtl: bool = False) -> RunResult:
+def parse(log: str, code: int, seconds: float) -> RunResult:
     lines = log.splitlines()
     passed = [l.split()[1] for l in lines if l.startswith("PASS ")]
     failed = [l for l in lines if l.startswith("FAIL ")]
@@ -174,19 +171,3 @@ def run_spike(elf: Path, timeout: int = 1800) -> RunResult:
         log, code = (exc.stdout or b"").decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or ""), 124
     return parse(log, code, time.time() - t0)
 
-
-def run_rtl(elf: Path, timeout: int = 7200, max_cycles: int = 400_000_000) -> RunResult:
-    sim = env("GEMMINI_RTL_SIM")
-    ini = env("GEMMINI_DRAMSIM_INI")
-    t0 = time.time()
-    with tempfile.TemporaryDirectory(dir=work_root()) as tmp:
-        cmd = ["bash", "-c",
-               f"ulimit -s unlimited; exec {sim} +permissive +dramsim +dramsim_ini_dir={ini} "
-               f"+max-cycles={max_cycles} +loadmem={elf} +permissive-off {elf} </dev/null"]
-        try:
-            p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=tmp)
-            log, code = p.stdout + p.stderr, p.returncode
-        except subprocess.TimeoutExpired:
-            log, code = "TIMEOUT", 124
-    log = "\n".join(l for l in log.splitlines() if not re.match(r"^C\d+: ", l))
-    return parse(log, code, time.time() - t0, rtl=True)

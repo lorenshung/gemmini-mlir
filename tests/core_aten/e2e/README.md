@@ -4,8 +4,8 @@ The integration test rejects a different or modified model2MLIR source revision.
 
 Set `PYTHONPATH` to include this repository, `merlin-support`, `tests/core_aten`,
 Merlin's `src`, and the pinned model2MLIR checkout. The device runner also needs
-`GEMMINI_LLVM_BIN`, `GEMMINI_RISCV_TOOLS`, `GEMMINI_ROCC_TESTS`,
-`GEMMINI_RTL_SIM`, `GEMMINI_DRAMSIM_INI`, and `GEMMINI_TEST_WORK`.
+`GEMMINI_LLVM_BIN`, `GEMMINI_RISCV_TOOLS`, `GEMMINI_ROCC_TESTS` and
+`GEMMINI_TEST_WORK`.
 The whole-program driver additionally uses Merlin's compiler environment; see
 its command help and `tests/core_aten/device/runner.py` for tool selection.
 
@@ -13,9 +13,9 @@ From the repository root, using the model2MLIR Python environment:
 
 ```sh
 python tests/core_aten/e2e/capture.py out/canonical --set rtl
-python tests/core_aten/e2e/run_e2e.py out/canonical --rtl --batch canonical --json out/canonical-results.json
+python tests/core_aten/e2e/run_e2e.py out/canonical --batch canonical --json out/canonical-results.json
 python tests/core_aten/e2e/capture_schemes.py out/schemes
-python tests/core_aten/e2e/run_e2e.py out/schemes --rtl --batch schemes --json out/scheme-results.json
+python tests/core_aten/e2e/run_e2e.py out/schemes --batch schemes --json out/scheme-results.json
 python tests/core_aten/e2e/run_offload.py --help
 ```
 

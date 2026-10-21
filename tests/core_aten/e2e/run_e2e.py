@@ -1,4 +1,4 @@
-"""End-to-end: model2MLIR quantized graph -> gemmini-mlir Core ATen catalog -> Spike / RTL.
+"""End-to-end: model2MLIR quantized graph -> gemmini-mlir Core ATen catalog -> Spike.
 
 For every captured case directory (``capture.py``) this parses ``model.mlir``, binds and
 compiles every matched region through ``mlir_oot.core_aten.catalog``, wires the kernels by
@@ -8,7 +8,7 @@ exact-rational reference and the instruction model, with equality of every outpu
 Eager float output is logged separately as informational divergence. Unsupported
 regions are reported as device refusals.
 
-    python run_e2e.py CAPTURE_DIR [--only name ...] [--rtl] [--no-spike] [--batch NAME] [--json OUT]
+    python run_e2e.py CAPTURE_DIR [--only name ...] [--no-spike] [--batch NAME] [--json OUT]
 """
 
 from __future__ import annotations
@@ -125,7 +125,7 @@ def prepare(case_dir: Path, prefix: str, wd: Path):
     return Path(obj), buffers, calls, checks, outputs, summary
 
 
-def run(case_dirs, batch: str, rtl=False, spike=True) -> dict:
+def run(case_dirs, batch: str, spike=True) -> dict:
     wd = runner.work_root() / batch
     objects, buffers, calls, checks, outputs, summary = [], {}, [], [], set(), {}
     for i, d in enumerate(case_dirs):
@@ -154,11 +154,9 @@ def run(case_dirs, batch: str, rtl=False, spike=True) -> dict:
     from mlir_oot.golden_device_catalog import final_elf_audit
     final_elf_audit(elf)
     result = dict(elf=str(elf), cases=summary)
-    for engine, fn, on in (("spike", runner.run_spike, spike), ("rtl", runner.run_rtl, rtl)):
-        if not on:
-            continue
-        r = fn(elf)
-        result[engine] = dict(status=r.status, passed=r.passed, failed=r.failed, info=r.info, perf=r.perf,
+    if spike:
+        r = runner.run_spike(elf)
+        result["spike"] = dict(status=r.status, passed=r.passed, failed=r.failed, info=r.info, perf=r.perf,
                               seconds=round(r.seconds, 1), exit=r.exit_code, tail=None if r.ok else r.log[-3000:])
     return result
 
@@ -178,7 +176,6 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("capture", type=Path)
     ap.add_argument("--only", nargs="*")
-    ap.add_argument("--rtl", action="store_true")
     ap.add_argument("--no-spike", action="store_true")
     ap.add_argument("--batch", default="e2e")
     ap.add_argument("--json", type=Path)
@@ -186,20 +183,18 @@ def main() -> int:
     dirs = sorted(p for p in a.capture.iterdir() if (p / "model.mlir").exists())
     if a.only:
         dirs = [d for d in dirs if d.name in a.only]
-    res = run(dirs, a.batch, rtl=a.rtl, spike=not a.no_spike)
+    res = run(dirs, a.batch, spike=not a.no_spike)
     text = json.dumps(res, indent=1)
     if a.json:
         a.json.write_text(text + "\n")
-    for eng in ("spike", "rtl"):
-        if eng in res:
-            print(eng, res[eng]["status"], "passed", len(res[eng]["passed"]), "failed", res[eng]["failed"],
-                  res[eng]["seconds"], "s")
-            for line in res[eng]["info"]:
-                print("  ", line)
-            if res[eng]["tail"]:
-                print(res[eng]["tail"][-2000:])
-    ok = all(res[e]["status"] == "PASS" for e in ("spike", "rtl") if e in res)
-    return 0 if ok else 1
+    spike = res.get("spike")
+    if spike:
+        print("spike", spike["status"], "passed", len(spike["passed"]), "failed", spike["failed"], spike["seconds"], "s")
+        for line in spike["info"]:
+            print("  ", line)
+        if spike["tail"]:
+            print(spike["tail"][-2000:])
+    return 0 if spike is None or spike["status"] == "PASS" else 1
 
 
 if __name__ == "__main__":

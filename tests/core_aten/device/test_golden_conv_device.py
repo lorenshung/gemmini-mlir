@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from common import need_rtl, need_spike, runner
+from common import need_spike, runner
 from mlir_oot.core_aten.emit import compile_to_object
 from mlir_oot.golden_conv import ConvShape, GoldenConv
 from mlir_oot.golden_device_lower import lower
@@ -52,11 +52,6 @@ class TestGoldenConvDevice(unittest.TestCase):
     @need_spike
     def test_spike(self):
         r = runner.run_spike(build("golden_conv_pad1"))
-        self.assertTrue(r.ok, r.log[-2000:])
-
-    @need_rtl
-    def test_rtl(self):
-        r = runner.run_rtl(build("golden_conv_pad1_rtl"))
         self.assertTrue(r.ok, r.log[-2000:])
 
 

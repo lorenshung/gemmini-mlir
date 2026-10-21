@@ -184,14 +184,13 @@ the C shim from lowered memref descriptors to the kernels. The existing contract
 The Spike lane does not yet call either entry point for graphs without a contraction. The required Merlin
 changes are listed in `/scratch/loren/core-aten-ref/ABI_NOTES.md`.
 
-Tests (set `GEMMINI_LLVM_BIN`, `GEMMINI_RISCV_TOOLS`, `GEMMINI_ROCC_TESTS`; for RTL also `GEMMINI_RTL_SIM`,
-`GEMMINI_DRAMSIM_INI`):
+Tests (set `GEMMINI_LLVM_BIN`, `GEMMINI_RISCV_TOOLS`, `GEMMINI_ROCC_TESTS`):
 
 ```sh
-python -m pytest tests/core_aten                                          # models, matching, rewrite (no tools)
-python tests/core_aten/e2e/run_e2e.py tests/fixtures/core_aten [--rtl]    # kernels called directly
-python tests/core_aten/e2e/run_offload.py tests/fixtures/core_aten [--rtl] # whole graph via mlir-opt + shim
-python tests/core_aten/e2e/run_all.py CAPTURES --engine spike|rtl -j 8    # one ELF per op, parallel
+python -m pytest tests/core_aten                                    # models, matching, rewrite (no tools)
+python tests/core_aten/e2e/run_e2e.py tests/fixtures/core_aten      # kernels called directly
+python tests/core_aten/e2e/run_offload.py tests/fixtures/core_aten  # whole graph via mlir-opt + shim
+python tests/core_aten/e2e/run_all.py CAPTURES -j 8                 # one ELF per op, parallel
 ```
 
 `tests/core_aten/e2e/capture.py` (run with model2MLIR's interpreter, `MODEL2MLIR=<checkout>`) regenerates the

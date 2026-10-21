@@ -1,4 +1,4 @@
-"""Whole-graph path: capture -> catalog -> offload rewrite -> standard MLIR lowering -> Spike/RTL.
+"""Whole-graph path: capture -> catalog -> offload rewrite -> standard MLIR lowering -> Spike.
 
 Unlike ``run_e2e.py`` (which calls the kernels directly), this lowers the rewritten model with an
 upstream ``mlir-opt`` pipeline, so the bound regions are reached through ``func.call`` and the
@@ -6,7 +6,7 @@ generated C-interface shim (``mlir_oot.core_aten.offload``) exactly as a host co
 reach them.  The model's own ``_mlir_ciface_forward`` is called from a bare-metal driver and its
 result is compared with the exact-arithmetic reference. Eager-float divergence is informational.
 
-    python run_offload.py CAPTURE_DIR [--only name ...] [--rtl] [--batch NAME]
+    python run_offload.py CAPTURE_DIR [--only name ...] [--batch NAME]
 """
 
 from __future__ import annotations
@@ -163,7 +163,6 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("capture", type=Path)
     ap.add_argument("--only", nargs="*")
-    ap.add_argument("--rtl", action="store_true")
     ap.add_argument("--batch", default="offload")
     ap.add_argument("--json", type=Path)
     a = ap.parse_args()
@@ -174,7 +173,7 @@ def main() -> int:
     for case in cases:
         try:
             elf = build_case(case, runner.work_root() / a.batch / case.name)
-            r = (runner.run_rtl if a.rtl else runner.run_spike)(elf)
+            r = runner.run_spike(elf)
             rows.append(dict(case=case.name, status=r.status, info=r.info, failed=r.failed, perf=r.perf,
                              tail=None if r.ok else r.log[-1500:]))
         except Exception as exc:  # noqa: BLE001
