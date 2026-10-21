@@ -141,6 +141,43 @@ def exact_widening_source(p):
     return None
 
 
+# tag: (schema kind, storage property, contract side, element types, missing/inverted range is None first)
+_QDQ = {'DQ': ('dequantize', 'input_dtype', 'operand', ('i8', 'i32'), True),
+        'Q': ('quantize', 'output_dtype', 'result', ('i8',), False)}
+
+
+def _qdq_params(op: Operation, tag: str, dtype: str):
+    """(scale, zero point, qmin, qmax, unsigned) of a splat per-tensor Q/DQ; Decline on contradicting provenance."""
+    from .quant_schema import attributes, ratios
+    kind, dtype_key, side, dtypes, range_first = _QDQ[tag]
+    policy = attributes(op, kind)
+    s, zp = splat_value(op.operands[1]), splat_value(op.operands[2])
+    if zp is not None and getattr(op.attributes.get('prov.quant.zero_point_dtype'), 'data', None) == 'uint8':
+        zp = int(zp) & 255
+    if s is None or zp is None or dtype not in dtypes or not math.isfinite(s) or not s > 0:
+        return None
+    if 'prov.quant.scale_numerator' in op.attributes or 'prov.quant.scale_denominator' in op.attributes:
+        pair = ratios(policy)
+        if len(pair) != 1 or pair[0] != Fraction(s):
+            raise Decline(f'source {tag} operands differ from exact scale provenance')
+        s = pair[0]
+    lo, hi = _prop_int(op, "quant_min"), _prop_int(op, "quant_max")
+    if range_first and (lo is None or hi is None or lo > hi):
+        return None
+    for key, expected in [('quant_min', lo), ('quant_max', hi), ('zero_point', zp)]:
+        if key in policy and policy[key].value.data != expected:
+            raise Decline(f'{tag} provenance differs from source parameters: ' + key)
+    if 'granularity' in policy and policy['granularity'].data != 'tensor':
+        raise Decline(f'per-tensor {tag} has inconsistent granularity')
+    declared = getattr(op.properties.get(dtype_key), 'data', None)
+    storage = getattr(op.attributes.get('prov.quant.storage_dtype'), 'data', None) or declared
+    if dtype == 'i8' and storage is not None and storage not in ('int8', 'uint8'):
+        raise Decline(f'unsupported {tag} byte storage dtype')
+    if declared in ('int8', 'uint8') and storage in ('int8', 'uint8') and declared != storage:
+        raise Decline(f'{tag} storage dtype differs from its source {side} contract')
+    return s, zp, lo, hi, dtype == 'i8' and storage == 'uint8'
+
+
 def dequant(v: SSAValue) -> QIn | None:
     p = producer(v)
     widened = exact_widening_source(p)
@@ -148,41 +185,15 @@ def dequant(v: SSAValue) -> QIn | None:
         return dequant(widened)
     if p is None or name_of(p) != "quant_ext.dequantize_per_tensor":
         return None
-    from .quant_schema import attributes
-    policy=attributes(p,"dequantize")
-    s = splat_value(p.operands[1])
-    zp = splat_value(p.operands[2])
-    if zp is not None and getattr(p.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8':
-        zp=int(zp)&255
     src = p.operands[0]
-    if s is None or zp is None or etype(src) not in ("i8", "i32") or not math.isfinite(s) or not s > 0:
+    params = _qdq_params(p, 'DQ', etype(src))
+    if params is None:
         return None
-    if 'prov.quant.scale_numerator' in p.attributes or 'prov.quant.scale_denominator' in p.attributes:
-        from .quant_schema import attributes,ratios
-        attrs=attributes(p,'dequantize')
-        pair=ratios(attrs)
-        if len(pair)!=1 or pair[0]!=Fraction(s):
-            raise Decline('source DQ operands differ from exact scale provenance')
-        s=pair[0]
-    lo, hi = _prop_int(p, "quant_min"), _prop_int(p, "quant_max")
-    if lo is None or hi is None or lo > hi:
+    s, zp, lo, hi, unsigned = params
+    bounds = (0, 255) if unsigned else (-128, 127)
+    if etype(src) == "i8" and not (bounds[0] <= lo <= hi <= bounds[1] and bounds[0] <= zp <= bounds[1]):
         return None
-    for key,expected in [('quant_min',lo),('quant_max',hi),('zero_point',zp)]:
-        if key in policy and policy[key].value.data!=expected:
-            raise Decline('DQ provenance differs from source parameters: '+key)
-    if 'granularity' in policy and policy['granularity'].data!='tensor':
-        raise Decline('per-tensor DQ has inconsistent granularity')
-    storage=getattr(p.attributes.get('prov.quant.storage_dtype'),'data',None) or getattr(p.properties.get('input_dtype'),'data',None)
-    declared=getattr(p.properties.get('input_dtype'),'data',None)
-    if etype(src) == 'i8' and storage is not None and storage not in ('int8', 'uint8'):
-        raise Decline('unsupported DQ byte storage dtype')
-    if declared in ('int8','uint8') and storage in ('int8','uint8') and declared!=storage:
-        raise Decline('DQ storage dtype differs from its source operand contract')
-    unsigned=etype(src)=='i8' and storage=='uint8'
-    bounds = (0,255) if unsigned else (-128,127)
-    if etype(src)=="i8" and not (bounds[0]<=lo<=hi<=bounds[1] and bounds[0]<=zp<=bounds[1]):
-        return None
-    return QIn(src, float(s), p, etype(src),int(zp),unsigned)
+    return QIn(src, float(s), p, etype(src), int(zp), unsigned)
 
 
 @dataclass(frozen=True)
@@ -203,37 +214,14 @@ def quant_sink(v: SSAValue) -> QOut | None:
     q = us[0]
     if q.operands[0] is not v:
         return None
-    from .quant_schema import attributes
-    policy=attributes(q,"quantize")
-    s, zp = splat_value(q.operands[1]), splat_value(q.operands[2])
-    if zp is not None and getattr(q.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8':
-        zp=int(zp)&255
-    if s is None or zp is None or etype(q.results[0]) != "i8" or not math.isfinite(s) or not s > 0:
+    params = _qdq_params(q, 'Q', etype(q.results[0]))
+    if params is None:
         return None
-    if 'prov.quant.scale_numerator' in q.attributes or 'prov.quant.scale_denominator' in q.attributes:
-        from .quant_schema import attributes,ratios
-        attrs=attributes(q,'quantize')
-        pair=ratios(attrs)
-        if len(pair)!=1 or pair[0]!=Fraction(s):
-            raise Decline('source Q operands differ from exact scale provenance')
-        s=pair[0]
-    lo, hi = _prop_int(q, "quant_min"), _prop_int(q, "quant_max")
-    for key,expected in [('quant_min',lo),('quant_max',hi),('zero_point',zp)]:
-        if key in policy and policy[key].value.data!=expected:
-            raise Decline('Q provenance differs from source parameters: '+key)
-    if 'granularity' in policy and policy['granularity'].data!='tensor':
-        raise Decline('per-tensor Q has inconsistent granularity')
-    storage=getattr(q.attributes.get('prov.quant.storage_dtype'),'data',None) or getattr(q.properties.get('output_dtype'),'data',None)
-    declared=getattr(q.properties.get('output_dtype'),'data',None)
-    if storage is not None and storage not in ('int8', 'uint8'):
-        raise Decline('unsupported Q byte storage dtype')
-    if declared in ('int8','uint8') and storage in ('int8','uint8') and declared!=storage:
-        raise Decline('Q storage dtype differs from its source result contract')
-    unsigned=storage=='uint8'
-    bounds=(0,255) if unsigned else (-128,127)
-    if lo is None or hi is None or not bounds[0]<=lo<hi<=bounds[1] or not bounds[0]<=zp<=bounds[1]:
+    s, zp, lo, hi, unsigned = params
+    bounds = (0, 255) if unsigned else (-128, 127)
+    if lo is None or hi is None or not bounds[0] <= lo < hi <= bounds[1] or not bounds[0] <= zp <= bounds[1]:
         return None
-    return QOut(q,q.results[0],float(s),lo,hi,int(zp),unsigned)
+    return QOut(q, q.results[0], float(s), lo, hi, int(zp), unsigned)
 
 
 def single_use(v: SSAValue) -> Operation | None:
