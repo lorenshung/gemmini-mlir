@@ -1,11 +1,9 @@
-"""Elementwise affine maps: scale (``em_ew_spad``), readout ReLU/scale (``em_ew_acc``), and the
+"""Elementwise affine maps: scale (``em_ew_spad``) and the
 exact integer linear combination ``qx_lincomb2`` / ``qx_affine1`` in its blocked form
 (``qf_lincomb_blocked``).
 
 * ``unary_scale``: y = sat8(RNE(c x)) on the int8 MVIN path (neg, mul.Scalar, div.Scalar:
   c = k s_x / s_out; one rounding).
-* ``unary_readout``: x through the accumulator (shrunk MVIN), y = sat8(RNE(s act(x))) on the
-  readout (relu with s = s_x / s_out > 0; ReLU before scale as on RTL).
 * ``lincomb``: ACC = sum_t W_t x_t (+ B) exactly in int32, W_t as int8 c*I matmul parts
   (|c| <= 127, negative weights allowed), B an int32 stride-0 MVIN3; one RNE readout.
   Groups of up to 32 output tiles; each c*I tile is preloaded once per group and reused
@@ -65,18 +63,6 @@ def unary_scale(s: Stream, x: str, out: str, n: int, scale: float) -> None:
         s.mvin(s.at(x, off), SP(slot), cols, rows, 0)
         for c0 in range(0, cols, DIM):
             s.mvout(s.at(out, off + c0), SP(slot + c0), min(DIM, cols - c0), rows)
-
-
-def unary_readout(s: Stream, x: str, out: str, n: int, scale: float, relu: bool) -> None:
-    if relu and scale <= 0:
-        raise ValueError("ReLU readout requires a positive scale (C7)")
-    s.config_ld(0, W64, 1.0, shrink=True)
-    s.config_st(W64, RELU if relu else NO_ACT, scale)
-    for t, (off, rows, cols) in enumerate(_flat_blocks(n)):
-        acc = (t & 1) * W64
-        for c0 in range(0, cols, DIM):
-            s.mvin(s.at(x, off + c0), ACC(acc + c0), min(DIM, cols - c0), rows, 0)
-        s.mvout(s.at(out, off), ACC(acc), cols, rows)
 
 
 def lincomb(s: Stream, terms: list[tuple[str, int, list[int]]], out: str, M: int, N: int, scale: float, *,

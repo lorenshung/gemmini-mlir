@@ -1,4 +1,4 @@
-"""Data movement through the scratchpad: strided 2-D DMA copies, fills, transposes.
+"""Data movement through the scratchpad: strided 2-D DMA copies, fills and widening.
 
 These are the ``_lib_movement.py`` recipes (``mv_copy2d[_multi]``, ``mv_vec``, ``mv_fill2d``,
 ``mv_transpose2d``, ``mv_run_jobs``) as compile-time job lists:
@@ -19,7 +19,6 @@ These are the ``_lib_movement.py`` recipes (``mv_copy2d[_multi]``, ``mv_vec``, `
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from itertools import product
 
 import numpy as np
 
@@ -48,18 +47,6 @@ class Plan:
     def stage(self) -> list[Copy]:
         self.stages.append([])
         return self.stages[-1]
-
-
-def strides(shape) -> list[int]:
-    out, acc = [], 1
-    for d in reversed(shape):
-        out.append(acc)
-        acc *= d
-    return list(reversed(out))
-
-
-def _iter(ranges):
-    return product(*[range(a, b) for a, b in ranges]) if ranges else [()]
 
 
 def normalize(job: Copy) -> list[Copy]:
@@ -132,10 +119,6 @@ def emit_plan(s: Stream, plan: Plan) -> None:
 # Op builders.  Shapes are row-major; offsets/strides are bytes of int8 elements.
 # ---------------------------------------------------------------------------------------------
 
-def flat_copy(plan_stage, src, dst, n, scale=1.0):
-    plan_stage.append(Copy(src, n, [dst], n, 1, n, scale))
-
-
 def gather_elements(s, sources, indices, itemsize, out, names, literal):
     """Static element selectors lifted to consecutive little-endian byte lanes.
 
@@ -168,145 +151,12 @@ def gather_elements(s, sources, indices, itemsize, out, names, literal):
     emit_plan(s, plan)
 
 
-def block_copy(stage, src_name, src_shape, src_index, dst_name, dst_shape, dst_index, extents, scale=1.0):
-    """Copy the block ``extents`` (per dim) from src[src_index:] to dst[dst_index:] (same rank)."""
-    r = len(extents)
-    ss, ds = strides(src_shape), strides(dst_shape)
-    if r == 1:
-        stage.append(Copy((src_name, src_index[0]), extents[0], [(dst_name, dst_index[0])], extents[0], 1,
-                          extents[0], scale))
-        return
-    for outer in _iter([(0, e) for e in extents[:-2]]):
-        so = sum((src_index[d] + i) * ss[d] for d, i in enumerate(outer)) + src_index[-2] * ss[-2] + src_index[-1]
-        do = sum((dst_index[d] + i) * ds[d] for d, i in enumerate(outer)) + dst_index[-2] * ds[-2] + dst_index[-1]
-        stage.append(Copy((src_name, so), ss[-2], [(dst_name, do)], ds[-2], extents[-2], extents[-1], scale))
-
-
 def fill(stage, dst_name, n, code):
     stage.append(Copy(None, 0, [(dst_name, 0)], n, 1, n, code=code))
 
 
-def constant_pad(plan: Plan, x: str, shape, out: str, pad_lohi, code, scale=1.0):
-    """pad_lohi: per dim (lo, hi); negative pads crop.  Fill (if any pad > 0), fence, interior."""
-    oshape = [d + lo + hi for d, (lo, hi) in zip(shape, pad_lohi)]
-    n = int(np.prod(oshape))
-    if any(lo > 0 or hi > 0 for lo, hi in pad_lohi):
-        fill(plan.stage(), out, n, code)
-    rng = [(max(0, -lo), min(d, d + hi)) for d, (lo, hi) in zip(shape, pad_lohi)]
-    if any(a >= b for a, b in rng):
-        return oshape
-    stage = plan.stage()
-    block_copy(stage, x, shape, [a for a, _ in rng], out, oshape, [a + lo for (a, _), (lo, _) in zip(rng, pad_lohi)],
-               [b - a for a, b in rng], scale)
-    return oshape
-
-
-def cat(plan: Plan, inputs: list[tuple[str, tuple]], out: str, dim: int, scales=None):
-    shape0 = inputs[0][1]
-    r = len(shape0)
-    dim %= r
-    total = sum(sh[dim] for _, sh in inputs)
-    outer = int(np.prod(shape0[:dim])) if dim else 1
-    inner = int(np.prod(shape0[dim + 1:])) if dim + 1 < r else 1
-    stage = plan.stage()
-    off = 0
-    for k, (name, sh) in enumerate(inputs):
-        cols = sh[dim] * inner
-        scale = 1.0 if scales is None else scales[k]
-        if cols:
-            stage.append(Copy((name, 0), cols, [(out, off * inner)], total * inner, outer, cols, scale))
-        off += sh[dim]
-    return [*shape0[:dim], total, *shape0[dim + 1:]]
-
-
-def slice_scatter(plan: Plan, self_: str, shape, src: str, out: str, dim: int, start: int, end: int, step: int,
-                  self_scale=1.0, src_scale=1.0):
-    r = len(shape)
-    dim %= r
-    n = int(np.prod(shape))
-    flat_copy(plan.stage(), (self_, 0), (out, 0), n, self_scale)
-    D = shape[dim]
-    idx = list(range(*slice(start, end, step).indices(D)))
-    if not idx:
-        return
-    outer = int(np.prod(shape[:dim])) if dim else 1
-    inner = int(np.prod(shape[dim + 1:])) if dim + 1 < r else 1
-    k = len(idx)
-    stage = plan.stage()
-    st = idx[1] - idx[0] if k > 1 else 1
-    if inner > 1 or st == 1:
-        # rows = slice positions (stride st*inner), cols = inner block; one job per outer index
-        if inner == 1:
-            stage.append(Copy((src, 0), k, [(out, idx[0])], D, outer, k, src_scale))
-        else:
-            for o in range(outer):
-                stage.append(Copy((src, o * k * inner), inner, [(out, (o * D + idx[0]) * inner)], st * inner, k,
-                                  inner, src_scale))
-    else:
-        # strided last-dim slice: element-granular (cols = 1) copies, DRAM row stride = step
-        for o in range(outer):
-            stage.append(Copy((src, o * k), 1, [(out, o * D + idx[0])], st, k, 1, src_scale))
-
-
 def full(plan: Plan, out: str, n: int, code: int):
     fill(plan.stage(), out, n, code)
-
-
-def repeat(plan: Plan, x: str, shape, out: str, reps, scale=1.0):
-    """out = x tiled ``reps`` times (len(reps) >= rank; leading reps add dims)."""
-    shape = [1] * (len(reps) - len(shape)) + list(shape)
-    oshape = [d * r for d, r in zip(shape, reps)]
-    os_ = strides(oshape)
-    stage = plan.stage()
-    # copy the whole input block once per tile position; rows = dim -2, cols = dim -1
-    tiles = list(product(*[range(r) for r in reps]))
-    ss = strides(shape)
-    for outer in _iter([(0, d) for d in shape[:-2]]):
-        so = sum(i * ss[d] for d, i in enumerate(outer))
-        dsts = []
-        for t in tiles:
-            idx = [t[d] * shape[d] + (outer[d] if d < len(outer) else 0) for d in range(len(shape))]
-            do = sum(idx[d] * os_[d] for d in range(len(shape) - 2)) + t[-2] * shape[-2] * os_[-2] + t[-1] * shape[-1] \
-                if len(shape) >= 2 else t[-1] * shape[-1]
-            dsts.append((out, do))
-        rows = shape[-2] if len(shape) >= 2 else 1
-        stage.append(Copy((x, so), shape[-1], dsts, oshape[-1], rows, shape[-1], scale))
-    return oshape
-
-
-def permute_plan(x: str, shape, out: str, perm, scale=1.0):
-    """Permutation keeping the innermost input dim innermost: strided row copies."""
-    r = len(shape)
-    oshape = [shape[p] for p in perm]
-    ist, ost = strides(shape), strides(oshape)
-    assert perm[-1] == r - 1
-    plan = Plan()
-    stage = plan.stage()
-    if r == 1:
-        flat_copy(stage, (x, 0), (out, 0), shape[0], scale)
-        return plan, oshape
-    rows_in = perm[-2]
-    for outer in _iter([(0, oshape[d]) for d in range(r - 2)]):
-        so = sum(i * ist[perm[d]] for d, i in enumerate(outer))
-        do = sum(i * ost[d] for d, i in enumerate(outer))
-        stage.append(Copy((x, so), ist[rows_in], [(out, do)], ost[-2], oshape[-2], oshape[-1], scale))
-    return plan, oshape
-
-
-def emit_transpose(s: Stream, x: str, shape, out: str, perm, scale=1.0):
-    """Move a permutation's innermost output axis with strided byte DMA.
-
-    Each DMA gathers a column of up to DIM source elements into scratchpad
-    rows, then writes those bytes contiguously. This avoids accumulator
-    narrowing even for layout conversions inside a contraction schedule.
-    """
-    from ..exactness import require
-    require(scale == 1, "permutation scaling requires exact host requantization")
-    from .. import layout
-    ss=layout.dense_strides(shape)
-    oshape=[shape[q] for q in perm]
-    layout.move(s,(x,0),(out,0),oshape,tuple(ss[q] for q in perm))
-    return oshape
 
 
 def emit_widen(s: Stream, x: str, out: str, n: int):
