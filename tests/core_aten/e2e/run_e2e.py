@@ -139,9 +139,7 @@ def run(case_dirs, batch: str, spike=True) -> dict:
             continue
         sm["build_s"] = round(time.time() - t0, 1)
         # one object per case: make its symbols unique by prefixing at the object level
-        renamed = wd / f"{prefix}_r.o"
-        _prefix_symbols(o, renamed, {s for s, _ in c}, prefix)
-        objects.append(renamed)
+        objects.append(runner.rename_symbols(o, wd / f"{prefix}_r.o", {s: f"{prefix}__{s}" for s, _ in c}))
         buffers.update(b)
         calls += [(f"{prefix}__{s}", a) for s, a in c]
         checks += ch
@@ -149,27 +147,12 @@ def run(case_dirs, batch: str, spike=True) -> dict:
         summary[d.name] = sm
     if not calls:
         return dict(cases=summary, device_status="REFUSED")
-    test = runner.DeviceTest(batch, objects, buffers, calls, checks, outputs)
-    elf = runner.build_elf(test, wd)
-    from mlir_oot.golden_device_catalog import final_elf_audit
-    final_elf_audit(elf)
+    elf, r = runner.replay(runner.DeviceTest(batch, objects, buffers, calls, checks, outputs), wd, spike)
     result = dict(elf=str(elf), cases=summary)
-    if spike:
-        r = runner.run_spike(elf)
+    if r is not None:
         result["spike"] = dict(status=r.status, passed=r.passed, failed=r.failed, info=r.info, perf=r.perf,
                               seconds=round(r.seconds, 1), exit=r.exit_code, tail=None if r.ok else r.log[-3000:])
     return result
-
-
-def _prefix_symbols(obj: Path, out: Path, symbols, prefix):
-    import os
-    import subprocess
-    objcopy = Path(os.environ["GEMMINI_RISCV_TOOLS"]) / "bin" / "riscv64-unknown-elf-objcopy"
-    argv = [str(objcopy)]
-    for s in sorted(symbols):
-        argv.append(f"--redefine-sym={s}={prefix}__{s}")
-    # private constant globals are internal; kernel symbols are the only external definitions
-    subprocess.run(argv + [str(obj), str(out)], check=True)
 
 
 def main() -> int:

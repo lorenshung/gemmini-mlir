@@ -86,18 +86,16 @@ def wire(text, inputs, expected, prefix):
     from mlir_oot.core_aten.catalog import build
     from mlir_oot.core_aten.offload import rewrite, shim_source
     from mlir_oot.core_aten.stream import simulate, ACC_BIT
-    from mlir_oot.frontend.parse import parse_module
+    from run_e2e import _key as key, _return_sources
     device, manifest, matches = build(text)
     # Exercise the same API and descriptors as Merlin, including dependent bindings.
     rewritten = rewrite(text, manifest)
     assert rewritten.count('func.call @ca_') == len(matches)
     assert shim_source(manifest)
-    key = lambda src: ('arg', src['func_arg']) if 'func_arg' in src else ('op', src['op_ordinal'], src['result'])
     values = {('arg', i): raw(x) for i, x in enumerate(inputs)}
     names = {k: f'{prefix}_arg{k[1]}' for k in values}
     buffers = {names[k]: v for k, v in values.items()}
     calls, outputs = [], set()
-    kernels = {k['symbol']: k for k in manifest['kernels']}
     for ordinal, (binding, match) in enumerate(zip(manifest['bindings'], matches)):
         assert match.numeric['numerics'] == 'bitwise_movement', binding
         assert not match.kernel.stream.readouts and not match.kernel.stream.packs
@@ -123,12 +121,7 @@ def wire(text, inputs, expected, prefix):
         actual = simulate(match.kernel.stream, feed)['y']
         values[key(out_source)] = np.ascontiguousarray(actual).reshape(-1).view(np.int8)
         calls.append((binding['symbol'], argv))
-    module = parse_module(text)
-    operations = list(module.walk())
-    fn = next(o for o in operations if o.name == 'func.func')
-    ret = next(o for o in fn.walk() if o.name == 'func.return')
-    value, = ret.operands
-    result_key = ('arg', list(fn.body.blocks[0].args).index(value)) if value in fn.body.blocks[0].args else ('op', operations.index(value.owner), list(value.owner.results).index(value))
+    result_key, = _return_sources(text)
     if result_key not in values:
         raise ValueError('returned result remains on host: ' + str(manifest['declines']))
     assert np.array_equal(values[result_key], expected), 'instruction model differs from PyTorch bytes'
@@ -174,12 +167,9 @@ def run(root, spike=False):
     result = dict(cases=records)
     if spike and calls:
         from mlir_oot.core_aten.emit import compile_to_object
-        from mlir_oot.golden_device_catalog import final_elf_audit
         obj = compile_to_object(combined, root / 'build')['object']
         test = runner.DeviceTest('dtype_movement', [Path(obj)], buffers, calls, checks, outputs)
-        elf = runner.build_elf(test, root / 'build')
-        final_elf_audit(elf)
-        actual = runner.run_spike(elf)
+        elf, actual = runner.replay(test, root / 'build')
         result.update(elf=str(elf.resolve()), spike=dict(status=actual.status, passed=len(actual.passed),
             failed=actual.failed, tail=None if actual.ok else actual.log[-3000:]))
     (root / 'results.json').write_text(json.dumps(result, indent=2))

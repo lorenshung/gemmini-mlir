@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -22,11 +21,16 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "device"))
+sys.path.insert(0, str(HERE.parent))
 
 import runner  # noqa: E402
+from exact_oracle import SourceOracle  # noqa: E402
+from fixture_source import read  # noqa: E402
+from run_e2e import DeviceRefusal  # noqa: E402
 from mlir_oot.core_aten.catalog import compile_catalog  # noqa: E402
 from mlir_oot.core_aten.emit import llvm_bin_dir  # noqa: E402
 from mlir_oot.core_aten.offload import rewrite, shim_source  # noqa: E402
+from mlir_oot.frontend.parse import parse_module  # noqa: E402
 
 PIPELINE = ["--allow-unregistered-dialect", "--canonicalize",
             "--one-shot-bufferize=bufferize-function-boundaries function-boundary-type-conversion=identity-layout-map",
@@ -55,8 +59,6 @@ def _ctype(dt):
 
 def build_case(case: Path, wd: Path) -> Path:
     wd.mkdir(parents=True, exist_ok=True)
-    sys.path.insert(0,str(HERE.parent))
-    from fixture_source import read
     source=read(case / "model.mlir")
     input_path=wd / "source.mlir"
     input_path.write_text(source+"\n")
@@ -71,15 +73,7 @@ def build_case(case: Path, wd: Path) -> Path:
         rewritten=str(expand_quant_to_standard(Parser(ctx,rewritten).parse_module()))
     (wd / 'offloaded.mlir').write_text(rewritten+'\n')
     (wd / "shim.c").write_text(shim_source(manifest))
-    sys.path.insert(0, str(HERE.parent))
-    from exact_oracle import evaluate, host_guard_values
-    from mlir_oot.core_aten.catalog import build
-    from run_e2e import _key, _return_sources, DeviceRefusal
-    text = source
-    _, _, matches = build(text)
-    from exact_oracle import SourceOracle
-    from mlir_oot.frontend.parse import parse_module
-    original=parse_module(text)
+    original=parse_module(source)
     function=next(o for o in original.walk() if o.name=='func.func')
     arguments=list(function.body.blocks[0].args)
     inputs=dict(np.load(case/'inputs.npz'))
@@ -100,9 +94,8 @@ def build_case(case: Path, wd: Path) -> Path:
     subprocess.run([str(bindir / "llc"), "-mtriple=riscv64-unknown-elf", "-mattr=+m,+a,+f,+d,+c", "-target-abi=lp64d",
                     "-code-model=medium", "-O2", "-filetype=obj", str(wd / "host.ll"), "-o", str(wd / "host.o")],
                    check=True, capture_output=True, text=True)
-    inputs = np.load(case / "inputs.npz")
     exps = exact_outputs
-    names = sorted(inputs.files, key=lambda k: int(k[3:]))
+    names = sorted(inputs, key=lambda k: int(k[3:]))
     c = ['#include "ca_harness.h"', RUNTIME]
     asm = [".section .data"]
     blobs = {nm: inputs[nm] for nm in names} | {f"expected{k}": e for k, e in enumerate(exps)}
@@ -141,19 +134,8 @@ def build_case(case: Path, wd: Path) -> Path:
     c.append("}")
     (wd / "main.c").write_text("\n".join(c) + "\n")
     (wd / "blobs.S").write_text("\n".join(asm) + "\n")
-    tools = runner.env("GEMMINI_RISCV_TOOLS")
-    common = runner.env("GEMMINI_ROCC_TESTS") / "riscv-tests" / "benchmarks" / "common"
-    elf = wd / f"{case.name}.elf"
-    cmd = [str(tools / "bin" / "riscv64-unknown-elf-gcc"), "-DPREALLOCATE=1", "-DMULTITHREAD=1", "-mcmodel=medany",
-           "-std=gnu99", "-O2", "-fno-common", "-fno-builtin-printf", "-fno-builtin-malloc",
-           "-fno-tree-loop-distribute-patterns", "-march=rv64gc", "-mabi=lp64d", f"-I{HERE.parent / 'device'}",
-           f"-I{common}", f"-I{runner.env('GEMMINI_ROCC_TESTS') / 'riscv-tests' / 'env'}", "-nostdlib",
-           "-nostartfiles", "-static", "-T", str(common / "test.ld"), "-Wl,--no-warn-rwx-segments",
-           str(wd / "main.c"), str(wd / "shim.c"), str(wd / "blobs.S"), str(wd / "host.o"), str(wd / "core_aten.o"),
-           str(common / "syscalls.c"), str(common / "crt.S"), "-lm", "-lgcc", "-o", str(elf)]
-    p = subprocess.run(cmd, capture_output=True, text=True)
-    if p.returncode:
-        raise RuntimeError(p.stderr[-2000:])
+    elf = runner.link(wd / f"{case.name}.elf", [wd / f for f in ("main.c", "shim.c", "blobs.S", "host.o", "core_aten.o")],
+                      ["-fno-builtin-malloc"])
     from mlir_oot.golden_device_catalog import final_elf_audit
     final_elf_audit(elf)
     return elf
@@ -177,7 +159,6 @@ def main() -> int:
             rows.append(dict(case=case.name, status=r.status, info=r.info, failed=r.failed, perf=r.perf,
                              tail=None if r.ok else r.log[-1500:]))
         except Exception as exc:  # noqa: BLE001
-            from run_e2e import DeviceRefusal
             if isinstance(exc, DeviceRefusal):
                 rows.append(dict(case=case.name, status="REFUSED", reason=str(exc)))
                 print(case.name, "device refusal:", str(exc), flush=True)

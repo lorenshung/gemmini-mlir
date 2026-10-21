@@ -105,21 +105,41 @@ def write_sources(test: DeviceTest, wd: Path) -> tuple[Path, Path]:
     return c_path, s_path
 
 
-def build_elf(test: DeviceTest, wd: Path | None = None) -> Path:
-    wd = wd or work_root() / test.name
-    c_path, s_path = write_sources(test, wd)
+def link(elf: Path, sources, extra_flags=()) -> Path:
+    """Link a bare-metal Spike ELF from C/assembly sources and objects plus the riscv-tests runtime."""
     tools = env("GEMMINI_RISCV_TOOLS")
     common = env("GEMMINI_ROCC_TESTS") / "riscv-tests" / "benchmarks" / "common"
-    elf = wd / f"{test.name}.elf"
     cmd = [str(tools / "bin" / "riscv64-unknown-elf-gcc"), "-DPREALLOCATE=1", "-DMULTITHREAD=1", "-mcmodel=medany",
-           "-std=gnu99", "-O2", "-fno-common", "-fno-builtin-printf", "-fno-tree-loop-distribute-patterns", "-march=rv64gc", "-mabi=lp64d",
+           "-std=gnu99", "-O2", "-fno-common", "-fno-builtin-printf", *extra_flags, "-fno-tree-loop-distribute-patterns", "-march=rv64gc", "-mabi=lp64d",
            f"-I{HERE}", f"-I{common}", f"-I{env('GEMMINI_ROCC_TESTS') / 'riscv-tests' / 'env'}", "-nostdlib", "-nostartfiles", "-static", "-T", str(common / "test.ld"),
-           "-Wl,--no-warn-rwx-segments", str(c_path), str(s_path), *map(str, test.objects),
+           "-Wl,--no-warn-rwx-segments", *map(str, sources),
            str(common / "syscalls.c"), str(common / "crt.S"), "-lm", "-lgcc", "-o", str(elf)]
     p = subprocess.run(cmd, capture_output=True, text=True)
     if p.returncode:
         raise RuntimeError(f"ELF build failed: {p.stderr[-2000:]}")
     return elf
+
+
+def build_elf(test: DeviceTest, wd: Path | None = None) -> Path:
+    wd = wd or work_root() / test.name
+    c_path, s_path = write_sources(test, wd)
+    return link(wd / f"{test.name}.elf", [c_path, s_path, *test.objects])
+
+
+def rename_symbols(obj, out: Path, renames: dict[str, str]) -> Path:
+    """Copy an object with symbols renamed, so one ELF can link several kernels of the same name."""
+    objcopy = env("GEMMINI_RISCV_TOOLS") / "bin" / "riscv64-unknown-elf-objcopy"
+    subprocess.run([str(objcopy), *(f"--redefine-sym={old}={new}" for old, new in sorted(renames.items())),
+                    str(obj), str(out)], check=True)
+    return out
+
+
+def replay(test: DeviceTest, wd: Path, spike: bool = True):
+    """(ELF, Spike result or None): link one batched device test, audit it, and run it."""
+    from mlir_oot.golden_device_catalog import final_elf_audit
+    elf = build_elf(test, wd)
+    final_elf_audit(elf)
+    return elf, run_spike(elf) if spike else None
 
 
 @dataclass

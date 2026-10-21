@@ -32,12 +32,8 @@ def build(name: str) -> Path:
         module = lower(GoldenConv(cs).build())
         obj = compile_to_object(module, wd, stem=f"conv{i}")["object"]
         sym = f"conv{i}_k"
-        # Rename the shared symbol per case; each object defines gemmini_golden_conv.
-        renamed = wd / f"conv{i}_r.o"
-        import subprocess, os
-        objcopy = Path(os.environ["GEMMINI_RISCV_TOOLS"]) / "bin" / "riscv64-unknown-elf-objcopy"
-        subprocess.run([str(objcopy), f"--redefine-sym=gemmini_golden_conv={sym}", obj, str(renamed)], check=True)
-        objects.append(renamed)
+        # Each object defines gemmini_golden_conv; rename it per case.
+        objects.append(runner.rename_symbols(obj, wd / f"conv{i}_r.o", {"gemmini_golden_conv": sym}))
         # Fill the input with a bias so stale scratchpad data would be visible in border outputs.
         X = rng.integers(-128, 128, (cs.h, cs.w, cs.cin)).astype(np.int8)
         W = rng.integers(-127, 128, (9 * cs.cin, cs.cout)).astype(np.int8)

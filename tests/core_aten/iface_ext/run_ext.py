@@ -165,10 +165,7 @@ def main() -> int:
               flush=True)
     result = {"model_vs_reference": rows}
     if a.spike and calls:
-        elf = runner.build_elf(runner.DeviceTest(a.batch, objects, buffers, calls, checks, outputs), wd)
-        from mlir_oot.golden_device_catalog import final_elf_audit
-        final_elf_audit(elf)
-        r = runner.run_spike(elf)
+        _, r = runner.replay(runner.DeviceTest(a.batch, objects, buffers, calls, checks, outputs), wd)
         result["spike"] = dict(status=r.status, passed=len(r.passed), failed=r.failed, info=r.info,
                                seconds=round(r.seconds, 1), tail=None if r.ok else r.log[-3000:])
         print("spike", r.status, len(r.passed), "checks passed", r.failed or "", flush=True)
