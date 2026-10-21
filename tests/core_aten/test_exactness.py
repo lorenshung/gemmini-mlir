@@ -1,13 +1,10 @@
 """Exhaustive signed-byte and adversarial rational-vs-device qualification."""
 from fractions import Fraction as F
-import importlib.util
-from pathlib import Path
 
 import numpy as np
 import pytest
 
 from mlir_oot.core_aten import ops
-from mlir_oot.core_aten.catalog import build
 from mlir_oot.core_aten.exactness import prove_readout
 from mlir_oot.core_aten.match import Decline
 from mlir_oot.core_aten.stream import simulate

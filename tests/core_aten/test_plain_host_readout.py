@@ -9,7 +9,7 @@ def test_native_per_channel_bias_zero_point_and_multiterm(tmp_path,axis,shape):
     import ctypes, os, subprocess
     from pathlib import Path
     from mlir_oot.core_aten.stream import Stream, Arg
-    from mlir_oot.core_aten.requant import Readout, apply as reference
+    from mlir_oot.core_aten.requant import Readout
     from mlir_oot.core_aten.emit import build_module
     bindir=Path(os.environ.get('GEMMINI_LLVM_BIN','/nonexistent'))
     if not (bindir/'mlir-translate').exists():pytest.skip('LLVM tools unavailable')

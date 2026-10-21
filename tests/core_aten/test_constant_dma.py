@@ -9,24 +9,17 @@ def tensor(shape, dtype):
     return 'tensor<'+'x'.join(map(str,(*shape,dtype)))+'>'
 
 
-def constant_source(dtype='i8', shape=(2,3,5,7), perm=(0,2,3,1), *, consumer=False):
+def constant_source(dtype='i8', shape=(2,3,5,7), perm=(0,2,3,1)):
     width=4 if dtype=='f32' else 1
     raw=np.random.default_rng(614).integers(0,256,(*shape,width),dtype=np.uint8)
     it=tensor(shape,dtype);ot=tensor(tuple(shape[p] for p in perm),dtype)
-    args=f'%x: {ot}' if consumer else ''
-    lines=[f'builtin.module {{ func.func @forward({args}) -> {ot} {{',
+    lines=[f'builtin.module {{ func.func @forward() -> {ot} {{',
         f'%c = arith.constant dense<"0x{raw.tobytes().hex()}"> : {it}',
         f'%init = tensor.empty() : {ot}',
         f'%p = linalg.transpose ins(%c : {it}) outs(%init : {ot}) permutation = {list(perm)}']
-    if consumer:
-        lines += [f'%y = tensor.concat dim(0) %p, %x : ({ot}, {ot}) -> {tensor((shape[perm[0]]*2,*[shape[p] for p in perm[1:]]),dtype)}']
-        # Give the consumer its correct result type.
-        lines[0]=lines[0].replace(f'-> {ot}',f'-> {tensor((shape[perm[0]]*2,*[shape[p] for p in perm[1:]]),dtype)}')
-    lines += [f'func.return {"%y" if consumer else "%p"} : '+(tensor((shape[perm[0]]*2,*[shape[p] for p in perm[1:]]),dtype) if consumer else ot),'} }']
+    lines += [f'func.return %p : {ot}','} }']
     expected=raw.transpose((*perm,4)).copy().tobytes()
     return '\n'.join(lines),expected
-
-
 
 
 @pytest.mark.parametrize('kind',['permute','transpose','copy','cat'])

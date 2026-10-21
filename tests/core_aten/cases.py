@@ -7,7 +7,7 @@ Every admitted output is compared with exact arithmetic and has zero tolerance.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from fractions import Fraction as F
 from exact_oracle import quantize as exact_quantize
 
@@ -39,9 +39,6 @@ class Case:
     kernel: ops.Kernel
     inputs: dict[str, np.ndarray]
     reference: dict[str, np.ndarray]           # kernel-layout expected outputs
-    tol: int = 0
-    min_exact: float = 1.0
-    info: dict = field(default_factory=dict)
 
 
 def _g(seed):
@@ -71,12 +68,12 @@ def mm_case(M, K, N, seed=0, name=None):
     return Case(name or f"mm_{M}x{K}x{N}", "aten.mm.default", k, {"a": _np(aq), "b": _np(bq)}, {"out": exact_quantize(_np(aq).astype(object) @ _np(bq).astype(object) * F(sa) * F(sb), so)})
 
 
-def addmm_case(M, K, N, seed=0, name=None, beta=1.0, alpha=1.0):
+def addmm_case(M, K, N, seed=0, name=None, alpha=1.0):
     a, w, bias = _act((M, K), seed), _act((K, N), seed + 1) * 0.04, _act((N,), seed + 2) * 2.0
     sa, sw = scale_of(a), scale_of(w)
     aq, wq = q(a, sa), q(w, sw)
-    # PT2E bias: int32 at scale s_a s_w (beta and alpha folded at compile time)
-    bq = torch.round(beta * bias / (alpha * sa * sw)).to(torch.int32)
+    # PT2E bias: int32 at scale s_a s_w (alpha folded at compile time)
+    bq = torch.round(bias / (alpha * sa * sw)).to(torch.int32)
     y = A.addmm.default(dq(bq, sa * sw) * alpha, dq(aq, sa), dq(wq, sw), beta=1.0, alpha=alpha)
     so = scale_of(y)
     k = ops.matmul("aten.addmm.default", M, K, N, s_a=sa, s_b=sw, s_out=so, alpha=alpha, bias=True,
@@ -116,17 +113,14 @@ def conv_case(N, C, H, W, cout, k, s=1, p=0, d=1, groups=1, seed=0, name=None):
 # Elementwise
 # ---------------------------------------------------------------------------------------------
 
-def scale_case(op, shape, c, seed=0, name=None, narrow=False):
+def scale_case(op, shape, c, seed=0, name=None):
     x = _act(shape, seed)
-    sx = scale_of(x) if not narrow else float(x.abs().max()) / 127.0
+    sx = scale_of(x)
     xq = q(x, sx)
-    if narrow:
-        xq = xq.clamp(min=-127)
-    fn = {"aten.neg.default": lambda t: A.neg.default(t), "aten.mul.Scalar": lambda t: A.mul.Scalar(t, c),
-          "aten.div.Scalar": lambda t: A.div.Scalar(t, c)}[op]
+    fn = {"aten.neg.default": lambda t: A.neg.default(t), "aten.mul.Scalar": lambda t: A.mul.Scalar(t, c)}[op]
     y = fn(dq(xq, sx))
     so = scale_of(y)
-    cc = {"aten.neg.default": -1.0, "aten.mul.Scalar": c, "aten.div.Scalar": F(1) / F(c) if c else F(0)}[op]
+    cc = {"aten.neg.default": -1.0, "aten.mul.Scalar": c}[op]
     k = ops.scale_map(op, shape, cc, s_x=sx, s_out=so)
     return Case(name or f"{op.split('.')[1]}_{'x'.join(map(str, shape))}", op, k, {"x": _np(xq)}, {"y": exact_quantize(_np(xq).astype(object) * F(sx) * F(cc), so)})
 
@@ -178,14 +172,13 @@ def _codes(shape, seed):
 def clone_case(shape, seed=0, name=None):
     xq = _codes(shape, seed)
     return Case(name or f"clone_{'x'.join(map(str, shape))}", "aten.clone.default", ops.clone(shape),
-                {"x": _np(xq)}, {"y": _np(A.clone.default(xq))}, tol=0, min_exact=1.0)
+                {"x": _np(xq)}, {"y": _np(A.clone.default(xq))})
 
 
 def permute_case(shape, perm, seed=0, name=None):
     xq = _codes(shape, seed)
     return Case(name or f"permute_{'x'.join(map(str, shape))}_{''.join(map(str, perm))}", "aten.permute.default",
-                ops.permute(shape, perm), {"x": _np(xq)}, {"y": _np(A.permute.default(xq, perm))}, tol=0,
-                min_exact=1.0)
+                ops.permute(shape, perm), {"x": _np(xq)}, {"y": _np(A.permute.default(xq, perm))})
 
 
 def cat_case(shapes, dim, seed=0, name=None, independent=False):
@@ -197,7 +190,6 @@ def cat_case(shapes, dim, seed=0, name=None, independent=False):
         ss = [scale_of(torch.cat([x.flatten() for x in xs]))] * len(xs)
         so = ss[0]
     xq = [q(x, s) for x, s in zip(xs, ss)]
-    y = A.cat.default([dq(t, s) for t, s in zip(xq, ss)], dim)
     k = ops.cat(shapes, dim, s_in=ss, s_out=so)
     return Case(name or f"cat_{len(shapes)}x{'x'.join(map(str, shapes[0]))}_d{dim}", "aten.cat.default", k,
                 {f"x{i}": _np(t) for i, t in enumerate(xq)}, {"y": exact_quantize(np.concatenate([_np(t).astype(object) * F(si) for t,si in zip(xq,ss)],axis=dim), so)})
@@ -221,7 +213,7 @@ def slice_scatter_case(shape, src_shape, dim, start, end, step, seed=0, name=Non
     y = A.slice_scatter.default(dq(aq, s), dq(bq, s), dim, start, end, step)
     k = ops.slice_scatter(shape, src_shape, dim, start, end, step, s_self=s, s_src=s, s_out=s)
     return Case(name or f"slice_scatter_{'x'.join(map(str, shape))}", "aten.slice_scatter.default", k,
-                {"self": _np(aq), "src": _np(bq)}, {"y": _np(q(y, s))}, tol=0, min_exact=1.0)
+                {"self": _np(aq), "src": _np(bq)}, {"y": _np(q(y, s))})
 
 
 def full_like_case(shape, value, seed=0, name=None, s_out=None):
@@ -230,14 +222,14 @@ def full_like_case(shape, value, seed=0, name=None, s_out=None):
     y = A.full_like.default(x, value)
     k = ops.full("aten.full_like.default", shape, value, s_out=so, like=True)
     return Case(name or f"full_like_{'x'.join(map(str, shape))}", "aten.full_like.default", k,
-                {"x": _np(q(x, scale_of(x)))}, {"y": _np(q(y, so))}, tol=0, min_exact=1.0)
+                {"x": _np(q(x, scale_of(x)))}, {"y": _np(q(y, so))})
 
 
 def to_copy_case(shape, seed=0, name=None):
     xq = _codes(shape, seed)
     y = A._to_copy.default(xq, dtype=torch.int32)
     return Case(name or f"to_copy_{'x'.join(map(str, shape))}", "aten._to_copy.default", ops.to_copy_widen(shape),
-                {"x": _np(xq)}, {"y": _np(y)}, tol=0, min_exact=1.0)
+                {"x": _np(xq)}, {"y": _np(y)})
 
 
 # ---------------------------------------------------------------------------------------------

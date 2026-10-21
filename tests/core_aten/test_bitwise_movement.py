@@ -1,6 +1,5 @@
 """Opaque payloads, dtype-width DMA, constants and typed descriptor offsets."""
 import subprocess
-from pathlib import Path
 
 import numpy as np
 import pytest

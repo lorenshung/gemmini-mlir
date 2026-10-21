@@ -26,7 +26,6 @@ sys.path.insert(0, str(HERE.parent))
 import runner  # noqa: E402
 from exact_oracle import SourceOracle  # noqa: E402
 from fixture_source import read  # noqa: E402
-from run_e2e import DeviceRefusal  # noqa: E402
 from mlir_oot.core_aten.catalog import compile_catalog  # noqa: E402
 from mlir_oot.core_aten.emit import llvm_bin_dir  # noqa: E402
 from mlir_oot.core_aten.offload import rewrite, shim_source  # noqa: E402
@@ -159,15 +158,11 @@ def main() -> int:
             rows.append(dict(case=case.name, status=r.status, info=r.info, failed=r.failed, perf=r.perf,
                              tail=None if r.ok else r.log[-1500:]))
         except Exception as exc:  # noqa: BLE001
-            if isinstance(exc, DeviceRefusal):
-                rows.append(dict(case=case.name, status="REFUSED", reason=str(exc)))
-                print(case.name, "device refusal:", str(exc), flush=True)
-                continue
             rows.append(dict(case=case.name, status="ERROR", error=f"{type(exc).__name__}: {str(exc)[-1500:]}"))
         print(f"{case.name:32s} {rows[-1]['status']} {rows[-1].get('info') or rows[-1].get('error', '')}", flush=True)
     if a.json:
         a.json.write_text(json.dumps(rows, indent=1) + "\n")
-    return 0 if all(r["status"] in ("PASS", "REFUSED") for r in rows) else 1
+    return 0 if all(r["status"] == "PASS" for r in rows) else 1
 
 
 if __name__ == "__main__":

@@ -40,7 +40,6 @@ class Check:
     expected: np.ndarray
     tol: int
     label: str
-    count: int | None = None      # leading elements to compare (default: all of expected)
 
     def __post_init__(self):
         if self.tol != 0:
@@ -96,8 +95,7 @@ def write_sources(test: DeviceTest, wd: Path) -> tuple[Path, Path]:
     lines.append(f'  printf("PERF {test.name} cycles=%lu\\n", (unsigned long)(t1 - t0));')
     for i, chk in enumerate(test.checks):
         fn = "ca_check_i8" if chk.expected.dtype == np.int8 else "ca_check_i32"
-        n = chk.count if chk.count is not None else chk.expected.size
-        lines.append(f'  {fn}("{chk.label}", ca_{chk.buffer}, ca_exp{i}, {n}, {chk.tol});')
+        lines.append(f'  {fn}("{chk.label}", ca_{chk.buffer}, ca_exp{i}, {chk.expected.size}, {chk.tol});')
     lines += ["  return ca_finish();", "}", ""]
     c_path, s_path = wd / "main.c", wd / "blobs.S"
     c_path.write_text("\n".join(lines))

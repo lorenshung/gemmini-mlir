@@ -116,7 +116,6 @@ def test_inconsistent_selected_mac_policy_declines_cleanly():
 
 
 def test_centered_i32_source_routes_to_proved_physical_byte_datapath(tmp_path):
-    from pathlib import Path
     from types import SimpleNamespace
     from merlin.targetgen.core_aten_device import selected_facts
     from conftest import provider,PACKAGE

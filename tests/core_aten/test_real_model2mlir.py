@@ -114,7 +114,6 @@ def test_real_signed_addmm_retains_exact_source_readout(alpha, bias):
     import torch.ao.quantization.fx._decomposed  # noqa: F401
     from m2m.capture.pt2e_integerize import integerize_pt2e
     from m2m.capture.pt2e_compat import allow_exported_model_train_eval
-    from mlir_oot.core_aten.quant_schema import ratios, attributes
 
     class Addmm(torch.nn.Module):
         def forward(self, a, b, offset):
