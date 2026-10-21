@@ -825,6 +825,25 @@ def _im2col(v: SSAValue, num_dims: int = 6):
     return p
 
 
+def _nchw_convolution(g, ch, q, qx, qw, bias_ok, head, tail=()):
+    """Kernel, host bias and Match of a proven im2col convolution; consumed = head, epilogue, Q/DQ, tail, bias DQ."""
+    bias = _bias_operand(ch, Fraction(qx.scale) * Fraction(qw.scale), g.cout, bias_ok)
+    if ch.c:
+        raise Decline("constant epilogue offset")
+    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
+                             relu=ch.relu, bias_const=None,
+                             constants=_literal_codes([("x",qx),("w",qw)]))
+    _host_bias(k,bias,q.scale,convolution=True)
+    _pack_inputs(k,[("x",qx),("w",qw)])
+    ops.convolution_zero_points(k,("x",qx),("w",qw),g)
+    runtime_bias = bias is not None and bias[0] == "arg"
+    operands = [("x", qx.value), ("w", qw.value)] + ([("bias", bias[1].value)] if runtime_bias else [])
+    consumed = [*head, *ch.ops, q.op, qx.dq, qw.dq, *tail] + ([bias[1].dq] if runtime_bias else [])
+    return Match("aten.convolution.default", q.op, consumed, operands, ("y", q.value), k,
+                 layout=dict(source="NCHW,OIHW", device="NHWC,HWIO", transposes="on-device"),
+                 numeric=dict(s_x=qx.scale, s_w=qw.scale, s_out=q.scale, geometry=g.__dict__))
+
+
 def match_convolution_rows(op: Operation) -> Match | None:
     """Weight-RHS rows form: im2col rows [N*OH*OW, G*C*KH*KW] x W^T -> [pixels, F], bias row, NCHW view."""
     if op.name != "linalg.matmul" or len(op.operands) != 3:
@@ -860,24 +879,8 @@ def match_convolution_rows(op: Operation) -> Match | None:
     q = _sandwich_out(ch.final)
     if ch.perm != [0, 3, 1, 2] or shape(q.value) != (N, F, OH, OW):
         raise Decline("convolution result is not viewed NCHW")
-    s_acc = Fraction(qx.scale) * Fraction(qw.scale)
-    bias = _bias_operand(ch, s_acc, F, lambda m: trailing_block(m) == m.num_dims - 1)
-    if ch.c:
-        raise Decline("constant epilogue offset")
-    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
-                             relu=ch.relu, bias_const=None,
-                             constants=_literal_codes([("x",qx),("w",qw)]))
-    _host_bias(k,bias,q.scale,convolution=True)
-    _pack_inputs(k,[("x",qx),("w",qw)])
-    ops.convolution_zero_points(k,("x",qx),("w",qw),g)
-    operands = [("x", qx.value), ("w", qw.value)]
-    if bias and bias[0] == "arg":
-        operands.append(("bias", bias[1].value))
-    consumed = [op, im, tr, *ch.ops, q.op, qx.dq, qw.dq] + ([pad_op] if pad_op else []) + \
-        ([bias[1].dq] if bias and bias[0] == "arg" else [])
-    return Match("aten.convolution.default", q.op, consumed, operands, ("y", q.value), k,
-                 layout=dict(source="NCHW,OIHW", device="NHWC,HWIO", transposes="on-device"),
-                 numeric=dict(s_x=qx.scale, s_w=qw.scale, s_out=q.scale, geometry=g.__dict__))
+    return _nchw_convolution(g, ch, q, qx, qw, lambda m: trailing_block(m) == m.num_dims - 1,
+                             [op, im, tr], [pad_op] if pad_op else [])
 
 
 def match_convolution(op: Operation) -> Match | None:
@@ -933,23 +936,7 @@ def match_convolution(op: Operation) -> Match | None:
     q = _sandwich_out(ch.final)
     if shape(q.value) != (N, F, OH, OW):
         raise Decline("convolution result is not NCHW")
-    s_acc = Fraction(qx.scale) * Fraction(qw.scale)
-    bias = _bias_operand(ch, s_acc, F, lambda m: map_coeffs(m) == [[0, 1, 0, 0]])
-    if ch.c:
-        raise Decline("constant epilogue offset")
-    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
-                             relu=ch.relu, bias_const=None,
-                             constants=_literal_codes([("x",qx),("w",qw)]))
-    _host_bias(k,bias,q.scale,convolution=True)
-    _pack_inputs(k,[("x",qx),("w",qw)])
-    ops.convolution_zero_points(k,("x",qx),("w",qw),g)
-    operands = [("x", qx.value), ("w", qw.value)]
-    if bias and bias[0] == "arg":
-        operands.append(("bias", bias[1].value))
-    consumed += [*ch.ops, q.op, qx.dq, qw.dq] + ([bias[1].dq] if bias and bias[0] == "arg" else [])
-    return Match("aten.convolution.default", q.op, consumed, operands, ("y", q.value), k,
-                 layout=dict(source="NCHW,OIHW", device="NHWC,HWIO", transposes="on-device"),
-                 numeric=dict(s_x=qx.scale, s_w=qw.scale, s_out=q.scale, geometry=g.__dict__))
+    return _nchw_convolution(g, ch, q, qx, qw, lambda m: map_coeffs(m) == [[0, 1, 0, 0]], consumed)
 
 
 # ---------------------------------------------------------------------------------------------
