@@ -5,8 +5,8 @@ production schedule uses test names, provenance IDs or expected outputs.
 """
 
 import torch
-from capture import A, case, plain, rnd
-from capture_rest import _shared, conv_backward_case
+from capture import A, _shared, case, plain, rnd
+from capture_rest import conv_backward_case
 
 
 def rtl_set():

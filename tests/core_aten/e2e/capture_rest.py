@@ -5,13 +5,7 @@ from __future__ import annotations
 
 import torch
 
-from capture import A, case, rnd
-
-
-def _shared(name, fn, xs, **kw):
-    n, mod, ints = case(name, fn, xs, **kw)
-    mod.s_out = mod.scales[0]
-    return n, mod, ints
+from capture import A, _shared, case, rnd
 
 
 class Multi(torch.nn.Module):

@@ -88,6 +88,12 @@ class Plain(torch.nn.Module):
         return self.fn(*xs)
 
 
+def _shared(name, fn, xs, **kw):
+    n, mod, ints = case(name, fn, xs, **kw)
+    mod.s_out = mod.scales[0]
+    return n, mod, ints
+
+
 def plain(name, fn, ints):
     return name, Plain(fn), ints
 
@@ -115,15 +121,11 @@ def paper_set(small=False):
     out.append(case("relu", lambda x: A.relu.default(x), [rnd(*Z((256, 196), (37, 21)), seed=20)]))
     out.append(case("mean_dim", lambda x: A.mean.dim(x, [-1]), [rnd(*Z((128, 2048), (37, 50)), seed=21, relu=True)]))
     # movement (shared qparams: the output scale is the input's)
-    def shared(name, fn, xs):
-        n, mod, ints = case(name, fn, xs)
-        mod.s_out = mod.scales[0]
-        return n, mod, ints
-    out.append(shared("clone", lambda x: A.clone.default(x), [rnd(Z(262144, 777), seed=22)]))
-    out.append(shared("permute", lambda x: A.permute.default(x, [1, 0, 2]), [rnd(*Z((128, 32, 64), (20, 3, 21)), seed=23)]))
+    out.append(_shared("clone", lambda x: A.clone.default(x), [rnd(Z(262144, 777), seed=22)]))
+    out.append(_shared("permute", lambda x: A.permute.default(x, [1, 0, 2]), [rnd(*Z((128, 32, 64), (20, 3, 21)), seed=23)]))
     out.append(case("slice_scatter", lambda a, b: A.slice_scatter.default(a, b, 1, 0, 32, 1),
                     [rnd(*Z((750, 64), (20, 64)), seed=24), rnd(*Z((750, 32), (20, 32)), seed=25)]))
-    out.append(shared("constant_pad_nd", lambda x: A.constant_pad_nd.default(x, [0, 0, 0, 0], 0.0), [rnd(*Z((3, 512, 512), (3, 20, 21)), seed=26)]))
+    out.append(_shared("constant_pad_nd", lambda x: A.constant_pad_nd.default(x, [0, 0, 0, 0], 0.0), [rnd(*Z((3, 512, 512), (3, 20, 21)), seed=26)]))
     out.append(case("constant_pad_nd_p1", lambda x: A.constant_pad_nd.default(x, [1, 1, 1, 1], 0.5),
                     [rnd(*Z((1, 64, 56, 56), (1, 5, 7, 9)), seed=30, relu=True)]))
     out.append(case("full_like", lambda x: A.full_like.default(x, -1.25), [rnd(*Z((12, 1024, 1024), (37, 21)), seed=27)], s_out=0.02))
