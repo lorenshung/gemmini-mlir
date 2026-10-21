@@ -1110,6 +1110,7 @@ def _per_tap_contraction(root: SSAValue, qg: QIn, qw: QIn):
 
 def _conv_input_two_stage(op, q0, root, qg, qw):
     from . import linmap
+    from .conv_wgrad import axis_geometry
     t = _per_tap_contraction(root, qg, qw)
     if t is None:
         raise Decline("grad_input region too large and not a per-tap contraction")
@@ -1146,30 +1147,9 @@ def _conv_input_two_stage(op, q0, root, qg, qw):
     on, oc, oy, ox = np.unravel_index(lm.out, (N, C, H, W))
     if not (np.array_equal(on, n_) and np.array_equal(oc, c_)):
         raise Decline("scatter mixes channels")
-    def axis_geometry(position, tap, output):
-        # Solve the exact affine identity output = stride*position +
-        # dilation*tap - padding. Rank-deficient axes get unit defaults.
-        rows = []
-        for a,b,c in sorted(set(zip(position.tolist(),tap.tolist(),output.tolist()))):
-            row = [Fraction(a),Fraction(b),Fraction(1),Fraction(c)]
-            for pivot,prior in rows:
-                factor = row[pivot]
-                row = [x-factor*y for x,y in zip(row,prior)]
-            pivot = next((j for j in range(3) if row[j]),None)
-            if pivot is None:
-                if row[3]: raise Decline('non-affine transposed convolution scatter')
-                continue
-            row = [x/row[pivot] for x in row]
-            rows.append((pivot,row)); rows.sort()
-        answer = [Fraction(1),Fraction(1),Fraction(0)]
-        for pivot,row in reversed(rows):
-            answer[pivot] = row[3]-sum(row[j]*answer[j] for j in range(pivot+1,3))
-        if any(v.denominator != 1 for v in answer):
-            raise Decline('noninteger transposed convolution geometry')
-        stride,dilation,offset = map(int,answer)
-        return stride,dilation,-offset
-    sh,dh,ph = axis_geometry(oh_,kh_,oy)
-    sw,dw,pw = axis_geometry(ow_,kw_,ox)
+    scatter = ('transposed convolution scatter', 'transposed convolution geometry')
+    sh,dh,ph = axis_geometry(oh_,kh_,oy,Decline,scatter)
+    sw,dw,pw = axis_geometry(ow_,kw_,ox,Decline,scatter)
     found = ConvGeom(N,H,W,C,F,KH,KW,sh,sw,ph,pw,dh,dw,1)
     found.validate()
     if (found.oh,found.ow) != (OH,OW):

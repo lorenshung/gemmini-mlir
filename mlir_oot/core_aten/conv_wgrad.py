@@ -11,8 +11,8 @@ import numpy as np
 from . import linmap
 
 
-def axis_geometry(position, tap, output):
-    """Solve output = stride*position + dilation*tap - padding exactly."""
+def axis_geometry(position, tap, output, error=linmap.NotLinear, subject=('convolution coordinates', 'convolution geometry')):
+    """Solve output = stride*position + dilation*tap - padding exactly; rank-deficient axes get unit defaults."""
     rows = []
     for a,b,c in sorted(set(zip(position.tolist(),tap.tolist(),output.tolist()))):
         row = [Q(a),Q(b),Q(1),Q(c)]
@@ -21,7 +21,7 @@ def axis_geometry(position, tap, output):
             row = [x-factor*y for x,y in zip(row,prior)]
         pivot = next((j for j in range(3) if row[j]),None)
         if pivot is None:
-            if row[3]: raise linmap.NotLinear('non-affine convolution coordinates')
+            if row[3]: raise error('non-affine ' + subject[0])
             continue
         row = [x/row[pivot] for x in row]
         rows.append((pivot,row));rows.sort()
@@ -29,7 +29,7 @@ def axis_geometry(position, tap, output):
     for pivot,row in reversed(rows):
         answer[pivot] = row[3]-sum(row[j]*answer[j] for j in range(pivot+1,3))
     if any(v.denominator != 1 for v in answer):
-        raise linmap.NotLinear('noninteger convolution geometry')
+        raise error('noninteger ' + subject[1])
     stride,dilation,offset = map(int,answer)
     return stride,dilation,-offset
 
