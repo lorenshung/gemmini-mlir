@@ -765,7 +765,7 @@ def match_contraction(op: Operation) -> Match | None:
     qa, qb = dequant(a), dequant(b)
     if qa is None or qb is None or qa.dtype != "i8" or qb.dtype != "i8":
         return None
-    if _is_conv_cols(b) or _im2col_rows(a) is not None:
+    if _im2col(b) is not None or _im2col(a, 7) is not None:
         return None           # the convolution matchers own im2col operands
     ch = follow_chain(op.results[0])
     if ch.perm is not None:
@@ -806,7 +806,8 @@ def _through_reshapes(v: SSAValue) -> SSAValue:
         v = p.operands[0]
 
 
-def _im2col(v: SSAValue):
+def _im2col(v: SSAValue, num_dims: int = 6):
+    """The pure im2col generic behind reshapes: 6 dims for the columns form, 7 for the rows form."""
     p = producer(_through_reshapes(v))
     if p is None or p.name != "linalg.generic" or any(i != "parallel" for i in iterators(p)):
         return None
@@ -815,25 +816,7 @@ def _im2col(v: SSAValue):
     if p.regions[0].blocks[0].ops.first.operands[0] is not p.regions[0].blocks[0].args[0]:
         return None
     maps = generic_maps(p)
-    if not identity_map(maps[1]) or len(maps[0].results) != 4 or maps[0].num_dims != 6:
-        return None
-    return p
-
-
-def _is_conv_cols(v: SSAValue) -> bool:
-    return _im2col(v) is not None
-
-
-def _im2col_rows(v: SSAValue):
-    p = producer(_through_reshapes(v))
-    if p is None or p.name != "linalg.generic" or any(i != "parallel" for i in iterators(p)):
-        return None
-    if len(p.operands) != 2 or [o.name for o in p.regions[0].blocks[0].ops] != ["linalg.yield"]:
-        return None
-    if p.regions[0].blocks[0].ops.first.operands[0] is not p.regions[0].blocks[0].args[0]:
-        return None
-    maps = generic_maps(p)
-    if not identity_map(maps[1]) or len(maps[0].results) != 4 or maps[0].num_dims != 7:
+    if not identity_map(maps[1]) or len(maps[0].results) != 4 or maps[0].num_dims != num_dims:
         return None
     return p
 
@@ -842,7 +825,7 @@ def match_convolution_rows(op: Operation) -> Match | None:
     """Weight-RHS rows form: im2col rows [N*OH*OW, G*C*KH*KW] x W^T -> [pixels, F], bias row, NCHW view."""
     if op.name != "linalg.matmul" or len(op.operands) != 3:
         return None
-    im = _im2col_rows(op.operands[0])
+    im = _im2col(op.operands[0], 7)
     if im is None or splat_value(op.operands[2]) != 0.0:
         return None
     co = map_coeffs(generic_maps(im)[0])
