@@ -7,7 +7,7 @@ import numpy as np
 from mlir_oot.core_aten.emit import build_module, encode
 from mlir_oot.core_aten.lint import HazardError, lint
 from mlir_oot.core_aten.recipes.gemm import blocked_matmul
-from mlir_oot.core_aten.reroll import expand, node_count, reroll
+from mlir_oot.core_aten.reroll import iter_expand, node_count, reroll
 from mlir_oot.core_aten.stream import ACC, Arg, SP, Stream, simulate
 from mlir_oot.core_aten.trace import stream_from_module
 from mlir_oot.golden_conv import ConvShape, GoldenConv
@@ -87,7 +87,7 @@ class TestReroll(unittest.TestCase):
         lint(s)
         recs = [encode(i) for i in s.ins]
         tree = reroll(recs)
-        self.assertEqual(expand(tree), recs)
+        self.assertEqual(list(iter_expand(tree)), recs)
         self.assertLess(node_count(tree), len(recs) // 4)
         rng = np.random.default_rng(3)
         A = rng.integers(-128, 128, (M, K)).astype(np.int8)

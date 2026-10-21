@@ -14,7 +14,6 @@ DRAM address is the zero-fill primitive's address 0.
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import subprocess
@@ -275,7 +274,3 @@ def compile_to_object(module: ModuleOp, workdir: Path, *, llvm_bin: Path | None 
         raise ValueError("device object contains a forbidden Gemmini command")
     return {"object": str(obj), "object_sha256": hashlib.sha256(obj.read_bytes()).hexdigest(),
             "argv": commands, "nofsm": audit["status"]}
-
-
-def write_manifest(path: Path, data: dict) -> None:
-    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")

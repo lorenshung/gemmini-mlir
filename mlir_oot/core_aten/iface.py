@@ -22,8 +22,6 @@ earlier one is still writing.
 
 from __future__ import annotations
 
-import re
-
 import numpy as np
 from xdsl.dialects.builtin import ArrayAttr, FloatAttr, IntegerAttr, IntegerType, StringAttr, TensorType
 
@@ -436,27 +434,6 @@ class Program:
                     after=start+(len(ks.ins) if r.after is None else r.after)))
         s.fence()
         return s
-
-
-_NAME = re.compile(r'\bname\s*=\s*"([^"]+)"')
-_F32 = re.compile(r'\b(\w+)\s*=\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*:\s*f32')
-
-
-def f32_literals(text: str) -> dict[tuple[str, str], float]:
-    """The decimal spelling of every ``: f32`` attribute, per op ``name``.
-
-    Merlin's reference engines read ``readout_scale = 0.7 : f32`` as the binary64 value 0.7 and then
-    form ``readout_scale / count`` in binary64 before the one binary32 rounding (WINDOW_SUM).  The
-    parsed attribute holds binary32(0.7), and binary32(binary32(0.7) / 36) differs from
-    binary32(0.7 / 36) in the last place, so the literal is kept alongside it.
-    """
-    out = {}
-    for line in text.splitlines():
-        m = _NAME.search(line)
-        if m:
-            for key, lit in _F32.findall(line):
-                out[(m.group(1), key)] = float(lit)
-    return out
 
 
 def build(module, text: str | None = None) -> tuple[dict, object, Stream]:

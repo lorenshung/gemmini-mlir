@@ -20,7 +20,6 @@ from merlin.targetgen.core_aten_overlay import (
     NON_CORE_BRIDGE,
     build_overlay,
     overlay_digest,
-    profile_digest,
     validate_overlay,
 )
 
@@ -256,10 +255,6 @@ class GemminiOverlayProvider:
 
 
 PROVIDER = GemminiOverlayProvider()
-
-
-def gemmini_profile_digest(profile: Mapping[str, Any]) -> str:
-    return profile_digest(profile)
 
 
 def gemmini_overlay_digest(document: Mapping[str, Any]) -> str:

@@ -82,9 +82,6 @@ def rewrite(source: str, manifest: dict) -> str:
     return module_text(module)
 
 
-_CT = {"i8": "int8_t", "i32": "int32_t"}
-
-
 def shim_source(manifest: dict) -> str:
     from .storage import itemsize
     ranks = set()

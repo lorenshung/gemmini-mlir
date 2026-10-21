@@ -6,7 +6,7 @@ argument's base pointer removed.  A block of ``L`` consecutive nodes repeats whe
 keys are identical and every value advances by a constant per repetition; such a run
 becomes ``Loop(count, body, step)``.  Passes repeat so inner loops become single nodes
 of outer runs.  Because the comparison is on the packed words, local scratchpad and
-accumulator addresses, DRAM offsets and even extents may vary affinely; ``expand``
+accumulator addresses, DRAM offsets and even extents may vary affinely; ``iter_expand``
 reproduces the original words exactly and is checked before emission.  The loops are
 plain CPU control flow; no Gemmini loop opcode is involved.
 """
@@ -128,19 +128,6 @@ def _shift(nodes, deltas, pos: int = 0):
             body, pos = _shift(node.body, deltas, pos)
             out.append(Loop(node.count, tuple(body), node.step))
     return out, pos
-
-
-def expand(nodes) -> list[Rec]:
-    """Re-expand a loop tree; ``expand(reroll(r)) == r`` is checked before emission."""
-    out: list[Rec] = []
-    for node in nodes:
-        if isinstance(node, Rec):
-            out.append(node)
-            continue
-        for it in range(node.count):
-            body, _ = _shift(node.body, [it * d for d in node.step])
-            out.extend(expand(body))
-    return out
 
 
 def iter_expand(nodes):
