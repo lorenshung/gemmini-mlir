@@ -117,7 +117,7 @@ Merlin region admission must authenticate `full_i32` movement readouts and their
 `storage_codes` identity proof above. It must not require every MVOUT to target
 the accumulator: scratchpad DMA after exact host conversion is byte movement.
 Accumulator MVOUTs still require full-width readout with unit scale. See
-`docs/taskD2_layout_scalability.md` for resource measurements and qualification.
+`docs/taskD2_layout_scalability.md` on the gemmini-perf branch for resource measurements and qualification.
 
 ## F1: opaque element movement
 
