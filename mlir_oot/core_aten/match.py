@@ -713,6 +713,14 @@ def _host_bias(kernel, bias, output_scale, convolution=False):
 
 
 
+def _closed_mac(block: Block) -> bool:
+    """The three-op body acc + a*b reads exactly the two inputs and the accumulator, and yields the sum."""
+    multiply, addition, yielded = list(block.ops)
+    return (set(multiply.operands) == set(block.args[:2])
+            and set(addition.operands) == {multiply.results[0], block.args[2]}
+            and list(yielded.operands) == [addition.results[0]])
+
+
 def match_contraction(op: Operation) -> Match | None:
     """mm / bmm / addmm: f32 matmul of two dequantized int8 tensors with an affine epilogue."""
     batched = False
@@ -732,12 +740,8 @@ def match_contraction(op: Operation) -> Match | None:
         if names not in (["arith.mulf", "arith.addf", "linalg.yield"], ["arith.extsi", "arith.extsi", "arith.muli",
                                                                          "arith.addi", "linalg.yield"]):
             return None
-        block = op.regions[0].blocks[0]
         if names[0] == "arith.mulf":
-            multiply, addition, yielded = list(block.ops)
-            if not (set(multiply.operands) == set(block.args[:2])
-                    and set(addition.operands) == {multiply.results[0], block.args[2]}
-                    and list(yielded.operands) == [addition.results[0]]):
+            if not _closed_mac(op.regions[0].blocks[0]):
                 return None
         else:
             from ..contraction_patterns import _canonical_body
@@ -1024,11 +1028,7 @@ def match_conv_wgrad(op: Operation) -> Match | None:
     cx,cg,co=(map_coeffs(m,bounds) for m in maps)
     if cx is None or cg is None or co != [[1 if j == i else 0 for j in range(7)] for i in range(4)]:
         raise Decline("weight-gradient maps")
-    block=op.regions[0].blocks[0]
-    multiply,addition,yielded=list(block.ops)
-    if not (set(multiply.operands)==set(block.args[:2]) and
-            set(addition.operands)=={multiply.results[0],block.args[2]} and
-            list(yielded.operands)==[addition.results[0]]):
+    if not _closed_mac(op.regions[0].blocks[0]):
         raise Decline('weight-gradient body is not a closed MAC')
     # x: (d4, d1, d5*sh + d2*dh, d6*sw + d3*dw); grad: (d4, d0, d5, d6)
     if cg != [[0, 0, 0, 0, 1, 0, 0], [1, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 0, 0, 1]]:
@@ -1110,11 +1110,7 @@ def _conv_input_two_stage(op, q0, root, qg, qw):
     if (wmap != [e(1), e(7), e(2), e(3), e(4)] or gmap != [e(0), e(1), e(7), e(5), e(6)]
             or cos[2] != [e(d) for d in range(7)]):
         raise Decline("per-tap contraction maps")
-    block = t.regions[0].blocks[0]
-    multiply,addition,yielded = list(block.ops)
-    if not (set(multiply.operands)==set(block.args[:2]) and
-            set(addition.operands)=={multiply.results[0],block.args[2]} and
-            list(yielded.operands)==[addition.results[0]]):
+    if not _closed_mac(t.regions[0].blocks[0]):
         raise Decline('per-tap contraction body is not closed MAC')
     tshape = shape(t.results[0])
     if tshape != (N, 1, C, KH, KW, OH, OW):
