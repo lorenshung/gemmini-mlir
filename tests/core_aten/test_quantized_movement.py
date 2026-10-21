@@ -1,7 +1,5 @@
 """Code identity, qparam differences, and semantic selector refusals."""
 from fractions import Fraction
-import importlib.util
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -118,11 +116,8 @@ def test_equal_rationals_need_not_have_identical_numerator_spelling():
 
 
 def test_provider_authenticates_byte_stream_without_a_mac_bound():
-    path = Path(__file__).parents[2] / 'merlin-support/core_aten/execution_provider.py'
-    spec = importlib.util.spec_from_file_location('movement_provider',path)
-    provider = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(provider)
-    proof = provider.admit_numeric_schedule(source(), package=path.parents[2], numeric_policy={})
+    from conftest import PACKAGE, provider
+    proof = provider().admit_numeric_schedule(source(), package=PACKAGE, numeric_policy={})
     assert proof['status'] == 'proven', proof
     kernel, = proof['kernels']
     assert kernel['device_readout'] == kernel['schedule']['readout'] == 'storage_codes'

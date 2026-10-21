@@ -1,9 +1,7 @@
 """Provider integration on actual convert(profile=int8_accelerator) output."""
 
-import importlib.util
 import json
 import subprocess
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,6 +12,7 @@ from mlir_oot.core_aten.catalog import build
 from mlir_oot.core_aten.offload import rewrite
 from mlir_oot.core_aten.stream import simulate, FULL_BIT, ACC_BIT
 from exact_oracle import evaluate
+from conftest import PACKAGE, POLICY, provider
 
 
 @pytest.mark.parametrize('dtype_name', ['float16', 'bfloat16'])
@@ -96,7 +95,6 @@ def test_real_limb_component_capture(kind):
     'repeat', 'slice_scatter', 'select_scatter', 'full', 'full_like', 'fill_Scalar', '_to_copy'])
 def test_real_dtype_movement(name, dtype):
     pytest.importorskip('m2m')
-    sys.path.insert(0, str(Path(__file__).parent / 'e2e'))
     from dtype_movement import capture, wire
     try:
         text, inputs, expected = capture(name, dtype)
@@ -181,14 +179,7 @@ def test_real_bmm_proof_covers_producer_and_retains_source_readout(batch, m, k, 
     assert converted.ok, converted.diagnostics
     module = parse_mlir_text(converted.mlir_text)
     text = str(module)
-    path = Path(__file__).parents[2] / 'merlin-support/core_aten/execution_provider.py'
-    spec = importlib.util.spec_from_file_location('real_bmm_provider_test', path)
-    provider = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(provider)
-    policy = dict(numerical_semantics=dict(accumulator_dtype='i32', internal_arithmetic=dict(
-        signed_operand_bits=8, mac_result_bits=20, mac_result_overflow='wrap_to_20_bits',
-        full_operation_overflow_policy='bounded_exact_requires_each_partial_sum')))
-    proof = provider.admit_numeric_schedule(text, package=path.parents[2], numeric_policy=policy)
+    proof = provider().admit_numeric_schedule(text, package=PACKAGE, numeric_policy=POLICY)
     contraction, = [op for op in module.walk() if match_integer_gemm(op, require_zero=False)]
     assert provider_coverage(module, proof, contraction) is None
     _, manifest, matches = build(text)
@@ -214,7 +205,6 @@ READINESS = ['add_Scalar', 'sub_Scalar', '_to_copy_f64', 'full_like_f64', 'fill_
 def readiness_cases():
     pytest.importorskip('m2m')
     torch = pytest.importorskip('torch')
-    sys.path.insert(0, str(Path(__file__).parent / 'e2e'))
     from capture_rtl import rtl_set
     from capture import case, rnd, A, QD
     class FloatWidth(torch.nn.Module):
@@ -386,34 +376,18 @@ def test_informational_scale_is_optional_and_unknown_keys_are_rejected(real_capt
 def test_real_capture_provider_routes_and_records_two_producer_proofs(
     real_capture, tmp_path
 ):
-    path = Path(__file__).parents[2] / "merlin-support/core_aten/execution_provider.py"
-    spec = importlib.util.spec_from_file_location("real_provider_test", path)
-    provider = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(provider)
-    policy = dict(
-        numerical_semantics=dict(
-            accumulator_dtype="i32",
-            internal_arithmetic=dict(
-                signed_operand_bits=8,
-                mac_result_bits=20,
-                mac_result_overflow="wrap_to_20_bits",
-                full_operation_overflow_policy="bounded_exact_requires_each_partial_sum",
-            ),
-        )
-    )
-    proof = provider.admit_numeric_schedule(
-        real_capture, package=path.parents[2], numeric_policy=policy
-    )
+    api = provider()
+    proof = api.admit_numeric_schedule(real_capture, package=PACKAGE, numeric_policy=POLICY)
     assert len(proof["kernels"]) == 2
     (tmp_path / "model.mlir").write_text(real_capture)
     from merlin.targetgen.core_aten_device import selected_facts
 
-    fixture = path.parents[1] / "tests/fixtures/core_aten_device/facts.json"
+    fixture = PACKAGE / "merlin-support/tests/fixtures/core_aten_device/facts.json"
     with selected_facts("synthetic_core_aten", fixture) as facts:
-        route = provider.routing(
+        route = api.routing(
             tmp_path,
             target="synthetic_core_aten",
-            package=path.parents[2],
+            package=PACKAGE,
             facts=facts,
             eligible=[(None, SimpleNamespace(dtypes=("i8", "i8", "i32")))],
         )
@@ -455,13 +429,8 @@ def test_real_centered_contraction(kind,scheme):
     _,manifest,replays = check_centered(source,inputs,expected)
     assert len(replays) == (3 if kind=='conv' else 1),manifest['declines']
     assert not any('centered' in d['reason'] or 'unsafe device schedule' in d['reason'] for d in manifest['declines'])
-    path = Path(__file__).parents[2]/'merlin-support/core_aten/execution_provider.py'
-    spec = importlib.util.spec_from_file_location('provider_asymmetric_test',path)
-    provider = importlib.util.module_from_spec(spec);spec.loader.exec_module(provider)
-    policy = dict(numerical_semantics=dict(accumulator_dtype='i32',internal_arithmetic=dict(
-        signed_operand_bits=8,mac_result_bits=20,mac_result_overflow='wrap_to_20_bits',
-        full_operation_overflow_policy='bounded_exact_requires_each_partial_sum')))
-    proof = provider.admit_numeric_schedule(source,package=path.parents[2],numeric_policy=policy)
+    api = provider()
+    proof = api.admit_numeric_schedule(source,package=PACKAGE,numeric_policy=POLICY)
     assert proof['status'] == 'proven',proof
     assert len(proof['kernels']) == len(replays)
     assert all(k['exact_arithmetic'] and k['schedule']['centered_byte_contraction'] for k in proof['kernels'])
@@ -471,7 +440,7 @@ def test_real_centered_contraction(kind,scheme):
     module = parse_mlir_text(source)
     # Binding hashes authenticate serialization exactly, as in Merlin's lane.
     normalized = str(module)
-    proof = provider.admit_numeric_schedule(normalized,package=path.parents[2],numeric_policy=policy)
+    proof = api.admit_numeric_schedule(normalized,package=PACKAGE,numeric_policy=POLICY)
     for op in module.walk():
         if contraction(op):
             failure = provider_coverage(module,proof,op)

@@ -8,7 +8,7 @@ from mlir_oot.core_aten.catalog import build, parse_module
 from mlir_oot.core_aten.offload import rewrite
 from mlir_oot.core_aten.stream import Arg, Stream, simulate
 from mlir_oot.core_aten.lint import lint
-from test_scalar_mean_island import provider, PACKAGE, POLICY
+from conftest import provider, PACKAGE, POLICY
 
 
 @pytest.mark.parametrize('width', [1, 2, 4, 8])

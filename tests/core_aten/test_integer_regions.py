@@ -1,6 +1,4 @@
 """Real model2MLIR seeded MAC/readout bodies through the provider's region catalog."""
-import importlib.util
-from pathlib import Path
 
 import numpy as np
 import pytest
@@ -11,6 +9,7 @@ from xdsl.ir import Block, Region
 from mlir_oot.core_aten.catalog import build
 from mlir_oot.core_aten.stream import simulate
 from exact_oracle import evaluate
+from conftest import PACKAGE, POLICY, provider
 
 
 def source(m=3,k=17,n=5,scale=.5, runtime=False, guarded=True):
@@ -62,23 +61,17 @@ def test_unbounded_runtime_seed_is_refused():
 
 
 def test_provider_proves_and_routes_the_actual_region(tmp_path):
-    path = Path(__file__).parents[2] / 'merlin-support/core_aten/execution_provider.py'
-    spec = importlib.util.spec_from_file_location('provider_seeded_test',path)
-    provider = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(provider)
+    api = provider()
     text = source()
-    policy = dict(numerical_semantics=dict(accumulator_dtype='i32',internal_arithmetic=dict(
-        signed_operand_bits=8,mac_result_bits=20,mac_result_overflow='wrap_to_20_bits',
-        full_operation_overflow_policy='bounded_exact_requires_each_partial_sum')))
-    proof = provider.admit_numeric_schedule(text,package=path.parents[2],numeric_policy=policy)
+    proof = api.admit_numeric_schedule(text,package=PACKAGE,numeric_policy=POLICY)
     assert len(proof['kernels']) == 1 and proof['kernels'][0]['exact_arithmetic']
     assert proof['bindings'][0]['source_operation_ordinal'] >= 0
     from types import SimpleNamespace
     from merlin.targetgen.core_aten_device import selected_facts
-    fixture=path.parents[1]/'tests/fixtures/core_aten_device/facts.json'
+    fixture=PACKAGE/'merlin-support/tests/fixtures/core_aten_device/facts.json'
     (tmp_path/'model.mlir').write_text(text)
     with selected_facts('synthetic_core_aten',fixture) as facts:
-        route=provider.routing(tmp_path,target='synthetic_core_aten',package=path.parents[2],facts=facts,
+        route=api.routing(tmp_path,target='synthetic_core_aten',package=PACKAGE,facts=facts,
                                eligible=[(None,SimpleNamespace(dtypes=('i8','i8','i32')))])
     assert callable(route.region_offload) and route.catalog_builder is None
     assert callable(route.final_elf_audit)

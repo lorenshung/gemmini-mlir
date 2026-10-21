@@ -1,11 +1,8 @@
 """Spike qualification of serial per-channel, biased multi-term readout."""
 from fractions import Fraction as F
 from pathlib import Path
-import sys
 import numpy as np
-import pytest
 
-sys.path.insert(0,str(Path(__file__).parent))
 from common import need_spike
 import runner
 

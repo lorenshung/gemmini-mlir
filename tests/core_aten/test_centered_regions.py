@@ -76,7 +76,7 @@ def test_repeated_centered_bindings_share_one_unambiguous_schedule_proof():
     from xdsl.dialects import func
     from xdsl.dialects.builtin import FunctionType
     from mlir_oot.frontend.parse import parse_module
-    from test_scalar_mean_island import provider,PACKAGE,POLICY
+    from conftest import provider,PACKAGE,POLICY
     module=parse_module(source())
     fn=next(o for o in module.walk() if o.name=='func.func')
     contraction=next(o for o in fn.walk() if o.name=='linalg.matmul')
@@ -96,7 +96,7 @@ def test_repeated_centered_bindings_share_one_unambiguous_schedule_proof():
 
 def test_selected_mac_width_without_one_mesh_tile_declines_cleanly():
     from copy import deepcopy
-    from test_scalar_mean_island import provider,PACKAGE,POLICY
+    from conftest import provider,PACKAGE,POLICY
     policy=deepcopy(POLICY)
     policy['numerical_semantics']['internal_arithmetic']['mac_result_bits']=16
     policy['numerical_semantics']['internal_arithmetic']['mac_result_overflow']='wrap_to_16_bits'
@@ -107,7 +107,7 @@ def test_selected_mac_width_without_one_mesh_tile_declines_cleanly():
 
 def test_inconsistent_selected_mac_policy_declines_cleanly():
     from copy import deepcopy
-    from test_scalar_mean_island import provider,PACKAGE,POLICY
+    from conftest import provider,PACKAGE,POLICY
     policy=deepcopy(POLICY)
     policy['numerical_semantics']['internal_arithmetic']['mac_result_bits']=16
     proof=provider().admit_numeric_schedule(source(),package=PACKAGE,numeric_policy=policy)
@@ -119,7 +119,7 @@ def test_centered_i32_source_routes_to_proved_physical_byte_datapath(tmp_path):
     from pathlib import Path
     from types import SimpleNamespace
     from merlin.targetgen.core_aten_device import selected_facts
-    from test_scalar_mean_island import provider,PACKAGE
+    from conftest import provider,PACKAGE
     (tmp_path/'model.mlir').write_text(source())
     fixture=PACKAGE/'merlin-support/tests/fixtures/core_aten_device/facts.json'
     with selected_facts('synthetic_core_aten',fixture) as facts:
@@ -131,7 +131,7 @@ def test_centered_i32_source_routes_to_proved_physical_byte_datapath(tmp_path):
     # not compile simply because the unprepared source had a match.
     from copy import deepcopy
     import json
-    from test_scalar_mean_island import POLICY
+    from conftest import POLICY
     policy=deepcopy(POLICY)
     policy['numerical_semantics']['internal_arithmetic']['mac_result_bits']=16
     policy['numerical_semantics']['internal_arithmetic']['mac_result_overflow']='wrap_to_16_bits'

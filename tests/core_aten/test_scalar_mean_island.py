@@ -1,6 +1,5 @@
 """Closed quantized reductions retain an exact numerator through dense views."""
 from fractions import Fraction as Q
-import importlib.util
 import json
 from pathlib import Path
 
@@ -11,19 +10,9 @@ from mlir_oot.core_aten.catalog import build, compile_catalog, merlin_builder, p
 from mlir_oot.core_aten.lint import lint
 from mlir_oot.core_aten.offload import rewrite
 from mlir_oot.core_aten.stream import simulate
+from conftest import PACKAGE, POLICY, provider
 
 FIXTURES = Path(__file__).parent/'fixtures/scalar_mean'
-PACKAGE = Path(__file__).resolve().parents[2]
-POLICY = dict(numerical_semantics=dict(accumulator_dtype='i32', internal_arithmetic=dict(
-    signed_operand_bits=8, mac_result_bits=20, mac_result_overflow='wrap_to_20_bits',
-    full_operation_overflow_policy='bounded_exact_requires_each_partial_sum')))
-
-
-def provider():
-    spec = importlib.util.spec_from_file_location('scalar_mean_provider', PACKAGE/'merlin-support/core_aten/execution_provider.py')
-    api = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(api)
-    return api
 
 
 def source(name='minimal'):

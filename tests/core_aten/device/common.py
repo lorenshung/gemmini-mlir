@@ -1,13 +1,9 @@
 """Shared gating for device tests: Spike needs the tool variables."""
 
 import os
-import sys
 import unittest
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import runner  # noqa: E402
+import runner  # noqa: F401  (re-exported to the device tests)
 
 SPIKE_VARS = ("GEMMINI_LLVM_BIN", "GEMMINI_RISCV_TOOLS", "GEMMINI_ROCC_TESTS")
 

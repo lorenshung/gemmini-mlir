@@ -2,15 +2,8 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import numpy as np
 import pytest
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE / "iface_ext"))
-sys.path.insert(0, str(HERE / "device"))
 
 pytest.importorskip("merlin.runtime.integer_ops")
 

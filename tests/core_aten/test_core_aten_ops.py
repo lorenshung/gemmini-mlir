@@ -1,13 +1,11 @@
 """Exact arithmetic and explicit device refusals on real model2MLIR captures."""
 
-import sys
 import unittest
 from pathlib import Path
 
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
 
 import cases  # noqa: E402
 from mlir_oot.core_aten.catalog import build  # noqa: E402

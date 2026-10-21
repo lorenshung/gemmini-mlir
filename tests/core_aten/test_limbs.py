@@ -1,5 +1,4 @@
 """F2/F4 device contracts, wide-integer reconstruction and refusal boundaries."""
-import importlib.util
 import json
 from pathlib import Path
 
@@ -10,12 +9,10 @@ from xdsl.dialects.builtin import StringAttr
 from mlir_oot.core_aten.catalog import build, parse_module
 from mlir_oot.core_aten.offload import rewrite
 from mlir_oot.core_aten.stream import simulate
+from conftest import PACKAGE, POLICY, provider
 
 
 FIXTURE = Path(__file__).parents[1] / 'fixtures/core_aten/limbs/int_mm.mlir'
-POLICY = dict(numerical_semantics=dict(accumulator_dtype='i32', internal_arithmetic=dict(
-    signed_operand_bits=8, mac_result_bits=20, mac_result_overflow='wrap_to_20_bits',
-    full_operation_overflow_policy='bounded_exact_requires_each_partial_sum')))
 
 
 def annotate(text, indices=(0, 0), exponents=(0, 0), family='F2', component='rr', mutate=None):
@@ -75,7 +72,7 @@ def test_ranked_linear_components_have_no_native_width_or_rank_limit(shape,count
     x = np.resize(np.array([-128,127,-1,0,1],np.int8),shape)
     assert np.array_equal(simulate(match.kernel.stream,{'x0':x})['out'],x.astype(np.int32)*-3-3)
     assert match.numeric['binary_exponent'] == 8*(count-1)
-    api,package = provider()
+    api,package = provider(),PACKAGE
     assert api.admit_numeric_schedule(text,package=package,numeric_policy=POLICY)['status'] == 'proven'
 
 
@@ -87,14 +84,6 @@ def selected(text):
         if 'limb_plan' in binding['numeric']:
             assert binding['source_operation_ordinal'] == binding['root_ordinal']
     return manifest, limbs[0]
-
-
-def provider():
-    path = Path(__file__).parents[2] / 'merlin-support/core_aten/execution_provider.py'
-    spec = importlib.util.spec_from_file_location('provider_limbs_test', path)
-    result = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(result)
-    return result, path.parents[2]
 
 
 @pytest.mark.parametrize('code', [-128, 127])
@@ -109,7 +98,7 @@ def test_captured_bilinear_tail_full_range_and_manifest(code, family):
     assert match.numeric['readout'] == 'full_i32'
     assert not match.kernel.stream.readouts
     assert 'func.call @ca_' in rewrite(text, manifest)
-    api, package = provider()
+    api, package = provider(), PACKAGE
     proof = api.admit_numeric_schedule(text, package=package, numeric_policy=POLICY)
     assert proof['status'] == 'proven', proof
     assert proof['kernels'][0]['schedule']['family'] == family
@@ -127,7 +116,7 @@ def test_signed_linear_maps_and_reduction_seeds(coefficient, reduction):
     assert match.numeric['binary_exponent'] == 0
     assert match.numeric['bound_proof']['required_signed_mac_bits'] == 15
     rewrite(text, manifest)
-    api, package = provider()
+    api, package = provider(), PACKAGE
     proof = api.admit_numeric_schedule(text, package=package, numeric_policy=POLICY)
     assert proof['status'] == 'proven', proof
 
@@ -145,7 +134,7 @@ def test_bad_plans_decline_without_fallback(change, reason):
     _, manifest, matches = build(text)
     assert not any('limb_plan' in m.numeric for m in matches)
     assert any(reason in d['reason'] for d in manifest['declines'])
-    api, package = provider()
+    api, package = provider(), PACKAGE
     assert api.admit_numeric_schedule(text, package=package, numeric_policy=POLICY)['status'] == 'declined'
 
 
@@ -195,7 +184,7 @@ def test_plan_is_authenticated_even_for_identical_instructions():
 
 
 def test_selected_mac_width_must_cover_the_actual_primitive():
-    api, package = provider()
+    api, package = provider(), PACKAGE
     narrow = json.loads(json.dumps(POLICY))
     narrow['numerical_semantics']['internal_arithmetic'].update(mac_result_bits=19, mac_result_overflow='wrap_to_19_bits')
     proof = api.admit_numeric_schedule(annotate(FIXTURE.read_text()), package=package, numeric_policy=narrow)
@@ -220,7 +209,7 @@ def test_real_batched_capture_full_i32():
 def test_limb_route_uses_region_abi(tmp_path):
     from types import SimpleNamespace
     from merlin.targetgen.core_aten_device import selected_facts
-    api, package = provider()
+    api, package = provider(), PACKAGE
     (tmp_path/'model.mlir').write_text(annotate(FIXTURE.read_text()))
     fixture = package/'merlin-support/tests/fixtures/core_aten_device/facts.json'
     with selected_facts('synthetic_core_aten', fixture) as facts:
@@ -317,7 +306,7 @@ def test_reused_component_kernel_has_one_proof_and_multiple_bindings():
     ret.parent_block().erase_op(ret)
     fn.properties['function_type'] = FunctionType.from_lists(
         [v.type for v in fn.body.block.args], [op.results[0].type]*2)
-    api, package = provider()
+    api, package = provider(), PACKAGE
     proof = api.admit_numeric_schedule(str(module), package=package, numeric_policy=POLICY)
     assert proof['status'] == 'proven', proof
     assert len(proof['kernels']) == 1

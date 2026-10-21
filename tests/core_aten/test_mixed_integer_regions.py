@@ -11,7 +11,7 @@ from mlir_oot.core_aten.catalog import build, parse_module
 from mlir_oot.core_aten.integer_regions import contraction
 from mlir_oot.core_aten.offload import rewrite
 from mlir_oot.core_aten.stream import simulate
-from test_scalar_mean_island import provider,PACKAGE,POLICY
+from conftest import provider,PACKAGE,POLICY
 
 FIXTURE=Path(__file__).parent/'fixtures/mixed_integer/tiny.mlir'
 

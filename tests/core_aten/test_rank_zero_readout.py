@@ -8,7 +8,7 @@ import pytest
 from mlir_oot.core_aten.exactness import rational
 from mlir_oot.core_aten.catalog import build
 from mlir_oot.core_aten.stream import simulate
-from test_scalar_mean_island import provider, PACKAGE, POLICY
+from conftest import provider, PACKAGE, POLICY
 
 
 @pytest.mark.parametrize('value', [Q(1, 2), Q(-17, 31), Q(1, 1 << 149),
