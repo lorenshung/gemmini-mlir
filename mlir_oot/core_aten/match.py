@@ -150,8 +150,6 @@ def dequant(v: SSAValue) -> QIn | None:
         return None
     from .quant_schema import attributes
     policy=attributes(p,"dequantize")
-    if getattr(policy.get("host_only"),"data",None)=="true":
-        raise Decline("host-only source dequantization")
     s = splat_value(p.operands[1])
     zp = splat_value(p.operands[2])
     if zp is not None and getattr(p.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8':
@@ -162,8 +160,6 @@ def dequant(v: SSAValue) -> QIn | None:
     if 'prov.quant.scale_numerator' in p.attributes or 'prov.quant.scale_denominator' in p.attributes:
         from .quant_schema import attributes,ratios
         attrs=attributes(p,'dequantize')
-        if getattr(attrs.get('host_only'),'data',None)=='true':
-            raise Decline('host-only source dequantization')
         pair=ratios(attrs)
         if len(pair)!=1 or pair[0]!=Fraction(s):
             raise Decline('source DQ operands differ from exact scale provenance')
@@ -209,8 +205,6 @@ def quant_sink(v: SSAValue) -> QOut | None:
         return None
     from .quant_schema import attributes
     policy=attributes(q,"quantize")
-    if getattr(policy.get("host_only"),"data",None)=="true":
-        raise Decline("host-only source quantization")
     s, zp = splat_value(q.operands[1]), splat_value(q.operands[2])
     if zp is not None and getattr(q.attributes.get('prov.quant.zero_point_dtype'),'data',None)=='uint8':
         zp=int(zp)&255
@@ -219,8 +213,6 @@ def quant_sink(v: SSAValue) -> QOut | None:
     if 'prov.quant.scale_numerator' in q.attributes or 'prov.quant.scale_denominator' in q.attributes:
         from .quant_schema import attributes,ratios
         attrs=attributes(q,'quantize')
-        if getattr(attrs.get('host_only'),'data',None)=='true':
-            raise Decline('host-only source quantization')
         pair=ratios(attrs)
         if len(pair)!=1 or pair[0]!=Fraction(s):
             raise Decline('source Q operands differ from exact scale provenance')
@@ -779,9 +771,7 @@ def match_contraction(op: Operation) -> Match | None:
     if etype(a) == "i8" and etype(b) == "i8" and etype(op.results[0]) == "i32":
         if any(key.startswith('prov.quant.') for key in op.attributes):
             from .quant_schema import attributes
-            attrs=attributes(op,'contraction')
-            if getattr(attrs.get('host_only'),'data',None)=='true':
-                raise Decline('host-only source integer contraction')
+            attributes(op,'contraction')  # validates the schema, including host_only
         k = ops.matmul("aten.bmm.default" if batched else "aten.mm.default", M, K, N, batch=Bn)
         return Match(k.op, op, [op], [("a", a), ("b", b)], ("out", op.results[0]), k)
     qa, qb = dequant(a), dequant(b)

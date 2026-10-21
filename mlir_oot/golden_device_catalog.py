@@ -73,9 +73,7 @@ def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool 
         from .core_aten.quant_schema import attributes
         from .core_aten.match import Decline
         try:
-            policy=attributes(op,'contraction')
-            if getattr(policy.get('host_only'),'data',None)=='true':
-                raise Decline('host-only source contraction')
+            attributes(op,'contraction')  # validates the schema, including host_only
         except Decline as exc:
             refusals.append(dict(source_operation_ordinal=ordinal,reason=str(exc)))
             continue

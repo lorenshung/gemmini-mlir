@@ -80,7 +80,6 @@ def readout(op):
         if getattr(reader.attributes.get('prov.quant.arithmetic'),'data',None) != 'exact':
             continue
         attrs = attributes(reader,'integer_readout')
-        require(getattr(attrs.get('host_only'),'data',None) != 'true','host-only source readout')
         require(getattr(attrs.get('accumulator'),'data',None)=='i32','readout accumulator is not i32')
         require(getattr(attrs.get('numerics'),'data',None)=='integer_readout','readout numerics are not exact integer')
         factors = ratios(attrs)
@@ -89,8 +88,7 @@ def readout(op):
         require(channels is not None and len(factors) in (1,channels[-1] if channels else 1),
                 'readout scale channel extent')
         if any(k.startswith('prov.quant.') for k in op.attributes):
-            producer_attrs = attributes(op,'contraction')
-            require(getattr(producer_attrs.get('host_only'),'data',None) != 'true','host-only source contraction')
+            attributes(op,'contraction')  # validates the schema, including host_only
         return reader,factors,False
     return None
 
