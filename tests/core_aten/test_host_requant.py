@@ -2,8 +2,6 @@
 
 from fractions import Fraction as F
 from pathlib import Path
-import ctypes
-import subprocess
 import numpy as np
 import pytest
 from mlir_oot.core_aten.requant import evaluate
@@ -199,14 +197,10 @@ def test_signedness_is_not_inferred_from_a_positive_narrow_range(storage):
 
 
 def test_emitted_host_readout_matches_rationals_natively(tmp_path):
-    import os
     from mlir_oot.core_aten.stream import Stream, Arg
     from mlir_oot.core_aten.requant import Readout
-    from mlir_oot.core_aten.emit import build_module
+    from conftest import native_readout
 
-    bindir = Path(os.environ.get("GEMMINI_LLVM_BIN", "/nonexistent"))
-    if not (bindir / "mlir-translate").exists():
-        pytest.skip("LLVM toolchain not configured")
     rng = np.random.default_rng(3021)
     values = np.r_[
         np.arange(-1024, 1025),
@@ -246,38 +240,7 @@ def test_emitted_host_readout_matches_rationals_natively(tmp_path):
                 quant_max=255,
             )
         )
-        module, _ = build_module(stream, "readout")
-        source = tmp_path / f"readout{ordinal}.mlir"
-        source.write_text(str(module) + "\n")
-        ir = source.with_suffix(".ll")
-        obj = source.with_suffix(".o")
-        shared = source.with_suffix(".so")
-        subprocess.run(
-            [
-                str(bindir / "mlir-translate"),
-                "--mlir-to-llvmir",
-                str(source),
-                "-o",
-                str(ir),
-            ],
-            check=True,
-        )
-        subprocess.run(
-            [
-                str(bindir / "llc"),
-                "-mtriple=x86_64-unknown-linux-gnu",
-                "-relocation-model=pic",
-                "-O2",
-                "-filetype=obj",
-                str(ir),
-                "-o",
-                str(obj),
-            ],
-            check=True,
-        )
-        subprocess.run(["cc", "-shared", str(obj), "-o", str(shared)], check=True)
-        fn = ctypes.CDLL(str(shared)).readout
-        fn.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        fn, _ = native_readout(stream, "readout", tmp_path)
         result = np.zeros(values.shape, np.uint8)
         fn(values.ctypes.data, result.ctypes.data)
         expected = np.array(

@@ -8,7 +8,7 @@ import pytest
 from mlir_oot.core_aten.exactness import rational
 from mlir_oot.core_aten.catalog import build
 from mlir_oot.core_aten.stream import simulate
-from conftest import provider, PACKAGE, POLICY
+from conftest import native_readout, provider, PACKAGE, POLICY
 
 
 @pytest.mark.parametrize('value', [Q(1, 2), Q(-17, 31), Q(1, 1 << 149),
@@ -38,28 +38,14 @@ def test_real_rank_zero_linear_island_has_exact_catalog_and_admission():
 
 @pytest.mark.parametrize('shape', [(), (7,)])
 def test_native_readout_accepts_scalar_object_arrays_in_all_parameter_roles(tmp_path, shape):
-    import ctypes, os, subprocess
     from mlir_oot.core_aten.stream import Stream, Arg
     from mlir_oot.core_aten.requant import Readout
-    from mlir_oot.core_aten.emit import build_module
-    bindir = Path(os.environ.get('GEMMINI_LLVM_BIN', '/nonexistent'))
-    if not (bindir/'mlir-translate').is_file():
-        pytest.skip('LLVM tools unavailable')
     def scalar(v): return np.array(v, dtype=object)
     stream = Stream([Arg('x', 'i32', shape, 'input'), Arg('y', 'i8', shape, 'output')])
     stream.readouts.append(Readout('y', [('x', scalar(Q(-3, 8)))],
                                   constant=scalar(Q(1, 2)), zero_point=scalar(-7),
                                   quant_min=scalar(-128), quant_max=scalar(127)))
-    meta = {}
-    module, _ = build_module(stream, 'scalar_parameters', meta=meta)
-    source, ir, obj, shared = (tmp_path/('scalar'+ext) for ext in ('.mlir', '.ll', '.o', '.so'))
-    source.write_text(str(module)+'\n')
-    subprocess.run([str(bindir/'mlir-translate'), '--mlir-to-llvmir', str(source), '-o', str(ir)], check=True)
-    subprocess.run([str(bindir/'llc'), '-mtriple=x86_64-unknown-linux-gnu', '-relocation-model=pic',
-                    '-O2', '-filetype=obj', str(ir), '-o', str(obj)], check=True)
-    subprocess.run(['cc', '-shared', str(obj), '-o', str(shared)], check=True)
-    fn = ctypes.CDLL(str(shared)).scalar_parameters
-    fn.argtypes = [ctypes.c_void_p]*2
+    fn, _ = native_readout(stream, 'scalar_parameters', tmp_path)
     for value in (-(1 << 31), -7, -3, 0, 1, 7, (1 << 31)-1):
         raw = np.full(shape, value, np.int32)
         result = np.zeros(shape, np.int8)

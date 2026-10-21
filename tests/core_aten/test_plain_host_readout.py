@@ -3,16 +3,13 @@ from fractions import Fraction as F
 import numpy as np
 import pytest
 
+from conftest import native_readout
+
 
 @pytest.mark.parametrize("axis,shape", [(-1,(129,7)),(1,(2,7,3,5))])
 def test_native_per_channel_bias_zero_point_and_multiterm(tmp_path,axis,shape):
-    import ctypes, os, subprocess
-    from pathlib import Path
     from mlir_oot.core_aten.stream import Stream, Arg
     from mlir_oot.core_aten.requant import Readout
-    from mlir_oot.core_aten.emit import build_module
-    bindir=Path(os.environ.get('GEMMINI_LLVM_BIN','/nonexistent'))
-    if not (bindir/'mlir-translate').exists():pytest.skip('LLVM tools unavailable')
     rng=np.random.default_rng(2231)
     x=rng.integers(-(1 << 31),1 << 31,shape,dtype=np.int32)
     z=np.resize(np.arange(-256,257,dtype=np.int32),shape).copy()
@@ -23,16 +20,10 @@ def test_native_per_channel_bias_zero_point_and_multiterm(tmp_path,axis,shape):
     s=Stream([Arg('x','i32',shape,'input'),Arg('z','i32',shape,'input'),Arg('y','i8',shape,'output')])
     s.readouts.append(Readout('y',[('x',factors),('z',np.array([F(0),F(0),F(2,7),F(3,5),F(0),F(0),F(1,2)],object))],bias,
                               zero_point=zps,quant_min=0,quant_max=255,axis=axis))
-    meta={};module,_=build_module(s,'channel_readout',meta=meta)
+    fn,meta=native_readout(s,'channel_readout',tmp_path)
     assert meta['host_readout_contract'] == 'exact_rational_RNE_v1'
     assert 'host_requantization_proofs' not in meta
     assert 'readout_pipeline' not in meta
-    src=tmp_path/'channels.mlir';src.write_text(str(module)+'\n')
-    ir,obj,shared=(src.with_suffix(e) for e in ('.ll','.o','.so'))
-    subprocess.run([str(bindir/'mlir-translate'),'--mlir-to-llvmir',str(src),'-o',str(ir)],check=True)
-    subprocess.run([str(bindir/'llc'),'-mtriple=x86_64-unknown-linux-gnu','-relocation-model=pic','-O2','-filetype=obj',str(ir),'-o',str(obj)],check=True)
-    subprocess.run(['cc','-shared',str(obj),'-o',str(shared)],check=True)
-    fn=ctypes.CDLL(str(shared)).channel_readout;fn.argtypes=[ctypes.c_void_p]*3
     out=np.zeros(shape,np.uint8);fn(x.ctypes.data,z.ctypes.data,out.ctypes.data)
     expected=np.array([min(255,max(0,round(int(x[idx])*factors[idx[axis]]+int(z[idx])*s.readouts[0].terms[1][1][idx[axis]]+bias[idx[axis]])+int(zps[idx[axis]])))
                        for idx in np.ndindex(shape)],np.uint8).reshape(shape)
@@ -45,30 +36,15 @@ def test_native_per_channel_bias_zero_point_and_multiterm(tmp_path,axis,shape):
 @pytest.mark.parametrize('factor', [F(3, 8), F(-17, 31)])
 @pytest.mark.parametrize('relu', [False, True])
 def test_native_structural_placement_preserves_exact_readout_and_unwritten_bytes(tmp_path, placement, factor, relu):
-    import ctypes, os, subprocess
-    from pathlib import Path
     from mlir_oot.core_aten.stream import Stream, Arg, simulate
     from mlir_oot.core_aten.requant import Readout
-    from mlir_oot.core_aten.emit import build_module
-    bindir = Path(os.environ.get('GEMMINI_LLVM_BIN', '/nonexistent'))
-    if not (bindir/'mlir-translate').exists():
-        pytest.skip('LLVM tools unavailable')
     shape = (2, 3, 5)
     raw = np.arange(-15, 15, dtype=np.int32).reshape(shape)
     result = np.full(shape, -99, np.int8)
     stream = Stream([Arg('x', 'i32', shape, 'input'), Arg('y', 'i8', shape, 'output')])
     stream.readouts.append(Readout('y', [('x', factor)], constant=F(1, 2),
                                   zero_point=-7, placement=placement, relu=relu))
-    meta = {}
-    module, _ = build_module(stream, 'placed_readout', meta=meta)
-    source, ir, obj, shared = (tmp_path/('placed'+suffix) for suffix in ('.mlir', '.ll', '.o', '.so'))
-    source.write_text(str(module)+'\n')
-    subprocess.run([str(bindir/'mlir-translate'), '--mlir-to-llvmir', str(source), '-o', str(ir)], check=True)
-    subprocess.run([str(bindir/'llc'), '-mtriple=x86_64-unknown-linux-gnu', '-relocation-model=pic',
-                    '-O2', '-filetype=obj', str(ir), '-o', str(obj)], check=True)
-    subprocess.run(['cc', '-shared', str(obj), '-o', str(shared)], check=True)
-    fn = ctypes.CDLL(str(shared)).placed_readout
-    fn.argtypes = [ctypes.c_void_p]*2
+    fn, _ = native_readout(stream, 'placed_readout', tmp_path)
     fn(raw.ctypes.data, result.ctypes.data)
     expected = np.full(shape, -99, np.int8)
     if isinstance(placement, dict):
