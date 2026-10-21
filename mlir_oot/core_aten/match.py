@@ -1146,64 +1146,48 @@ def match_conv_input(op):
 # Movement
 # ---------------------------------------------------------------------------------------------
 
-def _q_or_int(v: SSAValue):
-    """A movement operand: dequantized int8 (scale) or a plain int8 tensor (scale None)."""
-    q = dequant(v)
-    if q is not None and q.dtype == "i8":
-        return q
-    if etype(v) == "i8":
-        return QIn(v, 1.0, None, "i8")
-    return None
-
-
-def _movement_out(op: Operation, ins: list[QIn]):
-    """(output value, output scale, consumed quantize op or None)."""
+def _movement_io(op: Operation, values):
+    """Movement operands (dequantized int8 or plain int8), the output value and scale, and the
+    Q/DQ ops consumed with ``op``; None unless all are int8 codes or all are dequantized."""
+    qs = []
+    for v in values:
+        q = dequant(v)
+        qs.append(q if q is not None and q.dtype == "i8" else QIn(v, 1.0, None, "i8") if etype(v) == "i8" else None)
+    if any(q is None for q in qs):
+        return None
     res = op.results[0]
-    if all(q.dq is None for q in ins) and etype(res) == "i8":
-        return res, 1.0, None
-    if any(q.dq is None for q in ins) or etype(res) not in ('f16', 'bf16', 'f32', 'f64'):
+    if all(q.dq is None for q in qs) and etype(res) == "i8":
+        return qs, res, 1.0, []
+    if any(q.dq is None for q in qs) or etype(res) not in ('f16', 'bf16', 'f32', 'f64'):
         return None
     qo = quant_sink(res)
-    if qo is None:
-        return None
-    return qo.value, qo.scale, qo.op
+    return None if qo is None else (qs, qo.value, qo.scale, [qo.op] + [q.dq for q in qs])
 
 
 def match_movement(op: Operation) -> Match | None:
     nm = op.name
     if nm == "linalg.transpose":
-        q = _q_or_int(op.operands[0])
-        if q is None:
+        if (io := _movement_io(op, op.operands[:1])) is None:
             return None
-        out = _movement_out(op, [q])
-        if out is None:
-            return None
+        (q,), y, s_out, qdq = io
         perm = [int(p) for p in op.properties["permutation"].iter_values()]
-        k = ops.permute(shape(q.value), perm, s_x=q.scale, s_out=out[1])
-        return Match("aten.permute.default", op, [op] + ([out[2], q.dq] if out[2] else []), [("x", q.value)],
-                     ("y", out[0]), k)
+        k = ops.permute(shape(q.value), perm, s_x=q.scale, s_out=s_out)
+        return Match("aten.permute.default", op, [op, *qdq], [("x", q.value)], ("y", y), k)
     if nm == "tensor.cast" and shape(op.operands[0]) == shape(op.results[0]) and shape(op.results[0]) is not None:
         # a no-op cast materialized between DQ and Q (e.g. constant_pad_nd with zero pads): a copy
-        q = _q_or_int(op.operands[0])
-        if q is None:
+        if (io := _movement_io(op, op.operands[:1])) is None:
             return None
-        out = _movement_out(op, [q])
-        if out is None:
-            return None
-        k = ops.clone(shape(q.value), s_x=q.scale, s_out=out[1])
-        return Match("aten.clone.default", op, [op] + ([out[2], q.dq] if out[2] else []), [("x", q.value)],
-                     ("y", out[0]), k, numeric=dict(form="identity cast"))
+        (q,), y, s_out, qdq = io
+        k = ops.clone(shape(q.value), s_x=q.scale, s_out=s_out)
+        return Match("aten.clone.default", op, [op, *qdq], [("x", q.value)], ("y", y), k,
+                     numeric=dict(form="identity cast"))
     if nm == "tensor.concat":
-        qs = [_q_or_int(v) for v in op.operands]
-        if any(q is None for q in qs):
+        if (io := _movement_io(op, op.operands)) is None:
             return None
-        out = _movement_out(op, qs)
-        if out is None:
-            return None
+        qs, y, s_out, qdq = io
         dim = int(op.properties["dim"].value.data)
-        k = ops.cat([shape(q.value) for q in qs], dim, s_in=[q.scale for q in qs], s_out=out[1])
-        cons = [op] + ([out[2]] + [q.dq for q in qs] if out[2] else [])
-        return Match("aten.cat.default", op, cons, [(f"x{i}", q.value) for i, q in enumerate(qs)], ("y", out[0]), k)
+        k = ops.cat([shape(q.value) for q in qs], dim, s_in=[q.scale for q in qs], s_out=s_out)
+        return Match("aten.cat.default", op, [op, *qdq], [(f"x{i}", q.value) for i, q in enumerate(qs)], ("y", y), k)
     if nm == "tensor.insert_slice":
         src, dest = op.operands[0], op.operands[1]
         offs = list(op.properties["static_offsets"].iter_values())
@@ -1226,40 +1210,31 @@ def match_movement(op: Operation) -> Match | None:
                 lo_crop = list(crop.properties["static_offsets"].iter_values())
                 base = crop.operands[0]
                 cons.append(crop)
-            q = _q_or_int(base)
-            if q is None:
+            if (io := _movement_io(op, [base])) is None:
                 return None
-            out = _movement_out(op, [q])
-            if out is None:
-                return None
+            (q,), y, s_out, qdq = io
             xs, os_ = shape(base), shape(op.results[0])
             pad = []
             for d in reversed(range(len(xs))):
                 lo = offs[d] - lo_crop[d]
                 hi = os_[d] - xs[d] - lo
                 pad += [lo, hi]
-            k = ops.constant_pad_nd(xs, pad, value, s_x=q.scale, s_out=out[1])
-            if out[2]:
-                cons += [out[2], q.dq]
-            return Match("aten.constant_pad_nd.default", op, cons, [("x", q.value)], ("y", out[0]), k,
+            k = ops.constant_pad_nd(xs, pad, value, s_x=q.scale, s_out=s_out)
+            return Match("aten.constant_pad_nd.default", op, cons + qdq, [("x", q.value)], ("y", y), k,
                          numeric=dict(value=value, pad=pad))
         # slice_scatter: src into a data tensor along one strided dim
-        qd, qs_ = _q_or_int(dest), _q_or_int(src)
-        if qd is None or qs_ is None:
+        if (io := _movement_io(op, [dest, src])) is None:
             return None
-        out = _movement_out(op, [qd, qs_])
-        if out is None:
-            return None
+        (qd, qs_), y, s_out, qdq = io
         dshape = shape(dest)
         diff = [d for d in range(len(dshape)) if sizes[d] != dshape[d] or offs[d] != 0 or strides_[d] != 1]
         if len(diff) > 1:
             raise Decline("multi-dimensional scatter")
         d = diff[0] if diff else 0
         k = ops.slice_scatter(dshape, shape(src), d, offs[d], offs[d] + (sizes[d] - 1) * strides_[d] + 1,
-                              strides_[d], s_self=qd.scale, s_src=qs_.scale, s_out=out[1])
-        cons = [op] + ([out[2], qd.dq, qs_.dq] if out[2] else [])
-        return Match("aten.slice_scatter.default", op, cons, [("self", qd.value), ("src", qs_.value)],
-                     ("y", out[0]), k)
+                              strides_[d], s_self=qd.scale, s_src=qs_.scale, s_out=s_out)
+        return Match("aten.slice_scatter.default", op, [op, *qdq], [("self", qd.value), ("src", qs_.value)],
+                     ("y", y), k)
     if nm == "tensor.splat":
         value = _scalar_const(producer(op.operands[0]))
         if value is None:
