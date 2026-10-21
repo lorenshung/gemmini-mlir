@@ -231,7 +231,7 @@ def run_interface(args) -> int:
     text_out = _print(module)
     if args.output:
         Path(args.output).write_text(text_out)
-    elif not args.emit_command_buffer or args.emit_target_artifact or True:
+    else:
         sys.stdout.write(text_out)
     return 0
 
