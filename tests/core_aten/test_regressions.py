@@ -1,5 +1,4 @@
 """ABI and shape regressions from the exactness review."""
-import importlib.util
 import subprocess
 from pathlib import Path
 
@@ -164,12 +163,9 @@ int main(void) {
 
 
 def test_ceil_divisor_case_is_always_generated_with_partial_windows():
-    path = Path(__file__).parent / 'iface_ext/ext_cases.py'
-    spec = importlib.util.spec_from_file_location('ext_cases_regression', path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    import ext_cases
     for representative in (False, True):
-        cb = module.cases(representative)['ws_avg_pool2d_ceil_div']
+        cb = ext_cases.cases(representative)['ws_avg_pool2d_ceil_div']
         assert cb['tensors']['A']['shape'][1] % 2 == 1
         attrs = cb['commands'][0]['attributes']
         assert attrs['ceil_mode'] and attrs['divisor_override'] == 3

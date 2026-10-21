@@ -8,6 +8,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 
 import cases  # noqa: E402
+from run_e2e import _key as key  # noqa: E402
 from mlir_oot.core_aten.catalog import build  # noqa: E402
 from mlir_oot.core_aten.lint import lint  # noqa: E402
 from mlir_oot.core_aten.stream import simulate  # noqa: E402
@@ -49,7 +50,6 @@ class TestCatalogOnCaptures(unittest.TestCase):
                     text = read(d / "model.mlir")
                     _, manifest, matches = build(text)
                     values = {("arg", int(k[3:])): v for k, v in np.load(FIXTURES / d.name / "inputs.npz").items()}
-                    key = lambda src: ("arg", src["func_arg"]) if "func_arg" in src else ("op", src["op_ordinal"], src["result"])
                     checked = 0
                     for b, m in zip(manifest["bindings"], matches):
                         # Partial catalogs may consume host results. Their instruction

@@ -5,23 +5,12 @@ from pathlib import Path
 
 import numpy as np
 
-from common import need_spike, runner
+from common import conv_ref, need_spike, runner
 from mlir_oot.core_aten.emit import compile_to_object
 from mlir_oot.golden_conv import ConvShape, GoldenConv
 from mlir_oot.golden_device_lower import lower
 
 CASES = [ConvShape(5, 19, 20, 19, 1), ConvShape(6, 20, 32, 16, 2)]
-
-
-def conv_ref(cs, X, W):
-    Xp = np.zeros((cs.h + 2, cs.w + 2, cs.cin), np.int64)
-    Xp[1:-1, 1:-1] = X
-    out = np.zeros((cs.oh, cs.ow, cs.cout), np.int64)
-    for kh in range(3):
-        for kw in range(3):
-            patch = Xp[kh:kh + cs.stride * (cs.oh - 1) + 1:cs.stride, kw:kw + cs.stride * (cs.ow - 1) + 1:cs.stride]
-            out += patch @ W[(kh * 3 + kw) * cs.cin:(kh * 3 + kw + 1) * cs.cin].astype(np.int64)
-    return out.astype(np.int32)
 
 
 def build(name: str) -> Path:
@@ -39,7 +28,7 @@ def build(name: str) -> Path:
         W = rng.integers(-127, 128, (9 * cs.cin, cs.cout)).astype(np.int8)
         buffers.update({f"x{i}": X, f"w{i}": W, f"y{i}": np.zeros((cs.oh, cs.ow, cs.cout), np.int32)})
         calls.append((sym, [f"x{i}", f"w{i}", f"y{i}"]))
-        checks.append(runner.Check(f"y{i}", conv_ref(cs, X, W).reshape(-1), 0, f"conv{i}_pad1_vs_ref"))
+        checks.append(runner.Check(f"y{i}", conv_ref(cs, X, W).astype(np.int32).reshape(-1), 0, f"conv{i}_pad1_vs_ref"))
     test = runner.DeviceTest(name, objects, buffers, calls, checks, {f"y{i}" for i in range(len(CASES))})
     return runner.build_elf(test, wd)
 

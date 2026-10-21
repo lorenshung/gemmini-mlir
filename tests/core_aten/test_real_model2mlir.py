@@ -245,8 +245,7 @@ def test_real_readiness_capture_is_exact_with_unit_device_scales(name, readiness
     values = {('arg', i): x.numpy() for i, x in enumerate(inputs)}
     def key(value):
         return ('arg', arguments.index(value)) if value in arguments else ('op', ordinals[value.owner], list(value.owner.results).index(value))
-    def source_key(source):
-        return ('arg', source['func_arg']) if 'func_arg' in source else ('op', source['op_ordinal'], source['result'])
+    from run_e2e import _key as source_key
     oracle = SourceOracle({arg: np.asarray(x.numpy(), dtype=object) for arg, x in zip(arguments, inputs)})
     offloaded_oracle = SourceOracle({arg: np.asarray(x.numpy(), dtype=object) for arg, x in zip(arguments, inputs)})
     def source_value(source):
