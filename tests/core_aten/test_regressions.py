@@ -32,6 +32,20 @@ def test_catalog_declines_a_hazardous_candidate_without_publishing_a_binding(mon
     assert any('unsafe device schedule:' in d['reason'] and 'HW3' in d['reason'] for d in manifest['declines'])
 
 
+@pytest.mark.parametrize('error', [ValueError, OverflowError, ZeroDivisionError])
+def test_selector_island_prepass_surfaces_errors_other_than_decline(monkeypatch, error):
+    from mlir_oot.core_aten import catalog, quantized_movement
+    from fixture_source import read
+    text = read(Path(__file__).parents[1] / 'fixtures/core_aten/mm/model.mlir')
+    def raise_(exc):
+        raise exc
+    monkeypatch.setattr(quantized_movement, 'match', lambda op, ordinals: raise_(Decline('no selector island')))
+    assert catalog.build(text)[1]['bindings']     # a decline falls through to the normal matchers
+    monkeypatch.setattr(quantized_movement, 'match', lambda op, ordinals: raise_(error('matcher bug')))
+    with pytest.raises(error, match='matcher bug'):
+        catalog.build(text)
+
+
 @pytest.mark.parametrize('kind', ['config_ld', 'config_st', 'narrow'])
 def test_kernel_boundary_declines_unproved_device_scaling_or_narrowing(kind):
     from mlir_oot.core_aten.stream import ACC, Arg, Stream

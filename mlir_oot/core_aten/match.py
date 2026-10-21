@@ -1539,8 +1539,8 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                 _bind_dense_layouts(m)
                 matches.append(m)
                 taken.update(id(o) for o in m.consumed)
-        except (Decline, ValueError, OverflowError, ZeroDivisionError):
-            pass  # The normal matcher records malformed/unsupported contracts.
+        except Decline:
+            pass  # The normal matcher below records the decline; other errors are bugs and surface.
     for op in module.walk():
         ordinal = ordinals[op]
         if op not in live or id(op) in taken:
