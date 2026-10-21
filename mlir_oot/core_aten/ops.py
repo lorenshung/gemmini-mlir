@@ -12,13 +12,13 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .exactness import rational as Q, require, accumulator_bound
+from .exactness import rational as Q, require, accumulator_bound, code_offset
 from .numerics import code, parts127  # noqa: F401  (iface reads ops.parts127)
 from .recipes import movement as mv
 from .recipes import reduce as rd
 from .recipes.conv import ConvGeom, conv2d
 from .recipes.gemm import blocked_matmul
-from .stream import ACC_BIT, FULL_BIT, Arg, Stream
+from .stream import ACC_BIT, FULL_BIT, Arg, Ins, Stream
 
 
 @dataclass
@@ -436,17 +436,9 @@ def contraction_zero_points(kernel, qa, qb, M, K, N, batch=0):
     q-z = (q-128)+(128-z) for uint8; signed int8 needs only -z.
     No early byte saturation or float conversion participates in the folding.
     """
-    from .stream import Ins
     s=kernel.stream
-    names=['a','b']
-    for pos,q in enumerate((qa,qb)):
-        if not q.unsigned: continue
-        original=s._index[names[pos]]
-        names[pos]=s.signed_scratch(names[pos],s.args[original].shape)
-        target=s._index[names[pos]]
-        s.ins=[Ins(i.kind,i.attrs,target if i.arg==original else i.arg,i.off) for i in s.ins]
-    oa=(128 if qa.unsigned else 0)-qa.zero_point
-    ob=(128 if qb.unsigned else 0)-qb.zero_point
+    names=[s.retarget_signed(n,s.args[s._index[n]].shape) if q.unsigned else n for n,q in zip('ab',(qa,qb))]
+    oa,ob=code_offset(qa),code_offset(qb)
     if not oa and not ob: return
     readout=s.readouts[-1]
     scale=readout.terms[0][1]
@@ -491,70 +483,54 @@ def convolution_zero_points(kernel, left, right, g, mode='forward'):
     from .recipes.backward import conv_transpose,conv_wgrad
     s=kernel.stream
     qa,qb=left[1],right[1]
-    oa=(128 if qa.unsigned else 0)-qa.zero_point
-    ob=(128 if qb.unsigned else 0)-qb.zero_point
+    oa,ob=code_offset(qa),code_offset(qb)
     if not oa and not ob:return
     output=next(a for a in kernel.args if a.role=='output')
     readout=s.readouts[-1]
     scale=readout.terms[0][1]
-    def scratch(name,shape):
+    def fold(offset,ones_name,ones_shape,name,shape,bound,emit,perm=None,broadcast=None):
+        """One auxiliary integer contraction with a ones operand: offset * (sum of the other operand)."""
+        if not offset: return
+        s.const(ones_name,np.ones(ones_shape,dtype=np.int8))
+        accumulator_bound(bound)
         s._index[name]=len(s.args)
         s.args.append(Arg(name,'i32',shape,'scratch'))
-    def ones(name,shape):
-        s.const(name,np.ones(shape,dtype=np.int8))
-    def term(name,factor,shape,perm=None,broadcast=None,bound=0):
-        accumulator_bound(bound)
-        scratch(name,shape)
-        readout.terms.append((name,Q(factor)*scale))
+        readout.terms.append((name,Q(offset)*scale))
         if perm is not None:
             readout.permutations={**(readout.permutations or {}),name:(shape,perm)}
         if broadcast is not None:
             readout.broadcasts={**(readout.broadcasts or {}),name:broadcast}
         kernel.meta.setdefault('zero_point_corrections',[]).append(dict(tile=name,accumulator_min=-bound,accumulator_max=bound))
+        emit();s.fence()
     if mode=='forward':
         # ws_x/ws_w are the exact centered NHWC/HWIO operands produced by
         # convolution_nchw, fenced before this auxiliary schedule begins.
-        if ob:
-            small=replace(g,cout=1)
-            ones('zp_ones_w',(g.kh,g.kw,g.cin,1))
-            term('zp_sum_x',ob,(g.n,g.oh,g.ow,1),broadcast=(g.n,1,g.oh,g.ow),bound=g.kh*g.kw*g.cin*128)
-            _conv_body(s,small,'ws_x','zp_ones_w','zp_sum_x',None,1,False,True);s.fence()
-        if oa:
-            small=replace(g,n=1)
-            ones('zp_ones_x',(1,g.h,g.w,g.cin))
-            term('zp_sum_w',oa,(1,g.oh,g.ow,g.cout),perm=(0,3,1,2),bound=g.kh*g.kw*g.cin*128)
-            _conv_body(s,small,'zp_ones_x','ws_w','zp_sum_w',None,1,False,True);s.fence()
+        bound=g.kh*g.kw*g.cin*128
+        fold(ob,'zp_ones_w',(g.kh,g.kw,g.cin,1),'zp_sum_x',(g.n,g.oh,g.ow,1),bound,broadcast=(g.n,1,g.oh,g.ow),
+             emit=lambda:_conv_body(s,replace(g,cout=1),'ws_x','zp_ones_w','zp_sum_x',None,1,False,True))
+        fold(oa,'zp_ones_x',(1,g.h,g.w,g.cin),'zp_sum_w',(1,g.oh,g.ow,g.cout),bound,perm=(0,3,1,2),
+             emit=lambda:_conv_body(s,replace(g,n=1),'zp_ones_x','ws_w','zp_sum_w',None,1,False,True))
         oh,ow,kh,kw=np.indices((g.oh,g.ow,g.kh,g.kw))
         ih=oh*g.sh-g.ph+kh*g.dh;iw=ow*g.sw-g.pw+kw*g.dw
         counts=((ih>=0)&(ih<g.h)&(iw>=0)&(iw<g.w)).sum(axis=(2,3))*g.cin
         counts=counts.reshape((1,1,g.oh,g.ow))
     elif mode=='input':
-        if ob:
-            small=replace(g,cin=1)
-            ones('zp_ones_w',(g.kh,g.kw,g.cout,1))
-            term('zp_sum_g',ob,(g.n,g.h,g.w,1),broadcast=(g.n,1,g.h,g.w),bound=g.kh*g.kw*g.cout*128)
-            conv_transpose(s,small,'ws_g','zp_ones_w','zp_sum_g',1,out_i32=True);s.fence()
-        if oa:
-            small=replace(g,n=1)
-            ones('zp_ones_g',(1,g.oh,g.ow,g.cout))
-            term('zp_sum_w',oa,(1,g.h,g.w,g.cin),perm=(0,3,1,2),bound=g.kh*g.kw*g.cout*128)
-            conv_transpose(s,small,'zp_ones_g','ws_w','zp_sum_w',1,out_i32=True);s.fence()
+        bound=g.kh*g.kw*g.cout*128
+        fold(ob,'zp_ones_w',(g.kh,g.kw,g.cout,1),'zp_sum_g',(g.n,g.h,g.w,1),bound,broadcast=(g.n,1,g.h,g.w),
+             emit=lambda:conv_transpose(s,replace(g,cin=1),'ws_g','zp_ones_w','zp_sum_g',1,out_i32=True))
+        fold(oa,'zp_ones_g',(1,g.oh,g.ow,g.cout),'zp_sum_w',(1,g.h,g.w,g.cin),bound,perm=(0,3,1,2),
+             emit=lambda:conv_transpose(s,replace(g,n=1),'zp_ones_g','ws_w','zp_sum_w',1,out_i32=True))
         ih,iw,kh,kw=np.indices((g.h,g.w,g.kh,g.kw))
         h=ih+g.ph-kh*g.dh;w=iw+g.pw-kw*g.dw
         oh,ow=h//g.sh,w//g.sw
         counts=((h%g.sh==0)&(w%g.sw==0)&(oh>=0)&(oh<g.oh)&(ow>=0)&(ow<g.ow)).sum(axis=(2,3))*g.cout
         counts=counts.reshape((1,1,g.h,g.w))
     else:
-        if ob:
-            small=replace(g,cin=1)
-            ones('zp_ones_x',(g.n,g.h,g.w,1))
-            term('zp_sum_g',ob,(g.kh,g.kw,g.cout,1),perm=(2,3,0,1),bound=g.n*g.oh*g.ow*128)
-            conv_wgrad(s,small,'g__signed' if qa.unsigned else 'g','zp_ones_x','zp_sum_g',1,out_i32=True);s.fence()
-        if oa:
-            small=replace(g,cout=1)
-            ones('zp_ones_g',(g.n,1,g.oh,g.ow))
-            term('zp_sum_x',oa,(g.kh,g.kw,1,g.cin),perm=(2,3,0,1),bound=g.n*g.oh*g.ow*128)
-            conv_wgrad(s,small,'zp_ones_g','ws_x','zp_sum_x',1,out_i32=True);s.fence()
+        bound=g.n*g.oh*g.ow*128
+        fold(ob,'zp_ones_x',(g.n,g.h,g.w,1),'zp_sum_g',(g.kh,g.kw,g.cout,1),bound,perm=(2,3,0,1),
+             emit=lambda:conv_wgrad(s,replace(g,cin=1),'g__signed' if qa.unsigned else 'g','zp_ones_x','zp_sum_g',1,out_i32=True))
+        fold(oa,'zp_ones_g',(g.n,1,g.oh,g.ow),'zp_sum_x',(g.kh,g.kw,1,g.cin),bound,perm=(2,3,0,1),
+             emit=lambda:conv_wgrad(s,replace(g,cout=1),'zp_ones_g','ws_x','zp_sum_x',1,out_i32=True))
         kh,kw,oh,ow=np.indices((g.kh,g.kw,g.oh,g.ow))
         ih=oh*g.sh-g.ph+kh*g.dh;iw=ow*g.sw-g.pw+kw*g.dw
         counts=((ih>=0)&(ih<g.h)&(iw>=0)&(iw<g.w)).sum(axis=(2,3))*g.n

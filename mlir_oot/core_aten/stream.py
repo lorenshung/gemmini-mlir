@@ -192,6 +192,13 @@ class Stream:
         self.packs.append((source, packed))
         return packed
 
+    def retarget_signed(self, source: str, shape) -> str:
+        """``signed_scratch`` for ``source``, with the instructions already emitted on it moved there."""
+        old = self._index[source]
+        packed = self.signed_scratch(source, shape)
+        self.ins = [Ins(i.kind, i.attrs, self._index[packed] if i.arg == old else i.arg, i.off) for i in self.ins]
+        return packed
+
     def const(self, name: str, data: np.ndarray) -> None:
         """A compile-time constant operand (ones rows, identities, int32 seeds).
 

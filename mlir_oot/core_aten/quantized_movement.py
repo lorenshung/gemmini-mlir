@@ -10,7 +10,7 @@ from math import prod
 import numpy as np
 
 from . import linmap, ops
-from .exactness import quantized
+from .exactness import code_offset, quantized
 from .bitwise import Selectors
 from .match import (Match, dequant, name_of, producer, quant_sink,
                     shape, _prop_int, _region_closed)
@@ -96,7 +96,7 @@ def structural(op, qout, ordinals):
             converted = scratch(f'converted_{i}','i8',shape(q.value))
             layout.widen(s,source,raw,shape(q.value));s.fence()
             factor = Fraction(int(record['scale_numerator']),int(record['scale_denominator']))/so
-            s.readouts.append(Readout(converted,[(raw,factor)],constant=((128 if q.unsigned else 0)-q.zero_point)*factor,
+            s.readouts.append(Readout(converted,[(raw,factor)],constant=code_offset(q)*factor,
                                       zero_point=qout.zero_point,quant_min=qout.qmin,quant_max=qout.qmax,after=len(s.ins)))
             source=converted
         names[value]=source
@@ -217,7 +217,7 @@ def match(op, ordinals):
                 while end<len(positions) and positions[end]-positions[end-1]==step:
                     end+=1
                 s.readouts.append(Readout('y',[('raw_i32',factor)],
-                    constant=((128 if q.unsigned else 0)-q.zero_point)*factor,
+                    constant=code_offset(q)*factor,
                     placement=(end-start,1,int(positions[start]),step)))
                 start=end
     proof = dict(method='closed_static_selectors_identical_qparams', inputs=inputs, output=output,

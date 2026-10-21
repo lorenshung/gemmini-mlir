@@ -33,6 +33,11 @@ def quantized(value, lo=-128, hi=127, zero_point=0):
     return min(hi, max(lo, round(value) + zero_point))
 
 
+def code_offset(q):
+    """What (code - zero_point) adds to a stored signed code; uint8 is stored XOR 0x80."""
+    return (128 if q.unsigned else 0) - q.zero_point
+
+
 def accumulator_bound(bound):
     require(0 <= bound <= (1 << 31) - 1, 'unproved i32 accumulator overflow bound')
 

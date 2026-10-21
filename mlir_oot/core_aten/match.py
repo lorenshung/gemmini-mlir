@@ -26,6 +26,7 @@ from xdsl.dialects.builtin import DenseIntOrFPElementsAttr, FloatAttr, IntegerAt
 from xdsl.ir import Block, Operation, OpResult, SSAValue
 
 from . import ops
+from .exactness import code_offset
 from .recipes.conv import ConvGeom
 
 
@@ -463,7 +464,7 @@ def match_elementwise(op: Operation) -> Match | None:
         return None
     s_o = qout.scale
     terms = [(i, body.lin.terms[i], data[i]) for i in used]
-    c = body.lin.c + sum(Fraction(w)*Fraction(q.scale)*((128 if q.unsigned else 0)-q.zero_point) for _,w,q in terms)
+    c = body.lin.c + sum(Fraction(w)*Fraction(q.scale)*code_offset(q) for _,w,q in terms)
     consumed = [op, qout.op] + [t[2].dq for t in terms]
     if len(terms) == 0:
         raise Decline("constant elementwise result")
@@ -1242,7 +1243,7 @@ def match_linear(op: Operation) -> Match | None:
             k = len(by_value)
             by_value[src] = (k, dq.dq if not integer else None)
             srcs[k] = linmatch.Src(f"x{k}", shape(src), scale, dq.unsigned if not integer else False)
-        return by_value[src][0], Fraction(scale), Fraction(scale)*((128 if dq.unsigned else 0)-dq.zero_point) if not integer else Fraction(0)
+        return by_value[src][0], Fraction(scale), Fraction(scale)*code_offset(dq) if not integer else Fraction(0)
 
     try:
         lm, region = linmap.extract(root, leaf)
@@ -1279,7 +1280,6 @@ def _literal_codes(inputs):
 
 
 def _pack_inputs(kernel, inputs):
-    from .stream import Ins
     s=kernel.stream
     for name,q in inputs:
         if name in s.consts:
@@ -1292,10 +1292,8 @@ def _pack_inputs(kernel, inputs):
                 source_quant_attributes={key:str(value) for key,value in q.dq.attributes.items()
                                          if key.startswith('prov.quant.')})
             continue
-        if not q.unsigned: continue
-        old=s._index[name]; new=len(s.args)
-        s.signed_scratch(name,shape(q.value))
-        s.ins=[Ins(i.kind,i.attrs,new if i.arg==old else i.arg,i.off) for i in s.ins]
+        if q.unsigned:
+            s.retarget_signed(name,shape(q.value))
 
 
 def _configure_quant(match):
