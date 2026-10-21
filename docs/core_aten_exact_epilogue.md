@@ -106,7 +106,7 @@ writes to scratchpad with execute ReLU; `ExecuteController.scala` clips to
 signed-byte width before activation. That clipping is an identity because the
 product is already in `[-128,127]`. The result `[0,127]` is then widened by an
 identity product into ACC and read out at full int32 width. The manifest records
-the range and clipping proof in `execute_activation_proof`. Shifts are zero and
+`device_relu` and the range and clipping proof in `execute_activation_proof`. Shifts are zero and
 all scales are 1. Negative-weight or wider affine accumulators do not meet that
 proof and retain the exact host ReLU after the rational sum. No narrowed ACC
 readout is introduced to implement ReLU.

@@ -344,6 +344,6 @@ alter quantization, byte order, fences or the instruction budget.
 
 Phase 1 retains these source/readout boundaries and structural DMA loops for
 functional fitting, but removes literal layout folding and requant-A/overlap.
-Literal selectors execute ordinary device movement. Provider-owned readouts use
+Literal selectors execute ordinary device movement (no `constant_folds` record). Provider-owned readouts use
 serial `exact_rational_RNE_v1`; see the repository ABI notes. No cost policy
 selects placement. Historical performance measurements remain on `gemmini-perf`.
