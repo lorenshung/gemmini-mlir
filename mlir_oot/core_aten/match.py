@@ -255,117 +255,82 @@ class Body:
     widen: bool = False
 
 
+_NUM = (float, Fraction)
+
+
 def _is_zero(x):
-    return isinstance(x, (float, Fraction)) and x == 0
+    return isinstance(x, _NUM) and x == 0
 
 
-def analyse_body(block: Block, n_in: int, consts: dict[int, float]) -> Body | None:
-    """Symbolic evaluation of an elementwise linalg body (block args 0..n_in-1 are inputs)."""
-    env: dict = {}
-    for i, a in enumerate(block.args[:n_in]):
-        env[a] = Fraction(consts[i]) if i in consts else Lin({i: Fraction(1)}, Fraction(0))
+def _lin(x):
+    return x if isinstance(x, Lin) else Lin({}, x) if isinstance(x, _NUM) else None
+
+
+def analyse_body(generic: Operation, skip: int | None = None) -> Body | None:
+    """Symbolic evaluation of an elementwise generic's body; splat inputs (except ``skip``) are constants."""
+    n_in = len(generic.operands) - 1
+    consts = {i: c for i, v in enumerate(generic.operands[:n_in]) if i != skip and (c := splat_value(v)) is not None}
+    block = generic.regions[0].blocks[0]
+    env: dict = {a: Fraction(consts[i]) if i in consts else Lin({i: Fraction(1)}, Fraction(0))
+                 for i, a in enumerate(block.args[:n_in])}
     widen = False
     for op in block.ops:
-        nm = op.name
+        nm, r = op.name, None
         if nm == "linalg.yield":
             out = env.get(op.operands[0])
-            if isinstance(out, (float, Fraction)):
-                return Body(Lin({}, out), False, widen)
-            if isinstance(out, Lin):
-                return Body(out, False, widen)
-            if isinstance(out, tuple) and out[0] == "relu":
-                return Body(out[1], True, widen)
-            return None
+            if isinstance(out, tuple):
+                return Body(out[1], True, widen) if out[0] == "relu" else None
+            return None if _lin(out) is None else Body(_lin(out), False, widen)
         vals = [env.get(v) for v in op.operands]
         if nm == "arith.constant":
             c = _scalar_const(op)
-            if c is None:
-                return None
-            env[op.results[0]] = Fraction(c)
-        elif nm == 'arith.extf':
+            r = None if c is None else Fraction(c)
+        elif nm == "arith.extf":
             from .linmap import exact_float_widening
-            if (not isinstance(vals[0], (Lin, float, Fraction))
-                    or not exact_float_widening(str(op.operands[0].type), str(op.results[0].type))):
-                return None
-            env[op.results[0]] = vals[0]
+            if isinstance(vals[0], (Lin, *_NUM)) and exact_float_widening(str(op.operands[0].type), str(op.results[0].type)):
+                r = vals[0]
         elif nm in ("arith.sitofp", "arith.uitofp"):
-            if not isinstance(vals[0], (float, Fraction)):
-                return None
-            env[op.results[0]] = vals[0]
+            r = vals[0] if isinstance(vals[0], _NUM) else None
         elif nm == "arith.extsi":
-            if not (isinstance(vals[0], Lin) and str(op.operands[0].type) == "i8"
-                    and str(op.results[0].type) == "i32"):
-                return None
-            widen = True
-            env[op.results[0]] = vals[0]
+            if isinstance(vals[0], Lin) and str(op.operands[0].type) == "i8" and str(op.results[0].type) == "i32":
+                widen, r = True, vals[0]
+        elif nm == "arith.negf":
+            r = vals[0].scaled(Fraction(-1)) if isinstance(vals[0], Lin) else -vals[0] if isinstance(vals[0], _NUM) else None
+        elif nm == "arith.select":
+            c, t, f = vals
+            if isinstance(c, tuple) and c[0] == "cmp0":
+                zero, kept = (t, f) if c[2] == "lt" else (f, t)
+                r = ("relu", c[1]) if _is_zero(zero) and isinstance(kept, Lin) and kept == c[1] else None
         elif nm in ("arith.addf", "arith.subf"):
             a, b = vals
             k = Fraction(1) if nm == "arith.addf" else Fraction(-1)
-            if isinstance(a, (float, Fraction)) and isinstance(b, (float, Fraction)):
-                env[op.results[0]] = a + k * b
-            else:
-                la = a if isinstance(a, Lin) else Lin({}, a) if isinstance(a, (float, Fraction)) else None
-                lb = b if isinstance(b, Lin) else Lin({}, b) if isinstance(b, (float, Fraction)) else None
-                if la is None or lb is None:
-                    return None
-                env[op.results[0]] = la.plus(lb, k)
+            la, lb = _lin(a), _lin(b)
+            r = a + k * b if isinstance(a, _NUM) and isinstance(b, _NUM) else (
+                None if la is None or lb is None else la.plus(lb, k))
         elif nm == "arith.mulf":
             a, b = vals
-            if isinstance(a, (float, Fraction)) and isinstance(b, Lin):
-                a, b = b, a
-            if isinstance(a, Lin) and isinstance(b, (float, Fraction)):
-                env[op.results[0]] = a.scaled(b)
-            elif isinstance(a, (float, Fraction)) and isinstance(b, (float, Fraction)):
-                env[op.results[0]] = a * b
-            else:
-                return None
+            a, b = (b, a) if isinstance(a, _NUM) and isinstance(b, Lin) else (a, b)
+            r = a.scaled(b) if isinstance(a, Lin) and isinstance(b, _NUM) else (
+                a * b if isinstance(a, _NUM) and isinstance(b, _NUM) else None)
         elif nm == "arith.divf":
             a, b = vals
-            if isinstance(a, Lin) and isinstance(b, (float, Fraction)) and b != 0:
-                env[op.results[0]] = a.scaled(Fraction(1) / b)
-            elif isinstance(a, (float, Fraction)) and isinstance(b, (float, Fraction)) and b != 0:
-                env[op.results[0]] = a / b
-            else:
-                return None
-        elif nm == "arith.negf":
-            if isinstance(vals[0], Lin):
-                env[op.results[0]] = vals[0].scaled(Fraction(-1))
-            elif isinstance(vals[0], (float, Fraction)):
-                env[op.results[0]] = -vals[0]
-            else:
-                return None
+            if isinstance(b, _NUM) and b != 0:
+                r = a.scaled(Fraction(1) / b) if isinstance(a, Lin) else a / b if isinstance(a, _NUM) else None
         elif nm in ("arith.cmpf", "arith.cmpi"):
             pred = op.properties.get("predicate")
             p = int(pred.value.data) if pred is not None else None
             a, b = vals
-            # cmpf: olt=4, ult=12, ogt=2, ugt=10 ; cmpi: slt=2, sgt=4
+            # cmpf: olt=4, ule=12, ogt=2, uge=10; cmpi: slt=2, sgt=4 (at 0 both select the ReLU)
             lt = (nm == "arith.cmpf" and p in (4, 12)) or (nm == "arith.cmpi" and p == 2)
             gt = (nm == "arith.cmpf" and p in (2, 10)) or (nm == "arith.cmpi" and p == 4)
             if isinstance(a, Lin) and _is_zero(b) and (lt or gt):
-                env[op.results[0]] = ("cmp0", a, "lt" if lt else "gt")
-            else:
-                return None
-        elif nm == "arith.select":
-            c, t, f = vals
-            if not (isinstance(c, tuple) and c[0] == "cmp0"):
-                return None
-            x = c[1]
-            if c[2] == "lt" and _is_zero(t) and isinstance(f, Lin) and f == x:
-                env[op.results[0]] = ("relu", x)
-            elif c[2] == "gt" and _is_zero(f) and isinstance(t, Lin) and t == x:
-                env[op.results[0]] = ("relu", x)
-            else:
-                return None
+                r = ("cmp0", a, "lt" if lt else "gt")
         elif nm in ("arith.maximumf", "arith.maxnumf", "arith.maxsi"):
             a, b = vals
-            if isinstance(a, Lin) and _is_zero(b):
-                env[op.results[0]] = ("relu", a)
-            elif isinstance(b, Lin) and _is_zero(a):
-                env[op.results[0]] = ("relu", b)
-            else:
-                return None
-        else:
+            r = ("relu", a) if isinstance(a, Lin) and _is_zero(b) else ("relu", b) if isinstance(b, Lin) and _is_zero(a) else None
+        if r is None:
             return None
+        env[op.results[0]] = r
     return None
 
 
@@ -454,22 +419,6 @@ def _sandwich_out(v: SSAValue):
     return q
 
 
-def _data_inputs(op: Operation, n_in: int):
-    """Split generic inputs into quantized data inputs and splat constants."""
-    consts, data = {}, {}
-    for i, v in enumerate(op.operands[:n_in]):
-        c = splat_value(v)
-        if c is not None:
-            consts[i] = c
-            continue
-        q = dequant(v)
-        if q is not None:
-            data[i] = q
-            continue
-        data[i] = None
-    return consts, data
-
-
 def match_elementwise(op: Operation) -> Match | None:
     if op.name != "linalg.generic":
         return None
@@ -481,8 +430,8 @@ def match_elementwise(op: Operation) -> Match | None:
     if not identity_map(maps[-1]):
         return None
     block = op.regions[0].blocks[0]
-    consts, data = _data_inputs(op, n_in)
-    body = analyse_body(block, n_in, consts)
+    data = {i: dequant(v) for i, v in enumerate(op.operands[:n_in]) if splat_value(v) is None}
+    body = analyse_body(op)
     if body is None:
         return None
     if list(block.args[n_in].uses):
@@ -584,9 +533,7 @@ def _scaled_dequant(x: SSAValue):
         p = producer(x)
         if p is None or p.name != "linalg.generic" or any(i != "parallel" for i in iterators(p)):
             return None, k, ops_
-        n_in = len(p.operands) - 1
-        consts = {i: c for i, v in enumerate(p.operands[:n_in]) if (c := splat_value(v)) is not None}
-        body = analyse_body(p.regions[0].blocks[0], n_in, consts)
+        body = analyse_body(p)
         maps = generic_maps(p)
         if body is None or body.relu or body.lin.c or len(body.lin.terms) != 1:
             return None, k, ops_
@@ -633,17 +580,8 @@ def follow_chain(v: SSAValue) -> Chain:
         pos = [i for i, x in enumerate(u.operands[:n_in]) if x is ch.final]
         if len(pos) != 1 or not identity_map(maps[pos[0]]) or not identity_map(maps[-1]):
             raise Decline("epilogue does not map the value elementwise")
-        consts = {}
-        others = {}
-        for i, x in enumerate(u.operands[:n_in]):
-            if i == pos[0]:
-                continue
-            c = splat_value(x)
-            if c is not None:
-                consts[i] = c
-            else:
-                others[i] = x
-        body = analyse_body(u.regions[0].blocks[0], n_in, consts)
+        others = {i: x for i, x in enumerate(u.operands[:n_in]) if i != pos[0] and splat_value(x) is None}
+        body = analyse_body(u, skip=pos[0])
         if body is None or set(body.lin.terms) - {pos[0], *others}:
             raise Decline("epilogue body is not affine")
         k = body.lin.terms.get(pos[0], 0.0)
