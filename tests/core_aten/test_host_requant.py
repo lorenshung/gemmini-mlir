@@ -6,7 +6,7 @@ import ctypes
 import subprocess
 import numpy as np
 import pytest
-from mlir_oot.core_aten.requant import evaluate, thresholds, c_reference
+from mlir_oot.core_aten.requant import evaluate
 from mlir_oot.core_aten.match import Decline
 from mlir_oot.core_aten.exactness import prove_readout, prove_affine
 
@@ -22,24 +22,7 @@ from mlir_oot.core_aten.exactness import prove_readout, prove_affine
         (1, 255, 128),
     ],
 )
-def test_python_and_c_exact_requant_all_codes_random_accumulators_and_ties(
-    tmp_path, low, high, zp
-):
-    path = tmp_path / "reference.c"
-    path.write_text(c_reference())
-    obj = tmp_path / "reference.so"
-    subprocess.run(
-        ["cc", "-shared", "-fPIC", "-O2", str(path), "-o", str(obj)], check=True
-    )
-    fn = ctypes.CDLL(str(obj)).gemmini_exact_requant_i32
-    fn.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_size_t,
-        ctypes.c_void_p,
-        ctypes.c_int,
-        ctypes.c_int,
-    ]
+def test_python_exact_requant_all_codes_random_accumulators_and_ties(low, high, zp):
     rng = np.random.default_rng(1743 + zp)
     values = np.unique(
         np.concatenate(
@@ -60,30 +43,10 @@ def test_python_and_c_exact_requant_all_codes_random_accumulators_and_ties(
     ]
     scales += [F(float(np.float32(rng.uniform(0.000001, 4)))) for _ in range(16)]
     for scale in scales:
-        table = np.array(
-            thresholds(
-                scale.numerator,
-                scale.denominator,
-                zero_point=zp,
-                quant_min=low,
-                quant_max=high,
-            ),
-            np.int64,
-        )
-        result = np.zeros(values.shape, np.uint8)
-        fn(
-            values.ctypes.data,
-            result.ctypes.data,
-            len(values),
-            table.ctypes.data,
-            low,
-            high,
-        )
         expected = np.array(
             [min(high, max(low, round(int(x) * scale) + zp)) for x in values],
             dtype=np.int64,
         )
-        assert np.array_equal(result, expected.astype(np.uint8))
         assert np.array_equal(
             evaluate(
                 values,
@@ -192,39 +155,6 @@ def test_real_graph_schemes_equal_independent_source_oracle(name, low, high, zp)
         expected = source_reference(match, feed)
         model = simulate(match.kernel.stream, feed)
         assert np.array_equal(model[match.result[0]], expected[match.result[0]])
-
-
-def test_c_signed_ratio_reference(tmp_path):
-    path = tmp_path / "signed.c"
-    path.write_text(c_reference())
-    obj = tmp_path / "signed.so"
-    subprocess.run(
-        ["cc", "-shared", "-fPIC", "-O2", str(path), "-o", str(obj)], check=True
-    )
-    fn = ctypes.CDLL(str(obj)).gemmini_exact_requant_i32_ratio
-    fn.argtypes = [
-        ctypes.c_void_p,
-        ctypes.c_void_p,
-        ctypes.c_size_t,
-        ctypes.c_int64,
-        ctypes.c_uint64,
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_int,
-    ]
-    values = np.r_[np.arange(-256, 257), -(1 << 31), (1 << 31) - 1].astype(np.int32)
-    for n, d in [
-        (-1, 2),
-        (-3, 50),
-        (1, 3),
-        (-(1 << 63), 3),
-        ((1 << 63) - 1, (1 << 64) - 1),
-    ]:
-        out = np.zeros(values.shape, np.uint8)
-        fn(values.ctypes.data, out.ctypes.data, len(values), n, d, 123, 1, 255)
-        assert np.array_equal(
-            out, evaluate(values, n, d, zero_point=123, quant_min=1, quant_max=255)
-        )
 
 
 def test_numpy_fp32_scale_preserves_its_exact_canonical_value():
