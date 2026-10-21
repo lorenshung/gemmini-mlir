@@ -26,13 +26,12 @@ import numpy as np
 from xdsl.dialects.builtin import ArrayAttr, FloatAttr, IntegerAttr, IntegerType, StringAttr, TensorType
 
 from . import linmatch, ops
-from .exactness import rational as Q, prove_affine, accumulator_bound, quantized
+from .exactness import rational as Q, accumulator_bound, quantized
 from .emit import build_module
 from .linmap import LinearMap
 from .match import Decline
 from .recipes import elementwise as ew
 from .recipes import movement as mv
-from .recipes import reduce as rd
 from .stream import Arg, Ins, Stream, f32
 
 EXTENSION = {"affine_map", "concat", "insert_slice", "fill", "fence", "window_sum"}

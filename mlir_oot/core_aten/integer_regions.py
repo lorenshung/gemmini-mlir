@@ -4,16 +4,14 @@ Only a checked closed body grants semantics. Provenance describes bindings but
 never substitutes for that check. Unbounded runtime seeds stay on the host:
 i32 SRAM cannot implement an infinite-precision seeded sum without overflow.
 """
-from fractions import Fraction as Q
-import math
 
 import numpy as np
 
 from ..contraction_patterns import match_integer_gemm, _zero_init
 from . import ops
 from .exactness import require
-from .match import (Match, Decline, producer, shape, dense_values, splat_value,
-                    _attr_of, _scalar_const, identity_map, generic_maps, iterators)
+from .match import (Match, producer, shape, dense_values, splat_value,
+                    _scalar_const, identity_map, generic_maps, iterators)
 
 
 def candidate_readouts(op):

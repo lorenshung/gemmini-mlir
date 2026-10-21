@@ -27,7 +27,7 @@ from xdsl.dialects.builtin import (BytesAttr, DenseIntOrFPElementsAttr, Float32T
 from ..codegen.builder import PTR, FnBuilder
 from ..ir import gemmini_dialect as G
 from ..tables import isa
-from .reroll import Loop, Rec, reroll
+from .reroll import Rec, reroll
 from .stream import Ins, Stream
 
 _OPS = {

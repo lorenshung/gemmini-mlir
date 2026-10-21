@@ -18,8 +18,7 @@ from __future__ import annotations
 import json
 
 from xdsl.dialects import func, tensor
-from xdsl.dialects.builtin import FunctionType, StringAttr, TensorType, UnitAttr
-from xdsl.ir import BlockArgument
+from xdsl.dialects.builtin import FunctionType, UnitAttr
 
 from ..frontend.parse import parse_module
 

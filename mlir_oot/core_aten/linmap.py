@@ -611,7 +611,6 @@ class Region:
 
     def _scalar_impl(self, op, vals, env, ivs, mask):
         nm = op.name
-        f = _is_float(op.results[0]) if op.results else False
         if nm == "arith.constant":
             return np.asarray(_const(op))
         if nm == "linalg.index":

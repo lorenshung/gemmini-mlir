@@ -9,7 +9,7 @@ import numpy as np
 from xdsl.dialects.builtin import DenseIntOrFPElementsAttr, FloatAttr, TensorType
 from . import linmap, ops
 from .exactness import require
-from .match import Match, etype, shape, producer, name_of, _attr_of
+from .match import Match, etype, shape, producer, _attr_of
 from .recipes import movement as mv
 from .storage import itemsize, literal_bytes
 from .stream import Arg, Stream

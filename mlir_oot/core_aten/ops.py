@@ -13,8 +13,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .exactness import rational as Q, require, accumulator_bound
-from .numerics import code, parts127
-from .recipes import elementwise as ew
+from .numerics import code, parts127  # noqa: F401  (iface reads ops.parts127)
 from .recipes import movement as mv
 from .recipes import reduce as rd
 from .recipes.conv import ConvGeom, conv2d
@@ -437,7 +436,6 @@ def contraction_zero_points(kernel, qa, qb, M, K, N, batch=0):
     q-z = (q-128)+(128-z) for uint8; signed int8 needs only -z.
     No early byte saturation or float conversion participates in the folding.
     """
-    from dataclasses import replace
     from .stream import Ins
     s=kernel.stream
     names=['a','b']
@@ -491,7 +489,6 @@ def convolution_zero_points(kernel, left, right, g, mode='forward'):
     """
     from dataclasses import replace
     from .recipes.backward import conv_transpose,conv_wgrad
-    from .requant import Readout
     s=kernel.stream
     qa,qb=left[1],right[1]
     oa=(128 if qa.unsigned else 0)-qa.zero_point
