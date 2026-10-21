@@ -3,7 +3,6 @@
 import json
 import subprocess
 from pathlib import Path
-from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -378,18 +377,8 @@ def test_real_capture_provider_routes_and_records_two_producer_proofs(
     api = provider()
     proof = api.admit_numeric_schedule(real_capture, package=PACKAGE, numeric_policy=POLICY)
     assert len(proof["kernels"]) == 2
-    (tmp_path / "model.mlir").write_text(real_capture)
-    from merlin.targetgen.core_aten_device import selected_facts
-
-    fixture = PACKAGE / "merlin-support/tests/fixtures/core_aten_device/facts.json"
-    with selected_facts("synthetic_core_aten", fixture) as facts:
-        route = api.routing(
-            tmp_path,
-            target="synthetic_core_aten",
-            package=PACKAGE,
-            facts=facts,
-            eligible=[(None, SimpleNamespace(dtypes=("i8", "i8", "i32")))],
-        )
+    from conftest import synthetic_route
+    route = synthetic_route(real_capture, tmp_path, api=api)
     assert callable(route.region_offload)
 
 

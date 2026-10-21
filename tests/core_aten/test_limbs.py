@@ -9,7 +9,7 @@ from xdsl.dialects.builtin import StringAttr
 from mlir_oot.core_aten.catalog import build, parse_module
 from mlir_oot.core_aten.offload import rewrite
 from mlir_oot.core_aten.stream import simulate
-from conftest import PACKAGE, POLICY, provider
+from conftest import PACKAGE, POLICY, provider, synthetic_route
 
 
 FIXTURE = Path(__file__).parents[1] / 'fixtures/core_aten/limbs/int_mm.mlir'
@@ -207,14 +207,7 @@ def test_real_batched_capture_full_i32():
 
 
 def test_limb_route_uses_region_abi(tmp_path):
-    from types import SimpleNamespace
-    from merlin.targetgen.core_aten_device import selected_facts
-    api, package = provider(), PACKAGE
-    (tmp_path/'model.mlir').write_text(annotate(FIXTURE.read_text()))
-    fixture = package/'merlin-support/tests/fixtures/core_aten_device/facts.json'
-    with selected_facts('synthetic_core_aten', fixture) as facts:
-        route = api.routing(tmp_path, target='synthetic_core_aten', package=package, facts=facts,
-                            eligible=[(None, SimpleNamespace(dtypes=('i8', 'i8', 'i32')))])
+    route = synthetic_route(annotate(FIXTURE.read_text()), tmp_path)
     assert callable(route.region_offload) and route.catalog_builder is None
 
 

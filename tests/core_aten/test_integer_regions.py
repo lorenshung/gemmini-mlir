@@ -9,7 +9,7 @@ from xdsl.ir import Block, Region
 from mlir_oot.core_aten.catalog import build
 from mlir_oot.core_aten.stream import simulate
 from exact_oracle import evaluate
-from conftest import PACKAGE, POLICY, provider
+from conftest import PACKAGE, POLICY, provider, synthetic_route
 
 
 def source(m=3,k=17,n=5,scale=.5, runtime=False, guarded=True):
@@ -66,13 +66,7 @@ def test_provider_proves_and_routes_the_actual_region(tmp_path):
     proof = api.admit_numeric_schedule(text,package=PACKAGE,numeric_policy=POLICY)
     assert len(proof['kernels']) == 1 and proof['kernels'][0]['exact_arithmetic']
     assert proof['bindings'][0]['source_operation_ordinal'] >= 0
-    from types import SimpleNamespace
-    from merlin.targetgen.core_aten_device import selected_facts
-    fixture=PACKAGE/'merlin-support/tests/fixtures/core_aten_device/facts.json'
-    (tmp_path/'model.mlir').write_text(text)
-    with selected_facts('synthetic_core_aten',fixture) as facts:
-        route=api.routing(tmp_path,target='synthetic_core_aten',package=PACKAGE,facts=facts,
-                               eligible=[(None,SimpleNamespace(dtypes=('i8','i8','i32')))])
+    route=synthetic_route(text,tmp_path,api=api)
     assert callable(route.region_offload) and route.catalog_builder is None
     assert callable(route.final_elf_audit)
 

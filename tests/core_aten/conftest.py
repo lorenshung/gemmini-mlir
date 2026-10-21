@@ -22,6 +22,17 @@ def provider():
     return api
 
 
+
+def synthetic_route(text, tmp_path, dtypes=('i8', 'i8', 'i32'), api=None):
+    """The provider's region route for ``text`` under the synthetic Core ATen facts fixture."""
+    from types import SimpleNamespace
+    from merlin.targetgen.core_aten_device import selected_facts
+    (tmp_path/'model.mlir').write_text(text)
+    with selected_facts('synthetic_core_aten', PACKAGE/'merlin-support/tests/fixtures/core_aten_device/facts.json') as facts:
+        return (api or provider()).routing(tmp_path, target='synthetic_core_aten', package=PACKAGE, facts=facts,
+                                           eligible=[(None, SimpleNamespace(dtypes=dtypes))])
+
+
 def native_readout(stream, symbol, tmp_path):
     """Compile ``build_module(stream, symbol)`` for this host; return its ctypes function and metadata."""
     import ctypes, os, subprocess, tempfile

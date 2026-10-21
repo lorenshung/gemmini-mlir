@@ -116,14 +116,8 @@ def test_inconsistent_selected_mac_policy_declines_cleanly():
 
 
 def test_centered_i32_source_routes_to_proved_physical_byte_datapath(tmp_path):
-    from types import SimpleNamespace
-    from merlin.targetgen.core_aten_device import selected_facts
-    from conftest import provider,PACKAGE
-    (tmp_path/'model.mlir').write_text(source())
-    fixture=PACKAGE/'merlin-support/tests/fixtures/core_aten_device/facts.json'
-    with selected_facts('synthetic_core_aten',fixture) as facts:
-        route=provider().routing(tmp_path,target='synthetic_core_aten',package=PACKAGE,facts=facts,
-                                 eligible=[(None,SimpleNamespace(dtypes=('i32','i32','i32')))])
+    from conftest import synthetic_route
+    route=synthetic_route(source(),tmp_path,('i32','i32','i32'))
     assert route and callable(route.region_offload) and route.catalog_builder is None
     assert route.operand_dtype=='i8' and route.accum_dtype=='i32'
     # The route must honor a refusal when proving the prepared bytes; it must
