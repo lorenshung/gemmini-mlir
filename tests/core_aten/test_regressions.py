@@ -46,6 +46,23 @@ def test_selector_island_prepass_surfaces_errors_other_than_decline(monkeypatch,
         catalog.build(text)
 
 
+@pytest.mark.parametrize('name', ['mean_dim', 'avg_pool2d', 'col2im', 'convolution_backward',
+                                  '_adaptive_avg_pool2d_backward'])
+def test_catalog_does_not_read_aten_provenance(name):
+    """Matches, kernels and declines follow IR structure; prov.aten is only passed through to bindings."""
+    import re
+    from mlir_oot.core_aten import catalog
+    from fixture_source import read
+    text = read(Path(__file__).parents[1] / 'fixtures/core_aten' / name / 'model.mlir')
+    renamed = re.sub(r'prov\.aten = "aten\.[^"]*"', 'prov.aten = "aten.renamed.default"', text)
+    assert renamed != text
+    def placement(source):
+        manifest = catalog.build(source)[1]
+        bindings = [{k: v for k, v in b.items() if k != 'aten'} for b in manifest['bindings']]
+        return bindings, manifest['kernels'], manifest['declines']
+    assert placement(renamed) == placement(text)
+
+
 @pytest.mark.parametrize('kind', ['config_ld', 'config_st', 'narrow'])
 def test_kernel_boundary_declines_unproved_device_scaling_or_narrowing(kind):
     from mlir_oot.core_aten.stream import ACC, Arg, Stream

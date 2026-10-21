@@ -1014,7 +1014,7 @@ def match_mean(op: Operation) -> Match | None:
     q = _sandwich_out(ch.final)
     keepdim = len(shape(q.value)) == len(xshape)
     is_mean = Fraction(ch.w) * L == 1
-    aten = "aten.mean.dim" if is_mean else (getattr(op.attributes.get("prov.aten"), "data", "") or "aten.sum.dim_IntList")
+    aten = "aten.mean.dim" if is_mean else "aten.sum.dim_IntList"
     try:
         k = ops.mean_dim(xshape, dims, keepdim, s_x=qx.scale, s_out=q.scale, w=ch.w, op=aten)
     except ValueError as exc:
@@ -1086,8 +1086,7 @@ def match_conv_wgrad(op: Operation) -> Match | None:
     _pack_inputs(k,[("g",qg),("x",qx)])
     ops.convolution_zero_points(k,("g",qg),("x",qx),g,"weight")
     cons = [op, q.op, qx.dq, qg.dq] + ([pad] if pad else [])
-    aten = getattr(op.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
-    return Match(aten, q.op, cons, [("g", qg.value), ("x", qx.value)], ("y", q.value), k,
+    return Match("aten.convolution_backward.default", q.op, cons, [("g", qg.value), ("x", qx.value)], ("y", q.value), k,
                  layout=dict(source="NCHW,NCHW->OIHW", transposes="on-device"),
                  numeric=dict(output="grad_weight", s_g=qg.scale, s_x=qx.scale, s_out=q.scale))
 
@@ -1209,8 +1208,7 @@ def _conv_input_two_stage(op, q0, root, qg, qw):
                                 constants=_literal_codes([("g",qg),("w",qw)]))
     _pack_inputs(k,[("g",qg),("w",qw)])
     ops.convolution_zero_points(k,("g",qg),("w",qw),found,"input")
-    aten = getattr(t.attributes.get("prov.aten"), "data", "") or "aten.convolution_backward.default"
-    return Match(aten, q0.op, [*region, t, q0.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)],
+    return Match("aten.convolution_backward.default", q0.op, [*region, t, q0.op, qg.dq, qw.dq], [("g", qg.value), ("w", qw.value)],
                  ("y", q0.value), k, layout=dict(source="NCHW,OIHW->NCHW", transposes="on-device"),
                  numeric=dict(output="grad_input", s_g=qg.scale, s_w=qw.scale, s_out=q0.scale,
                               geometry=found.__dict__, verification="structural contraction + extracted scatter"))
@@ -1429,11 +1427,10 @@ def match_linear(op: Operation) -> Match | None:
         return None
     if not _region_closed(region, {op} | set(users(out_val))):
         raise Decline("region values escape the region")
-    aten = getattr(region[-1].attributes.get("prov.aten"), "data", "") or "linear_region"
-    kernel = linmatch.kernel_for(aten, lm, srcs, s_out)
+    kernel = linmatch.kernel_for("linear_region", lm, srcs, s_out)
     operands = [(srcs[k].name, v) for v, (k, _) in sorted(by_value.items(), key=lambda kv: kv[1][0])]
     consumed = list(region) + ([op] if not integer else []) + [d for _, (k, d) in by_value.items() if d is not None]
-    return Match(aten, op if not integer else producer(root), consumed, operands, ("y", out_val), kernel,
+    return Match("linear_region", op if not integer else producer(root), consumed, operands, ("y", out_val), kernel,
                  numeric=dict(s_out=s_out, terms=int(lm.out.size), form=kernel.meta.get("form")))
 
 
@@ -1587,8 +1584,7 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
                     _configure_quant(m)
                     _bind_dense_layouts(m)
             except (Decline, ValueError, OverflowError, ZeroDivisionError) as exc:
-                declines.append(dict(ordinal=ordinal, op=op.name, reason=str(exc),
-                                     aten=getattr(op.attributes.get("prov.aten"), "data", "")))
+                declines.append(dict(ordinal=ordinal, op=op.name, reason=str(exc), aten=""))
                 m = None
                 break
             if m is not None:
@@ -1620,6 +1616,5 @@ def match_all(module) -> tuple[list[Match], list[dict]]:
             if candidate.name in ('linalg.matmul', 'linalg.batch_matmul') or (
                     candidate.name == 'linalg.generic' and any(o.name in arithmetic for o in candidate.walk())):
                 declines.append(dict(ordinal=ordinal, op=candidate.name,
-                    reason='no exact integer schedule for unquantized data arithmetic or numeric conversion',
-                    aten=getattr(candidate.attributes.get('prov.aten'), 'data', '')))
+                    reason='no exact integer schedule for unquantized data arithmetic or numeric conversion', aten=''))
     return live_bindings(sorted(matches, key=lambda m: ordinals[m.root]), live), declines
