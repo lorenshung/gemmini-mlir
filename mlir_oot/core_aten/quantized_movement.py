@@ -172,18 +172,11 @@ def match(op, ordinals):
     fields = ('scale_numerator', 'scale_denominator', 'zero_point',
               'quant_min', 'quant_max', 'storage_dtype')
     identical = all(all(record[k] == output[k] for k in fields) for record in inputs.values())
-    if not isinstance(value, linmap.Sym):
-        value = linmap.Sym([], np.asarray(value, dtype=object))
-    value = value.bshape(shape(root))
-    n = prod(shape(root))
-    which, indices = np.full(n, -1, np.int64), np.zeros(n, np.int64)
-    for sid, index, coefficient in value.terms:
-        c = np.asarray(coefficient).reshape(-1)
-        active = c != 0
-        if not (np.all(c[active] == 1) and np.all(which[active] == -1)):
-            return None
-        which[active], indices[active] = sid, np.asarray(index).reshape(-1)[active]
-    constants = np.asarray(value.const, dtype=object).reshape(-1)
+    found = linmap.selector(value, shape(root))
+    if found is None:
+        return None
+    which, indices, constants = found
+    n = which.size
     if any(v != 0 for v in constants[which >= 0]):
         return None
     s = ops._begin([Arg(f'x{i}', 'i8', shape(q.value), 'input') for i, q in enumerate(sources)] +

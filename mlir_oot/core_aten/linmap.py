@@ -157,6 +157,24 @@ def where(cond, a, b):
     return Sym(terms, np.where(cond, sa.const, sb.const)).compact()
 
 
+def selector(value, shape, check=lambda sid: None, compact=False):
+    """(which, indices, flat constants) when every output element reads at most one source
+    element with a unit coefficient (which -1: none), else None. ``check(sid)`` runs per term."""
+    if not isinstance(value, Sym):
+        value = Sym([], np.asarray(value, dtype=object))
+    value = value.bshape(shape).compact() if compact else value.bshape(shape)
+    n = int(np.prod(shape)) if shape else 1
+    which, indices = np.full(n, -1, np.int64), np.zeros(n, np.int64)
+    for sid, index, coefficient in value.terms:
+        c = np.asarray(coefficient).reshape(-1)
+        active = c != 0
+        if not (np.all(c[active] == 1) and np.all(which[active] == -1)):
+            return None
+        check(sid)
+        which[active], indices[active] = sid, np.asarray(index).reshape(-1)[active]
+    return which, indices, np.asarray(value.const, dtype=object).reshape(-1)
+
+
 @dataclass
 class Scatter:
     """A tensor built by an accumulate-scatter loop: base + sum of value[k] at out[k] (flat)."""

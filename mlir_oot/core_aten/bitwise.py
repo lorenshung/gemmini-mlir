@@ -95,18 +95,10 @@ def match(op):
         value = reg.tensor(root)
     except linmap.NotLinear:
         return None
-    if not isinstance(value, linmap.Sym):
-        value = linmap.Sym([], np.asarray(value, dtype=object))
-    value = value.bshape(shape(root))
-    which = np.full(n, -1, dtype=np.int64)
-    indices = np.zeros(n, dtype=np.int64)
-    for sid, index, coefficient in value.terms:
-        c = np.asarray(coefficient).reshape(-1)
-        active = c != 0
-        require(np.all(c[active] == 1) and np.all(which[active] == -1), 'selector combines data elements')
-        require(itemsize(etype(sources[sid])) == width, 'selector changes element storage width')
-        which[active], indices[active] = sid, np.asarray(index).reshape(-1)[active]
-    constants = np.asarray(value.const, dtype=object).reshape(-1)
+    found = linmap.selector(value, shape(root), lambda sid: require(
+        itemsize(etype(sources[sid])) == width, 'selector changes element storage width'))
+    require(found is not None, 'selector combines data elements')
+    which, indices, constants = found
     require(all(v == 0 for v in constants[which >= 0]), 'selector adds a data constant')
     args = [Arg(f'x{i}', etype(v), shape(v), 'input') for i, v in enumerate(sources)]
     args.append(Arg('y', etype(root), shape(root), 'output'))

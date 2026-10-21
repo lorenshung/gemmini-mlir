@@ -65,17 +65,10 @@ def kernel(op, dims, batch, bias, seed, bias_rows, seed_range):
     selectors, constants = [], []
     for root, value in zip(op.operands, values):
         require(isinstance(value, linmap.Sym), 'centered operand is not byte-derived')
-        value = value.bshape(shape(root)).compact()
-        n = int(np.prod(shape(root)))
-        which, indices = np.full(n, -1, np.int64), np.zeros(n, np.int64)
-        for sid, index, coefficient in value.terms:
-            coefficient = np.asarray(coefficient, object).reshape(-1)
-            active = coefficient != 0
-            require(np.all(coefficient[active] == 1) and np.all(which[active] == -1),
-                    'centered operand must select at most one byte with unit coefficient')
-            which[active] = sid
-            indices[active] = np.asarray(index).reshape(-1)[active]
-        constant = np.asarray(value.const, object).reshape(shape(root))
+        found = linmap.selector(value, shape(root), compact=True)
+        require(found is not None, 'centered operand must select at most one byte with unit coefficient')
+        which, indices, constant = found
+        constant = constant.reshape(shape(root))
         require(all(int(c) == c and abs(c) <= 255 for c in constant.flat),
                 'centered byte correction is not a bounded integer constant')
         selectors.append((which, indices))
