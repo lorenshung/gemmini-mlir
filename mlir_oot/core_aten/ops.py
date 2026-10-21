@@ -170,39 +170,27 @@ def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float
 
 
 def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha: float = 1.0,
-                     bias: bool = False, relu: bool = False, bias_const: np.ndarray | None = None,
-                     constants=None) -> Kernel:
+                     relu: bool = False, constants=None) -> Kernel:
     """The source layout (NCHW x OIHW -> NCHW) with on-device transposes around the channels-last
     convolution: x and w are transposed into caller-provided scratch, fenced (DRAM RAW), convolved,
     fenced, and the NHWC result transposed into y.  Merlin's layout propagation can bind the
     channels-last kernel (``convolution``) instead and drop the transposes."""
     g.validate()
-    require(not bias or bias_const is not None, "runtime convolution seed has no nonoverflow range proof")
     bound = g.kh * g.kw * g.cin * 16384
-    if bias:
-        bound += int(np.max(np.abs(np.asarray(bias_const, dtype=np.int64))))
     accumulator_bound(bound)
     if g.groups != 1:
         raise ValueError("grouped convolution needs the channels-last kernel")
-    args = [Arg("x", "i8", (g.n, g.cin, g.h, g.w), "input"), Arg("w", "i8", (g.cout, g.cin, g.kh, g.kw), "input")]
-    if bias and bias_const is None:
-        args.append(Arg("bias", "i32", (g.cout,), "input"))
-    args += [Arg("y", "i8", (g.n, g.cout, g.oh, g.ow), "output"),
+    args = [Arg("x", "i8", (g.n, g.cin, g.h, g.w), "input"), Arg("w", "i8", (g.cout, g.cin, g.kh, g.kw), "input"),
+             Arg("y", "i8", (g.n, g.cout, g.oh, g.ow), "output"),
              Arg("ws_x", "i8", (g.n, g.h, g.w, g.cin), "scratch"),
              Arg("ws_w", "i8", (g.kh, g.kw, g.cin, g.cout), "scratch"),
              Arg("ws_y", "i32", (g.n, g.oh, g.ow, g.cout), "scratch")]
     s = _begin(args,constants)
-    bname = None
-    if bias:
-        bname = "bias"
-        if bias_const is not None:
-            bname = "bias_c"
-            s.const(bname, np.asarray(bias_const, np.int32).reshape(g.cout))
     _permute_into(s, "x", [g.n, g.cin, g.h, g.w], "ws_x", [0, 2, 3, 1])
     _permute_into(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 1, 0])
     s.fence()
     scale = Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out)
-    _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, 1.0, False, True)
+    _conv_body(s, g, "ws_x", "ws_w", "ws_y", None, 1.0, False, True)
     from .requant import Readout
     s.readouts.append(Readout("y",[("ws_y",scale)],relu=relu,
         permutations={"ws_y":((g.n,g.oh,g.ow,g.cout),(0,3,1,2))}))

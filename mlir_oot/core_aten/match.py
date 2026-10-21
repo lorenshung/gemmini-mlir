@@ -713,10 +713,7 @@ def match_contraction(op: Operation) -> Match | None:
     if ch.c:
         raise Decline("constant epilogue offset")
     aten = "aten.bmm.default" if batched else ("aten.addmm.default" if bias else "aten.mm.default")
-    k = ops.matmul(aten, M, K, N, batch=Bn, s_a=qa.scale, s_b=qb.scale, s_out=q.scale, alpha=ch.w,
-                   bias=False, relu=ch.relu,
-                   bias_const=None,
-                   bias_rows=False)
+    k = ops.matmul(aten, M, K, N, batch=Bn, s_a=qa.scale, s_b=qb.scale, s_out=q.scale, alpha=ch.w, relu=ch.relu)
     _host_bias(k,bias,q.scale)
     ops.contraction_zero_points(k,qa,qb,M,K,N,Bn)
     operands = [("a", qa.value), ("b", qb.value)]
@@ -761,8 +758,7 @@ def _nchw_convolution(g, ch, q, qx, qw, bias_ok, head, tail=()):
     bias = _bias_operand(ch, g.cout, bias_ok)
     if ch.c:
         raise Decline("constant epilogue offset")
-    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
-                             relu=ch.relu, bias_const=None,
+    k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, relu=ch.relu,
                              constants=_literal_codes([("x",qx),("w",qw)]))
     _host_bias(k,bias,q.scale,convolution=True)
     _pack_inputs(k,[("x",qx),("w",qw)])
