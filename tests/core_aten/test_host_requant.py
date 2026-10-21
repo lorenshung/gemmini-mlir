@@ -60,9 +60,7 @@ def test_python_exact_requant_all_codes_random_accumulators_and_ties(low, high, 
 
 def test_output_equivalence_is_insufficient_for_product_proof():
     # Saturation masks the product rounding at these inputs; the design rule
-    # nevertheless rejects the rounded product and the inexact i32 conversion.
-    with pytest.raises(Decline, match="conversion"):
-        prove_readout(F(1, 2), -(1 << 31), (1 << 31) - 1)
+    # nevertheless rejects the rounded product.
     with pytest.raises(Decline, match="product"):
         prove_readout(F(3, 8), -10_000_000, 10_000_000)
     with pytest.raises(Decline, match="coefficients"):

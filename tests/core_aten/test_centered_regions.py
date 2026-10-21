@@ -94,25 +94,20 @@ def test_repeated_centered_bindings_share_one_unambiguous_schedule_proof():
     assert len(proof['bindings'])==2 and len(proof['kernels'])==1
 
 
-def test_selected_mac_width_without_one_mesh_tile_declines_cleanly():
+@pytest.mark.parametrize('overflow,reason',[
+    ('wrap_to_16_bits','provider padded mesh K exceeds selected internal MAC bound'),
+    (None,'integer mesh has unsupported selected MAC/accumulator arithmetic')],
+    ids=['mesh_k_exceeds_mac_bound','inconsistent_mac_policy'])
+def test_selected_16_bit_mac_policy_declines_cleanly(overflow,reason):
     from copy import deepcopy
     from conftest import provider,PACKAGE,POLICY
     policy=deepcopy(POLICY)
     policy['numerical_semantics']['internal_arithmetic']['mac_result_bits']=16
-    policy['numerical_semantics']['internal_arithmetic']['mac_result_overflow']='wrap_to_16_bits'
+    if overflow:
+        policy['numerical_semantics']['internal_arithmetic']['mac_result_overflow']=overflow
     proof=provider().admit_numeric_schedule(source(),package=PACKAGE,numeric_policy=policy)
     assert proof['status']=='declined' and not proof['kernels'] and not proof['bindings']
-    assert proof['reason']=='provider padded mesh K exceeds selected internal MAC bound'
-
-
-def test_inconsistent_selected_mac_policy_declines_cleanly():
-    from copy import deepcopy
-    from conftest import provider,PACKAGE,POLICY
-    policy=deepcopy(POLICY)
-    policy['numerical_semantics']['internal_arithmetic']['mac_result_bits']=16
-    proof=provider().admit_numeric_schedule(source(),package=PACKAGE,numeric_policy=policy)
-    assert proof['status']=='declined' and not proof['kernels']
-    assert proof['reason']=='integer mesh has unsupported selected MAC/accumulator arithmetic'
+    assert proof['reason']==reason
 
 
 def test_centered_i32_source_routes_to_proved_physical_byte_datapath(tmp_path):
