@@ -158,17 +158,12 @@ Merlin's derived `experiments/reference-data/phase0/conformance/gemmini.yaml`
 and must match the sha256 pinned in `overlay_provider.py`. Tests include a
 synthetic facts fixture and do not certify hardware.
 
-The older `phase1-support-baseline` changes (7e7a883 and c5b94f1) are already
-represented by the current support residual's `plugin.backend`, lazy
-`rocc_semantics`, and selected RTL-check capability, with evolved implementation
-and existing migration records/tests. Their older implementations are not
-reintroduced over these owners.
-
 The full overlay construction and certificate-refresh tests require PyTorch
 and z3. A missing dependency is an explicit skipped test, not an optimum
 certificate. Independent exhaustive finite enumeration may revalidate the
 ten-candidate pool, but must report that evidence separately from a z3 run.
-`core_aten_migration.json` records predecessor and relocated content identities.
+`core_aten_migration.json` records predecessor and relocated content identities,
+including the superseded `phase1-support-baseline` changes.
 
 ## Core ATen device lowerings (all 39 support-set ops)
 
@@ -180,9 +175,6 @@ declines with reasons).
 
 `core_aten_offload(...)` additionally rewrites the bound regions into `llvm.emit_c_interface` calls and emits
 the C shim from lowered memref descriptors to the kernels. The existing contraction `routing` is unchanged.
-
-The Spike lane does not yet call either entry point for graphs without a contraction. The required Merlin
-changes are listed in `/scratch/loren/core-aten-ref/ABI_NOTES.md`.
 
 Tests (set `GEMMINI_LLVM_BIN`, `GEMMINI_RISCV_TOOLS`, `GEMMINI_ROCC_TESTS`):
 
