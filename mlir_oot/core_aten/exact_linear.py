@@ -6,6 +6,7 @@ an exact rational host combination before the sole quantization. Coefficients
 are never approximated. Sparse maps derive solely from the source IR.
 """
 
+from dataclasses import dataclass
 from fractions import Fraction as Q
 from functools import reduce
 from math import gcd, lcm
@@ -17,6 +18,15 @@ from .exactness import accumulator_bound, require
 from .requant import Readout
 from .stream import Arg
 from .recipes.asm import accumulate_sum
+
+
+@dataclass
+class Src:
+    """A sparse-map input: kernel argument name, shape, code unit (scale) and uint8 storage."""
+    name: str
+    shape: tuple
+    scale: object
+    unsigned: bool = False
 
 
 def _integer_plan(lm, srcs, s_out):

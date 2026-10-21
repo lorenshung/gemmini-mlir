@@ -244,8 +244,7 @@ def conv_backward_weight(g, *, s_g, s_x, s_out, constants=None):
 
 def _dense_linear(op, out_shape, inputs, constant=0, relu=False, *, code_units=None):
     from .linmap import LinearMap
-    from .linmatch import Src
-    from .exact_linear import kernel
+    from .exact_linear import Src, kernel
     n = _numel(out_shape)
     require(n <= 1 << 16, 'dense arithmetic map exceeds bounded compiler capacity; use a structural schedule')
     outs, ids, indices, coefficients, srcs = [], [], [], [], {}

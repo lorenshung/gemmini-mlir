@@ -9,7 +9,7 @@ are numpy arrays, and every float value is a symbolic linear form ``sum coef * i
 const`` whose coefficient and index arrays span the iteration space.  Loops with
 point-dependent bounds run to the maximum trip count under a mask.  The result is the
 region's exact sparse linear map from its inputs (dequantized tensors or plain integer
-tensors) to its output, which ``linmatch`` classifies into device recipes.
+tensors) to its output, which ``exact_linear`` schedules on the device.
 
 Anything the interpreter does not model exactly (memory effects, non-linear float ops,
 data-dependent indices) raises ``NotLinear``; the region then stays on the host.

@@ -25,7 +25,7 @@ from __future__ import annotations
 import numpy as np
 from xdsl.dialects.builtin import ArrayAttr, FloatAttr, IntegerAttr, IntegerType, StringAttr, TensorType
 
-from . import linmatch, ops
+from . import exact_linear, ops
 from .exactness import rational as Q, accumulator_bound, quantized
 from .emit import build_module
 from .linmap import LinearMap
@@ -149,7 +149,7 @@ def movement_kernel(attrs, src_shape, src_dtype, dst_shape, dst_dtype) -> ops.Ke
     if tuple(out.shape) != tuple(dst_shape):
         raise IfaceDecline("MOVEMENT result extent differs from the declared one", "MOVEMENT", dst_shape)
     lm = _gather_map(np.ascontiguousarray(out), {0: 1.0 if scale is None else f32(scale)}, fill)
-    return linmatch.kernel_for("MOVEMENT", lm, {0: linmatch.Src("x0", tuple(src_shape), 1.0)}, 1.0)
+    return exact_linear.kernel("MOVEMENT", lm, {0: exact_linear.Src("x0", tuple(src_shape), 1.0)}, 1.0)
 
 
 def concat_kernel(attrs, src_shapes, dst_shape) -> ops.Kernel:
@@ -158,16 +158,16 @@ def concat_kernel(attrs, src_shapes, dst_shape) -> ops.Kernel:
     parts = [_tags(i, sh) for i, sh in enumerate(src_shapes)]
     out = np.concatenate(parts, axis=attrs["axis"])
     ratios = {i: 1.0 if scales is None else f32(scales[i]) for i in range(len(src_shapes))}
-    srcs = {i: linmatch.Src(f"x{i}", tuple(sh), 1.0) for i, sh in enumerate(src_shapes)}
-    return linmatch.kernel_for("CONCAT", _gather_map(out, ratios, None), srcs, 1.0)
+    srcs = {i: exact_linear.Src(f"x{i}", tuple(sh), 1.0) for i, sh in enumerate(src_shapes)}
+    return exact_linear.kernel("CONCAT", _gather_map(out, ratios, None), srcs, 1.0)
 
 
 def insert_slice_kernel(attrs, dest_shape, src_shape) -> ops.Kernel:
     out = _tags(0, dest_shape).copy()
     sl = tuple(slice(o, o + n * s, s) for o, n, s in zip(attrs["offsets"], src_shape, attrs["strides"]))
     out[sl] = _tags(1, src_shape)
-    srcs = {0: linmatch.Src("x0", tuple(dest_shape), 1.0), 1: linmatch.Src("x1", tuple(src_shape), 1.0)}
-    return linmatch.kernel_for("INSERT_SLICE", _gather_map(out, {0: 1.0, 1: 1.0}, None), srcs, 1.0)
+    srcs = {0: exact_linear.Src("x0", tuple(dest_shape), 1.0), 1: exact_linear.Src("x1", tuple(src_shape), 1.0)}
+    return exact_linear.kernel("INSERT_SLICE", _gather_map(out, {0: 1.0, 1: 1.0}, None), srcs, 1.0)
 
 
 def fill_kernel(attrs, dst_shape) -> ops.Kernel:
@@ -380,7 +380,7 @@ def window_sum_kernel(attrs, src_shape, dst_shape) -> ops.Kernel:
 
 def _sum(lm, src_shape, W, rho, dst_shape) -> ops.Kernel:
     try:
-        return linmatch.kernel_for("WINDOW_SUM",lm,{0:linmatch.Src("x0",src_shape,1)},1)
+        return exact_linear.kernel("WINDOW_SUM",lm,{0:exact_linear.Src("x0",src_shape,1)},1)
     except (Decline, ValueError) as exc:
         raise IfaceDecline(f"WINDOW_SUM: {exc}", "WINDOW_SUM", dst_shape)
 

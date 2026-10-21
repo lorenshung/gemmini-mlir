@@ -8,7 +8,7 @@ import pytest
 
 from mlir_oot.core_aten import ops
 from mlir_oot.core_aten.linmap import LinearMap
-from mlir_oot.core_aten.linmatch import copy_kernel
+from mlir_oot.core_aten.exact_linear import kernel as linear_kernel
 from mlir_oot.core_aten.match import Decline
 from mlir_oot.core_aten.offload import shim_source
 
@@ -136,7 +136,7 @@ def test_empty_gather_declines_before_stride_division():
     z = np.zeros(0, dtype=np.int64)
     lm = LinearMap((2, 0), z, z, z, z.astype(float), z.astype(float), {})
     with pytest.raises(Decline, match='empty'):
-        copy_kernel('gather', lm, {}, 1)
+        linear_kernel('gather', lm, {}, 1)
 
 
 def test_nonzero_memref_offsets_are_elements_for_i32_inputs_and_outputs(tmp_path):

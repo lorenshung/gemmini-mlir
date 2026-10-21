@@ -1201,7 +1201,7 @@ def _region_closed(ops_, root_users) -> bool:
 
 def match_linear(op: Operation) -> Match | None:
     """A region linear in its quantized (or plain int8) inputs, exactly extracted (``linmap``)."""
-    from . import linmap, linmatch
+    from . import exact_linear, linmap
     nm = name_of(op)
     if nm == "quant_ext.quantize_per_tensor":
         q = quant_sink(op.operands[0])
@@ -1221,7 +1221,7 @@ def match_linear(op: Operation) -> Match | None:
         return None
     if math.prod(shape(root)) > 1 << 16:
         raise Decline('interpreted linear region exceeds bounded compiler capacity; use a structural schedule')
-    srcs: dict[int, linmatch.Src] = {}
+    srcs: dict[int, exact_linear.Src] = {}
     by_value: dict = {}
 
     def leaf(v):
@@ -1238,7 +1238,7 @@ def match_linear(op: Operation) -> Match | None:
         if src not in by_value:
             k = len(by_value)
             by_value[src] = (k, dq.dq if not integer else None)
-            srcs[k] = linmatch.Src(f"x{k}", shape(src), scale, dq.unsigned if not integer else False)
+            srcs[k] = exact_linear.Src(f"x{k}", shape(src), scale, dq.unsigned if not integer else False)
         return by_value[src][0], Fraction(scale), Fraction(scale)*code_offset(dq) if not integer else Fraction(0)
 
     try:
@@ -1249,7 +1249,7 @@ def match_linear(op: Operation) -> Match | None:
         return None
     if not _region_closed(region, {op} | set(users(out_val))):
         raise Decline("region values escape the region")
-    kernel = linmatch.kernel_for("linear_region", lm, srcs, s_out)
+    kernel = exact_linear.kernel("linear_region", lm, srcs, s_out)
     operands = [(srcs[k].name, v) for v, (k, _) in sorted(by_value.items(), key=lambda kv: kv[1][0])]
     consumed = list(region) + ([op] if not integer else []) + [d for _, (k, d) in by_value.items() if d is not None]
     return Match("linear_region", op if not integer else producer(root), consumed, operands, ("y", out_val), kernel,
