@@ -156,18 +156,6 @@ def add_case(op, shape, b_shape=None, alpha=1.0, seed=0, name=None):
                 {"y": exact_quantize(_np(aq).astype(object) * F(sa) + _np(bq).astype(object) * F(sb) * F(alpha) * (1 if op == "aten.add.Tensor" else -1), so)})
 
 
-def add_scalar_case(op, shape, c, seed=0, name=None):
-    x = _act(shape, seed)
-    sx = scale_of(x)
-    xq = q(x, sx)
-    fn = A.add.Scalar if op == "aten.add.Scalar" else A.sub.Scalar
-    y = fn(dq(xq, sx), c)
-    so = scale_of(y)
-    k = ops.add_scalar(op, shape, c if op == "aten.add.Scalar" else -c, s_x=sx, s_out=so)
-    return Case(name or f"{op.split('.')[1]}_{'x'.join(map(str, shape))}", op, k, {"x": _np(xq)},
-                {"y": exact_quantize(_np(xq).astype(object) * F(sx) + F(c) * (1 if op == "aten.add.Scalar" else -1), so)})
-
-
 def mean_case(shape, dims, keepdim=False, seed=0, name=None):
     x = _act(shape, seed, relu_like=True)
     sx = scale_of(x)
