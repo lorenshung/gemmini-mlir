@@ -102,12 +102,7 @@ def kernel(op, dims, batch, bias, seed, bias_rows, seed_range):
     s = ops._begin(args)
     names = []
     for i, (v, unsigned) in enumerate(sources):
-        name = f'x{i}'
-        if unsigned:
-            name += '__signed'
-            s._index[name] = len(s.args); s.args.append(Arg(name, 'i8', shape(v), 'scratch'))
-            s.packs.append((f'x{i}', name))
-        names.append(name)
+        names.append(s.signed_scratch(f'x{i}', shape(v)) if unsigned else f'x{i}')
     planes = []
     for axis, (root, (which, indices), constant) in enumerate(zip(op.operands, selectors, constants)):
         prefix = f'operand{axis}'

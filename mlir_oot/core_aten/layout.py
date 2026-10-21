@@ -154,11 +154,7 @@ def quantized(op, shapes, output_shape, maps, factors, *, biases=None, unsigned=
         copy_shape,ss,offset,ds,*source_offset = mapping
         source = names[i]
         if exact and unsigned[i]:
-            packed = source+'__signed'
-            s._index[packed] = len(s.args)
-            s.args.append(Arg(packed,'i8',tuple(shapes[i]),'scratch'))
-            s.packs.append((source,packed))
-            source = packed
+            source = s.signed_scratch(source, tuple(shapes[i]))
         if i and staged:
             s.fence()
         move(s,(source,source_offset[0] if source_offset else 0),(target,offset),copy_shape,ss,destination_strides=ds)

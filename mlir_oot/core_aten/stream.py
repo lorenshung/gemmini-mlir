@@ -184,6 +184,14 @@ class Stream:
             raise ValueError(f"DRAM offset {byte_offset} outside {name}")
         return (idx, int(byte_offset))
 
+    def signed_scratch(self, source: str, shape, packed: str | None = None) -> str:
+        """An i8 scratch argument the host fills with ``source``'s uint8 codes XOR 0x80 before the call."""
+        packed = packed or source + "__signed"
+        self._index[packed] = len(self.args)
+        self.args.append(Arg(packed, "i8", shape, "scratch"))
+        self.packs.append((source, packed))
+        return packed
+
     def const(self, name: str, data: np.ndarray) -> None:
         """A compile-time constant operand (ones rows, identities, int32 seeds).
 

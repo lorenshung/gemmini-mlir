@@ -1366,7 +1366,7 @@ def _literal_codes(inputs):
 
 
 def _pack_inputs(kernel, inputs):
-    from .stream import Arg,Ins
+    from .stream import Ins
     s=kernel.stream
     for name,q in inputs:
         if name in s.consts:
@@ -1380,9 +1380,8 @@ def _pack_inputs(kernel, inputs):
                                          if key.startswith('prov.quant.')})
             continue
         if not q.unsigned: continue
-        old=s._index[name]; packed=name+'__signed'; new=len(s.args)
-        s.args.append(Arg(packed,'i8',shape(q.value),'scratch'));s._index[packed]=new
-        s.packs.append((name,packed))
+        old=s._index[name]; new=len(s.args)
+        s.signed_scratch(name,shape(q.value))
         s.ins=[Ins(i.kind,i.attrs,new if i.arg==old else i.arg,i.off) for i in s.ins]
 
 

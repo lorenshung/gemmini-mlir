@@ -443,13 +443,10 @@ def contraction_zero_points(kernel, qa, qb, M, K, N, batch=0):
     names=['a','b']
     for pos,q in enumerate((qa,qb)):
         if not q.unsigned: continue
-        source=names[pos]; packed=source+'__signed'
-        original=s._index[source]
-        target=len(s.args)
-        s.args.append(Arg(packed,'i8',s.args[original].shape,'scratch'));s._index[packed]=target
-        s.packs.append((source,packed))
+        original=s._index[names[pos]]
+        names[pos]=s.signed_scratch(names[pos],s.args[original].shape)
+        target=s._index[names[pos]]
         s.ins=[Ins(i.kind,i.attrs,target if i.arg==original else i.arg,i.off) for i in s.ins]
-        names[pos]=packed
     oa=(128 if qa.unsigned else 0)-qa.zero_point
     ob=(128 if qb.unsigned else 0)-qb.zero_point
     if not oa and not ob: return

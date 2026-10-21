@@ -90,8 +90,7 @@ def structural(op, qout, ordinals):
             # Widen each source once, retain the rational host boundary, then
             # execute the entire layout DAG in destination code units.
             if q.unsigned:
-                packed = scratch(source+'__signed','i8',shape(q.value))
-                s.packs.append((source,packed));source=packed
+                source = s.signed_scratch(source, tuple(shape(q.value)))
             raw = scratch(f'raw_{i}','i32',shape(q.value))
             converted = scratch(f'converted_{i}','i8',shape(q.value))
             layout.widen(s,source,raw,shape(q.value));s.fence()
@@ -198,9 +197,7 @@ def match(op, ordinals):
             s._index[name]=len(s.args);s.args.append(Arg(name,dtype,shape(root),'scratch'))
         for i,q in enumerate(sources):
             if q.unsigned:
-                packed=f'x{i}__signed'
-                s._index[packed]=len(s.args);s.args.append(Arg(packed,'i8',shape(q.value),'scratch'))
-                s.packs.append((names[i],packed));names[i]=packed
+                names[i]=s.signed_scratch(names[i],shape(q.value),f'x{i}__signed')
     if np.any(which < 0):
         scale = Fraction(int(output['scale_numerator']), int(output['scale_denominator']))
         codes = np.zeros(n, np.uint8)

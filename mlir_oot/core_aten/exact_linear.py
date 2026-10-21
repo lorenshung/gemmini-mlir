@@ -108,11 +108,7 @@ def kernel(op, lm, srcs, s_out, *, relu=False):
     input_names = {sid: src.name for sid, src in srcs.items()}
     for sid, src in srcs.items():
         if src.unsigned:
-            packed = src.name + "__signed"
-            s._index[packed] = len(s.args)
-            s.args.append(Arg(packed, "i8", tuple(src.shape), "scratch"))
-            s.packs.append((src.name, packed))
-            input_names[sid] = packed
+            input_names[sid] = s.signed_scratch(src.name, tuple(src.shape))
     plan = _integer_plan(lm, srcs, s_out)
     if plan is not None and lm.coef.size:
         factors, weights, seed, residual = plan
