@@ -87,7 +87,7 @@ def _readout(s, name, scale, relu=False):
 
 def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0, s_b: float = 1.0,
            s_out: float | None = None, alpha: float = 1.0, bias: bool = False, relu: bool = False,
-           bias_const: np.ndarray | None = None, bias_rows: bool = False, bias_repeat: int = 1,
+           bias_const: np.ndarray | None = None, bias_rows: bool = False,
            bias_range: tuple[int, int] | None = None) -> Kernel:
     """mm / bmm (batch > 0) / addmm (bias: int32 [N] in accumulator units, i.e. at scale alpha s_a s_b).
 
@@ -96,7 +96,6 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
     """
     require(min(M, K, N) > 0 and batch >= 0, "empty or dynamic contraction")
     require(s_out is not None or not relu,'raw i32 contraction cannot silently apply byte-readout ReLU')
-    require(isinstance(bias_repeat,int) and 1<=bias_repeat<=16,'invalid integer seed repetition')
     bound = K * 16384
     lo, hi = -bound, bound
     if bias:
@@ -104,13 +103,13 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
             literals=np.asarray(bias_const,dtype=object)
             require(all(int(v)==v and -(1<<31)<=v<(1<<31) for v in literals.flat),'seed is not exactly int32')
             values = np.asarray(bias_const, dtype=np.int64)
-            lo += min(0, int(values.min())) * bias_repeat
-            hi += max(0, int(values.max())) * bias_repeat
+            lo += min(0, int(values.min()))
+            hi += max(0, int(values.max()))
         else:
             require(bias_range is not None, "runtime i32 seed has no nonoverflow range proof")
             require(-(1<<31)<=bias_range[0]<=bias_range[1]<(1<<31),'invalid runtime seed range')
-            lo += min(0, bias_range[0]) * bias_repeat
-            hi += max(0, bias_range[1]) * bias_repeat
+            lo += min(0, bias_range[0])
+            hi += max(0, bias_range[1])
     require(-(1 << 31) <= lo <= hi < (1 << 31), "unproved i32 accumulator overflow bound")
 
     B = max(batch, 1)
@@ -136,18 +135,17 @@ def matmul(op: str, M: int, K: int, N: int, *, batch: int = 0, s_a: float = 1.0,
             s.fence()
         blocked_matmul(s, ("a", bi * M * K), K, ("b", bi * K * N), N, ("out", bi * M * N * (4 if out_i32 else 1)), N,
                        M, K, N, bias=(bname, bi * M * N * 4 if bias_rows else 0) if bias else None, scale=scale, relu=False, out_i32=out_i32,
-                       configure=bi == 0, bias_rows=bias_rows, bias_repeat=bias_repeat)
+                       configure=bi == 0, bias_rows=bias_rows)
     return _end(op, s, readout_scale=scale, accumulator_min=lo, accumulator_max=hi)
 
 
-def _conv_body(s: Stream, g: ConvGeom, x, w, y, bname, scale, relu, out_i32, bias_repeat=1):
+def _conv_body(s: Stream, g: ConvGeom, x, w, y, bname, scale, relu, out_i32):
     if (g.kh, g.kw, g.sh, g.sw, g.ph, g.pw, g.groups) == (1, 1, 1, 1, 0, 0, 1):
         M = g.n * g.h * g.w
         blocked_matmul(s, (x, 0), g.cin, (w, 0), g.cout, (y, 0), g.cout, M, g.cin, g.cout,
-                       bias=(bname, 0) if bname else None, scale=scale, relu=relu, out_i32=out_i32,
-                       bias_repeat=bias_repeat)
+                       bias=(bname, 0) if bname else None, scale=scale, relu=relu, out_i32=out_i32)
     else:
-        conv2d(s, g, x, w, y, bias=bname, scale=scale, relu=relu, out_i32=out_i32, bias_repeat=bias_repeat)
+        conv2d(s, g, x, w, y, bias=bname, scale=scale, relu=relu, out_i32=out_i32)
 
 
 def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float | None = None,
@@ -174,7 +172,7 @@ def convolution(g: ConvGeom, *, s_x: float = 1.0, s_w: float = 1.0, s_out: float
 
 def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha: float = 1.0,
                      bias: bool = False, relu: bool = False, bias_const: np.ndarray | None = None,
-                     bias_repeat: int = 1, constants=None) -> Kernel:
+                     constants=None) -> Kernel:
     """The source layout (NCHW x OIHW -> NCHW) with on-device transposes around the channels-last
     convolution: x and w are transposed into caller-provided scratch, fenced (DRAM RAW), convolved,
     fenced, and the NHWC result transposed into y.  Merlin's layout propagation can bind the
@@ -183,7 +181,7 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     require(not bias or bias_const is not None, "runtime convolution seed has no nonoverflow range proof")
     bound = g.kh * g.kw * g.cin * 16384
     if bias:
-        bound += int(np.max(np.abs(np.asarray(bias_const, dtype=np.int64)))) * bias_repeat
+        bound += int(np.max(np.abs(np.asarray(bias_const, dtype=np.int64))))
     accumulator_bound(bound)
     if g.groups != 1:
         raise ValueError("grouped convolution needs the channels-last kernel")
@@ -205,7 +203,7 @@ def convolution_nchw(g: ConvGeom, *, s_x: float, s_w: float, s_out: float, alpha
     _permute_into(s, "w", [g.cout, g.cin, g.kh, g.kw], "ws_w", [2, 3, 1, 0])
     s.fence()
     scale = Q(alpha) * Q(s_x) * Q(s_w) / Q(s_out)
-    _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, 1.0, False, True, bias_repeat)
+    _conv_body(s, g, "ws_x", "ws_w", "ws_y", bname, 1.0, False, True)
     from .requant import Readout
     s.readouts.append(Readout("y",[("ws_y",scale)],relu=relu,
         permutations={"ws_y":((g.n,g.oh,g.ow,g.cout),(0,3,1,2))}))

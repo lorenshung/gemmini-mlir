@@ -901,7 +901,7 @@ def match_convolution_rows(op: Operation) -> Match | None:
         raise Decline("constant epilogue offset")
     k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
                              relu=ch.relu, bias_const=None,
-                             bias_repeat=1, constants=_literal_codes([("x",qx),("w",qw)]))
+                             constants=_literal_codes([("x",qx),("w",qw)]))
     _host_bias(k,bias,q.scale,convolution=True)
     _pack_inputs(k,[("x",qx),("w",qw)])
     ops.convolution_zero_points(k,("x",qx),("w",qw),g)
@@ -974,7 +974,7 @@ def match_convolution(op: Operation) -> Match | None:
         raise Decline("constant epilogue offset")
     k = ops.convolution_nchw(g, s_x=qx.scale, s_w=qw.scale, s_out=q.scale, alpha=ch.w, bias=False,
                              relu=ch.relu, bias_const=None,
-                             bias_repeat=1, constants=_literal_codes([("x",qx),("w",qw)]))
+                             constants=_literal_codes([("x",qx),("w",qw)]))
     _host_bias(k,bias,q.scale,convolution=True)
     _pack_inputs(k,[("x",qx),("w",qw)])
     ops.convolution_zero_points(k,("x",qx),("w",qw),g)
