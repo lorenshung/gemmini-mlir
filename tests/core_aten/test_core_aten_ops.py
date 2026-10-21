@@ -15,7 +15,7 @@ from mlir_oot.core_aten.lint import lint  # noqa: E402
 from mlir_oot.core_aten.stream import simulate  # noqa: E402
 
 FIXTURES = HERE.parent / "fixtures" / "core_aten"            # model2MLIR 9c8b69f structural forms
-LEGACY = HERE.parent / "fixtures" / "core_aten_legacy"      # earlier gather-loop and LHS-weight forms
+LEGACY = HERE.parent / "fixtures" / "core_aten_legacy"      # earlier gather-loop and LHS-weight forms of core_aten cases
 class TestRecipes(unittest.TestCase):
     def test_admitted_recipes_equal_exact_arithmetic(self):
         for case in cases.paper_cases(representative=False):
@@ -38,7 +38,7 @@ class TestCatalogOnCaptures(unittest.TestCase):
                     from fixture_source import read
                     text = read(d / "model.mlir")
                     _, manifest, matches = build(text)
-                    values = {("arg", int(k[3:])): v for k, v in np.load(d / "inputs.npz").items()}
+                    values = {("arg", int(k[3:])): v for k, v in np.load(FIXTURES / d.name / "inputs.npz").items()}
                     key = lambda src: ("arg", src["func_arg"]) if "func_arg" in src else ("op", src["op_ordinal"], src["result"])
                     checked = 0
                     for b, m in zip(manifest["bindings"], matches):
