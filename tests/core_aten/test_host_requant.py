@@ -58,6 +58,13 @@ def test_python_exact_requant_all_codes_random_accumulators_and_ties(low, high, 
         )
 
 
+def test_python_exact_requant_negative_and_int64_extreme_ratios():
+    values = np.r_[np.arange(-256, 257), -(1 << 31), (1 << 31) - 1].astype(np.int32)
+    for n, d in [(-1, 2), (-3, 50), (1, 3), (-(1 << 63), 3), ((1 << 63) - 1, (1 << 64) - 1)]:
+        expected = [min(255, max(1, round(int(x) * F(n, d)) + 123)) for x in values]
+        assert evaluate(values, n, d, zero_point=123, quant_min=1, quant_max=255).tolist() == expected
+
+
 def test_output_equivalence_is_insufficient_for_product_proof():
     # Saturation masks the product rounding at these inputs; the design rule
     # nevertheless rejects the rounded product.
