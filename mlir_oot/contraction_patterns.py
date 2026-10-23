@@ -1,6 +1,7 @@
 """Exact integer GEMM patterns in upstream linalg-on-tensors IR.
 
-Only dense row-major, from-zero i8 x i8 -> i32 contractions match.  A
+The default matches dense row-major i8 x i8 -> i32 contractions. Explicit
+i32 structural matching requires a separate byte-origin and bound proof. A
 provenance label is never sufficient: indexing maps, iterator kinds, the
 integer region body, operand shapes and accumulator initialization are checked.
 """
@@ -64,17 +65,29 @@ def _canonical_maps(op: Operation, rank: int) -> bool:
     return True
 
 
-def _canonical_body(op: Operation) -> bool:
+def _canonical_body(op: Operation, dtype: str = "i8") -> bool:
     if len(op.regions) != 1 or len(op.regions[0].blocks) != 1:
         return False
     block = op.regions[0].blocks[0]
     ops = list(block.ops)
+    if dtype == "i32":
+        if len(block.args) != 3 or any(str(x.type) != "i32" for x in block.args):
+            return False
+        if [x.name for x in ops] != ["arith.muli", "arith.addi", "linalg.yield"]:
+            return False
+        mul, add, result = ops
+        return (not any(getattr(getattr(x, "overflow_flags", None), "data", ()) for x in (mul, add))
+                and list(mul.operands) == list(block.args[:2])
+                and set(add.operands) == {mul.results[0], block.args[2]}
+                and list(result.operands) == [add.results[0]])
     if [x.name for x in ops] != ["arith.extsi", "arith.extsi", "arith.muli",
                                  "arith.addi", "linalg.yield"]:
         return False
     if len(block.args) != 3 or [str(x.type) for x in block.args] != ["i8", "i8", "i32"]:
         return False
     ext_a, ext_b, mul, add, result = ops
+    if any(getattr(getattr(x, "overflow_flags", None), "data", ()) for x in (mul, add)):
+        return False
     return (list(ext_a.operands) == [block.args[0]] and
             list(ext_b.operands) == [block.args[1]] and
             str(ext_a.results[0].type) == "i32" and
@@ -86,15 +99,21 @@ def _canonical_body(op: Operation) -> bool:
             list(result.operands) == [add.results[0]])
 
 
-def match_integer_gemm(op: Operation) -> IntegerGemm | None:
-    """Return physical batch/M/N/K only when this op has exact GEMM semantics."""
+def match_integer_gemm(op: Operation, *, require_zero: bool = True, operand_dtype: str = "i8") -> IntegerGemm | None:
+    """Check GEMM structure; i32 callers must separately prove operand/overflow bounds.
+
+    The default remains signed bytes. Opting into i32 never grants permission
+    to truncate operands: centered_regions proves and decomposes their producers.
+    """
     if op.name not in ("linalg.matmul", "linalg.generic") or len(op.operands) != 3 or len(op.results) != 1:
         return None
-    lhs = _shape(op.operands[0], "i8")
-    rhs = _shape(op.operands[1], "i8")
+    if operand_dtype not in ("i8", "i32"):
+        return None
+    lhs = _shape(op.operands[0], operand_dtype)
+    rhs = _shape(op.operands[1], operand_dtype)
     init = _shape(op.operands[2], "i32")
     out = _shape(op.results[0], "i32")
-    if lhs is None or rhs is None or init is None or out != init or not _zero_init(op.operands[2]):
+    if lhs is None or rhs is None or init is None or out != init or (require_zero and not _zero_init(op.operands[2])):
         return None
     if op.name == "linalg.matmul":
         if len(lhs) != 2 or len(rhs) != 2:
@@ -102,7 +121,7 @@ def match_integer_gemm(op: Operation) -> IntegerGemm | None:
     else:
         if len(lhs) not in (2, 3) or len(rhs) != len(lhs) or not _canonical_maps(op, len(lhs)):
             return None
-        if not _canonical_body(op):
+        if not _canonical_body(op, operand_dtype):
             return None
     if len(lhs) == 2:
         m, k = lhs

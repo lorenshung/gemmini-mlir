@@ -87,3 +87,19 @@ try:get_backend('gemmini')
 except (KeyError,ValueError):pass
 else:raise AssertionError('backend implicitly selected')
 """)
+
+
+def test_harness_contract_is_generated_from_selected_merlin_contract(monkeypatch, tmp_path):
+    import importlib.util
+    import merlin
+    spec = importlib.util.spec_from_file_location('gsim_contract_sync', ROOT / 'merlin-support/tools/sync_contracts.py')
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    selected = Path(os.environ.get('MERLIN_SOURCE_ROOT', Path(merlin.__file__).resolve().parents[2])) / 'examples/gemmini/target/contracts'
+    generator.sync_harness(selected, check=True)
+    (tmp_path / 'contracts').mkdir()
+    data = (PROVIDER / 'contracts/target_contract.yaml').read_text()
+    (tmp_path / 'contracts/target_contract.yaml').write_text(data + '\n# drift\n')
+    monkeypatch.setattr(generator, 'HARNESS_ROOT', tmp_path)
+    with pytest.raises(ValueError, match='GSIM provider contract drift'):
+        generator.sync_harness(selected, check=True)

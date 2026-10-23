@@ -111,7 +111,7 @@ class FnBuilder:
         nxt = self.add_i(iv, self.const(step))
         latch = self.add(llvm.BrOp(header, nxt))
         if retain_loop:
-            from merlin.llvmlower.llvm_loop_metadata import disable_loop_unroll
+            from .._vendor.llvm_loop_metadata import disable_loop_unroll
             disable_loop_unroll(latch)
         self.blk = exit_block
 

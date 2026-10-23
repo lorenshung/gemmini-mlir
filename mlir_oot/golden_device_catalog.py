@@ -35,20 +35,50 @@ def _symbol(key: dict) -> str:
     return "gemmini_golden_" + digest
 
 
+def hazard_report(module, dims, batched, symbol=None):
+    from .core_aten.stream import Arg
+    from .core_aten.trace import stream_from_module
+    from .core_aten.lint import lint
+    lead = (dims.batch,) if batched else ()
+    stream = stream_from_module(module, [
+        Arg('a', 'i8', lead+(dims.m, dims.k), 'input'),
+        Arg('b', 'i8', lead+(dims.k, dims.n), 'input'),
+        Arg('out', 'i32', lead+(dims.m, dims.n), 'output')], symbol=symbol)
+    report = lint(stream)
+    return dict(fences=report['fences'], instructions=report['instructions'],
+                hazard_lint=report['status'], hazard_lint_method='complete_static_CPU_CFG_trace')
+
+
 def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool = False,
                   prefetch_b: bool = False) -> tuple[ModuleOp, dict]:
     if max_kernels is not None and max_kernels <= 0:
         raise ValueError("max_kernels must be positive")
     source_module = parse_module(source)
+    from .core_aten.liveness import live_source_ops
+    live = live_source_ops(source_module)
     module = ModuleOp([])
     bindings = []
     kernels: dict[str, dict] = {}
     matched_total = 0
+    refusals = []
     for ordinal, op in enumerate(source_module.walk()):
+        if op not in live:
+            continue
         dims = match_integer_gemm(op)
         if dims is None:
             continue
+        if not op.results[0].uses:
+            continue  # The closed tensor contraction has no observable result.
         matched_total += 1
+        from .core_aten.quant_schema import attributes
+        from .core_aten.match import Decline
+        try:
+            attributes(op,'contraction')  # validates the schema, including host_only
+        except Decline as exc:
+            refusals.append(dict(source_operation_ordinal=ordinal,reason=str(exc)))
+            continue
+        if dims.k * 16384 > (1 << 31) - 1:
+            continue  # unbounded exact dot product does not fit accumulator SRAM
         shape = choose_shape(dims,large_n=large_n,prefetch_b=prefetch_b)
         batched = len(op.operands[0].type.get_shape()) == 3
         key = {"batch": dims.batch if batched else 0,
@@ -56,6 +86,12 @@ def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool 
         symbol = _symbol(key)
         if symbol not in kernels and (max_kernels is None or len(kernels) < max_kernels):
             local = build_batched(dims.batch, shape) if batched else GoldenGemm(shape).build()
+            try:
+                checked = hazard_report(local, dims, batched)
+            except ValueError as exc:
+                refusals.append(dict(source_operation_ordinal=ordinal,
+                                     reason='unsafe or unprovable device schedule: '+str(exc)))
+                continue
             for fn in list(local.body.blocks[0].ops):
                 old = fn.sym_name.data
                 new = symbol if old.endswith("batched_gemm") or not batched else symbol + "_core"
@@ -67,7 +103,8 @@ def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool 
                 fn.detach()
                 module.body.blocks[0].add_op(fn)
             kernels[symbol] = {"symbol": symbol, "dimensions": asdict(dims),
-                               "schedule": asdict(shape), "batched": batched}
+                               "schedule": asdict(shape), "batched": batched,
+                               **checked}
         if symbol in kernels:
             bindings.append({"source_operation_ordinal": ordinal,
                              "region": getattr(op.attributes.get("prov.region_id"), "data", ""),
@@ -90,7 +127,8 @@ def build_catalog(source: str, *, max_kernels: int | None = None, large_n: bool 
                     "coverage_complete": len(bindings) == matched_total,
                     "unique_kernels": len(kernels),
                     "kernels": list(kernels.values()),
-                    "bindings": bindings}
+                    "bindings": bindings,
+                    **({"declines":refusals} if refusals else {})}
 
 
 def compile_catalog(source_path: Path, llvm_bin: Path, workdir: Path,

@@ -13,6 +13,18 @@ from .tables import rtl_facts as F, isa
 from .codegen.builder import PTR
 
 
+def _zero_lanes(valid: list[int], rows: int) -> list[tuple[int, int]]:
+    """Disjoint (first lane, count) runs outside the contiguous in-bounds lanes."""
+    if not valid:
+        return [(0, rows)]
+    out = []
+    if valid[0] > 0:
+        out.append((0, valid[0]))
+    if valid[-1] + 1 < rows:
+        out.append((valid[-1] + 1, rows - valid[-1] - 1))
+    return out
+
+
 @dataclass(frozen=True)
 class ConvShape:
     h: int
@@ -70,8 +82,10 @@ class GoldenConv(GoldenGemm):
                             for a, rows in enumerate(widths):
                                 x = a * F.DIM
                                 valid = list(range(rows)) if s.explicit_halo else [r for r in range(rows) if 0 <= (x+r)*s.stride+kw-1 < s.w]
-                                if len(valid) != rows:
-                                    self._rocc("mvin", {"local": a*F.DIM, "rows": rows, "cols": kr, "load_id": 0}, zero)
+                                # Zero only the out-of-bounds lanes: a zero-fill that a data MVIN then
+                                # overwrites is an unordered MVIN->MVIN pair on stock RTL (HW3).
+                                for lo, n in _zero_lanes(valid, rows):
+                                    self._rocc("mvin", {"local": a*F.DIM+lo, "rows": n, "cols": kr, "load_id": 0}, zero)
                                 if valid:
                                     left, count = valid[0], len(valid)
                                     pixel = self.fb.add_i(self.fb.mul_i(iy, self.fb.const(s.w+2 if s.explicit_halo else s.w)), self.fb.const((x+left)*s.stride+kw-(0 if s.explicit_halo else 1)))
@@ -137,8 +151,8 @@ def command_counts(s: ConvShape) -> dict[str, int]:
         result['mvout'] += (sum(_ceil_div(min(s.bn,nt-d),4) for d in range(0,nt,s.bn)) if s.output_dtype == 'i8' else nt)*len(widths)
         for kw in range(3):
             for a, rows in enumerate(widths):
-                valid = rows if s.explicit_halo else sum(0 <= (a*F.DIM+r)*s.stride+kw-1 < s.w for r in range(rows))
-                result['mvin_a'] += taps*kt*blocks*((valid != rows)+(valid > 0))
+                lanes = list(range(rows)) if s.explicit_halo else [r for r in range(rows) if 0 <= (a*F.DIM+r)*s.stride+kw-1 < s.w]
+                result['mvin_a'] += taps*kt*blocks*(len(_zero_lanes(lanes, rows))+(len(lanes) > 0))
     result['preload'] = result['compute']
     result['padded_array_issue_cycles'] = result['compute']*F.DIM
     return result

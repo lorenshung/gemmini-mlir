@@ -1,0 +1,17 @@
+{
+  "schema": "gemmini.support_evolution.v1",
+  "kind": "in_place_source_evolution",
+  "reason": "VCS RTL execution support: simulator identity and a single +loadmem ELF image as the only loader for execution and timing.",
+  "commits": [
+    "16a3db2 Add VCS execution and simulator identity for Gemmini RTL",
+    "8616adf Require one loadmem image for VCS execution and timing"
+  ],
+  "files": [
+    {
+      "destination": "backend/gemmini.py",
+      "source_sha256": "6ab8a1ce3fa7357b34b3ab6c4e08829d6370c406e40ba173c4fee34d4bd5b893",
+      "destination_sha256": "b6eaacfcfa012882ca25a9f992281268df51e6d15581d12d702d3ab084b70134"
+    }
+  ],
+  "qualification": "Source identity record only. Covered by tests/test_vcs_engine.py; no VCS, hardware or experimental runtime execution is claimed."
+}

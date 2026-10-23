@@ -88,9 +88,24 @@ def compile_calibrated_catalog(source_path, module, manifest, llvm_bin, workdir,
     for row in selections:
         selected = row['selection']
         if not any(k['symbol'] == row['selected_symbol'] for k in kernels):
+            from .golden_device_catalog import hazard_report
+            from .contraction_patterns import IntegerGemm
+            from .frontend.parse import context
+            from .ir.gemmini_dialect import GEMMINI
+            from xdsl.dialects.llvm import LLVM
+            from xdsl.parser import Parser
+            actual_ir = Path(row['object_path']).with_name('kernel.gemmini.mlir')
+            ctx = context()
+            ctx.load_dialect(LLVM)
+            ctx.load_dialect(GEMMINI)
+            selected_module = Parser(ctx, actual_ir.read_text()).parse_module()
+            selected_module.verify()
+            checked = hazard_report(selected_module,
+                                    IntegerGemm(**selected['dimensions']), False,
+                                    symbol=row['selected_symbol'])
             kernels.append(dict(symbol=row['selected_symbol'], dimensions=selected['dimensions'],
                 schedule=selected['schedule'], batched=False,
-                schedule_kind=selected['schedule_kind'], prefetch_b_rows=selected['prefetch_b_rows']))
+                schedule_kind=selected['schedule_kind'], prefetch_b_rows=selected['prefetch_b_rows'], **checked))
     module.attributes['gemmini.golden_catalog'] = StringAttr(
         json.dumps(dict(kernels=len(retained), bindings=sum(b['symbol'] in retained for b in bindings)), sort_keys=True))
     module.verify()

@@ -15,6 +15,7 @@ so one shared parser/printer pair serves the whole dialect.
 """
 from __future__ import annotations
 
+from xdsl.dialects.builtin import FunctionType
 from xdsl.ir import Attribute, Dialect, ParametrizedAttribute, TypeAttribute
 from xdsl.irdl import (
     IRDLOperation,
@@ -90,6 +91,8 @@ class _IfaceOp(IRDLOperation):
             if first is None:                    # `: () -> <t>` shaped, no operands
                 ftype = parser.parse_function_type()
                 operands, results = [], list(ftype.outputs.data)
+            elif isinstance(first, FunctionType):  # `: () -> <t>` read as one function type
+                operands, results = [], list(first.outputs.data)
             else:
                 operands, results = [], [first]
         op = cls(operands=[operands], result_types=[results])
@@ -314,10 +317,42 @@ class RopeOp(_IfaceOp):
         self._require_name()
 
 
+def _named_op(mnemonic: str, counts: tuple[int, ...], doc: str):
+    """A whole op of the ABI v0.1 extension: a `name`, and an operand count from ``counts``."""
+
+    def verify_(self) -> None:
+        self._require_name()
+        if len(self.operands_) not in counts:
+            raise VerifyException(f"merlin_iface.{mnemonic} takes {' or '.join(map(str, counts))} operand(s)")
+
+    cls = type(f"{mnemonic.title().replace('_', '')}Op", (_IfaceOp,), {
+        "__doc__": doc, "name": f"merlin_iface.{mnemonic}", "verify_": verify_})
+    return irdl_op_definition(cls)
+
+
+AffineMapOp = _named_op("affine_map", (1, 2), "`merlin_iface.affine_map` — integer affine map, one readout (AFFINE_MAP).")
+ConcatOp = _named_op("concat", tuple(range(2, 9)), "`merlin_iface.concat` — tensors joined along an axis (CONCAT).")
+InsertSliceOp = _named_op("insert_slice", (2,), "`merlin_iface.insert_slice` — src written into dest (INSERT_SLICE).")
+FillOp = _named_op("fill", (0,), "`merlin_iface.fill` — one quantized code everywhere (FILL).")
+WindowSumOp = _named_op("window_sum", (1,), "`merlin_iface.window_sum` — exact window sums, one readout (WINDOW_SUM).")
+
+
+@irdl_op_definition
+class FenceOp(_IfaceOp):
+    """`merlin_iface.fence` — a completion barrier between commands (FENCE)."""
+
+    name = "merlin_iface.fence"
+
+    def verify_(self) -> None:
+        if self.operands_ or self.res is not None:
+            raise VerifyException("merlin_iface.fence takes no operands and has no result")
+
+
 IFACE_OPS = (
     TensorOp, ResidentPackOp, MatmulOp, MatmulBatchedOp, CommitOp, EvictOp,
     MovementOp, Conv2dOp, BiasAddOp, AttentionQkOp, AttentionPvOp,
     SoftmaxOp, RmsNormOp, RopeOp,
+    AffineMapOp, ConcatOp, InsertSliceOp, FillOp, WindowSumOp, FenceOp,
 )
 
 MERLIN_IFACE = Dialect("merlin_iface", list(IFACE_OPS), [ResidentType, AccType])

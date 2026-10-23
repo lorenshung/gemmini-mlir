@@ -1,0 +1,191 @@
+"""Build and run bare-metal device tests of compiler-emitted Core ATen kernels.
+
+Environment (all explicit; nothing is guessed from the caller's checkout):
+  GEMMINI_LLVM_BIN     LLVM/MLIR bin directory with mlir-translate and clang or llc
+  GEMMINI_RISCV_TOOLS  riscv-tools prefix with riscv64-unknown-elf-gcc, spike, lib/libgemmini.so
+  GEMMINI_ROCC_TESTS   gemmini-rocc-tests checkout (riscv-tests benchmarks common: crt.S, syscalls.c, test.ld)
+  GEMMINI_TEST_WORK    scratch directory for build products (default: ./out/core_aten_device)
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+
+
+def env(key: str) -> Path:
+    value = os.environ.get(key)
+    if not value:
+        raise RuntimeError(f"{key} is not set")
+    return Path(value)
+
+
+def work_root() -> Path:
+    root = Path(os.environ.get("GEMMINI_TEST_WORK", "out/core_aten_device")).resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+@dataclass
+class Check:
+    buffer: str
+    expected: np.ndarray
+    tol: int
+    label: str
+
+    def __post_init__(self):
+        if self.tol != 0:
+            raise ValueError("device correctness checks require exact equality")
+
+
+@dataclass
+class DeviceTest:
+    name: str
+    objects: list[Path]                                  # compiled kernel objects
+    buffers: dict[str, np.ndarray]                        # initial contents (outputs: sentinel-filled)
+    calls: list[tuple[str, list[str]]]                    # (symbol, argument buffer names)
+    checks: list[Check] = field(default_factory=list)
+    outputs: set[str] = field(default_factory=set)        # refilled with a sentinel before the calls
+
+
+def _ctype(arr: np.ndarray) -> str:
+    return {np.dtype(np.int8): "int8_t", np.dtype(np.int32): "int32_t"}[arr.dtype]
+
+
+def write_sources(test: DeviceTest, wd: Path) -> tuple[Path, Path]:
+    """C driver plus an assembly blob file; tensors are .incbin'd, not printed as C text."""
+    wd.mkdir(parents=True, exist_ok=True)
+    asm = [".section .data", ""]
+    lines = ['#include "ca_harness.h"', ""]
+    blobs = dict(test.buffers)
+    for i, chk in enumerate(test.checks):
+        blobs[f"exp{i}"] = chk.expected
+    for name, arr in blobs.items():
+        arr = np.ascontiguousarray(arr)
+        path = wd / f"{name}.bin"
+        data = arr.tobytes()
+        if not data:
+            data = b"\0"
+        path.write_bytes(data + b"\0" * (-len(data) % 64))
+        asm += [f".global ca_{name}", ".balign 64", f"ca_{name}:", f'.incbin "{path}"', ""]
+        lines.append(f"extern {_ctype(arr)} ca_{name}[];")
+    lines.append("")
+    symbols = sorted({s for s, _ in test.calls})
+    for s in symbols:
+        nargs = {len(a) for sym, a in test.calls if sym == s}
+        assert len(nargs) == 1
+        lines.append(f"extern void {s}({', '.join(['void *'] * nargs.pop())});")
+    lines += ["", "int main(void) {"]
+    for name in sorted(test.outputs):
+        lines.append(f"  ca_fill(ca_{name}, {test.buffers[name].nbytes}, 0x5a);")
+    lines.append("  ca_fence();")
+    lines.append("  uint64_t t0 = ca_rdcycle();")
+    for sym, args in test.calls:
+        lines.append(f"  {sym}({', '.join('ca_' + a for a in args)});")
+    lines.append("  ca_fence();")
+    lines.append("  uint64_t t1 = ca_rdcycle();")
+    lines.append(f'  printf("PERF {test.name} cycles=%lu\\n", (unsigned long)(t1 - t0));')
+    for i, chk in enumerate(test.checks):
+        fn = "ca_check_i8" if chk.expected.dtype == np.int8 else "ca_check_i32"
+        lines.append(f'  {fn}("{chk.label}", ca_{chk.buffer}, ca_exp{i}, {chk.expected.size}, {chk.tol});')
+    lines += ["  return ca_finish();", "}", ""]
+    c_path, s_path = wd / "main.c", wd / "blobs.S"
+    c_path.write_text("\n".join(lines))
+    s_path.write_text("\n".join(asm))
+    return c_path, s_path
+
+
+def link(elf: Path, sources, extra_flags=()) -> Path:
+    """Link a bare-metal Spike ELF from C/assembly sources and objects plus the riscv-tests runtime."""
+    tools = env("GEMMINI_RISCV_TOOLS")
+    common = env("GEMMINI_ROCC_TESTS") / "riscv-tests" / "benchmarks" / "common"
+    cmd = [str(tools / "bin" / "riscv64-unknown-elf-gcc"), "-DPREALLOCATE=1", "-DMULTITHREAD=1", "-mcmodel=medany",
+           "-std=gnu99", "-O2", "-fno-common", "-fno-builtin-printf", *extra_flags, "-fno-tree-loop-distribute-patterns", "-march=rv64gc", "-mabi=lp64d",
+           f"-I{HERE}", f"-I{common}", f"-I{env('GEMMINI_ROCC_TESTS') / 'riscv-tests' / 'env'}", "-nostdlib", "-nostartfiles", "-static", "-T", str(common / "test.ld"),
+           "-Wl,--no-warn-rwx-segments", *map(str, sources),
+           str(common / "syscalls.c"), str(common / "crt.S"), "-lm", "-lgcc", "-o", str(elf)]
+    p = subprocess.run(cmd, capture_output=True, text=True)
+    if p.returncode:
+        raise RuntimeError(f"ELF build failed: {p.stderr[-2000:]}")
+    return elf
+
+
+def build_elf(test: DeviceTest, wd: Path | None = None) -> Path:
+    wd = wd or work_root() / test.name
+    c_path, s_path = write_sources(test, wd)
+    return link(wd / f"{test.name}.elf", [c_path, s_path, *test.objects])
+
+
+def rename_symbols(obj, out: Path, renames: dict[str, str]) -> Path:
+    """Copy an object with symbols renamed, so one ELF can link several kernels of the same name."""
+    objcopy = env("GEMMINI_RISCV_TOOLS") / "bin" / "riscv64-unknown-elf-objcopy"
+    subprocess.run([str(objcopy), *(f"--redefine-sym={old}={new}" for old, new in sorted(renames.items())),
+                    str(obj), str(out)], check=True)
+    return out
+
+
+def replay(test: DeviceTest, wd: Path, spike: bool = True):
+    """(ELF, Spike result or None): link one batched device test, audit it, and run it."""
+    from mlir_oot.golden_device_catalog import final_elf_audit
+    elf = build_elf(test, wd)
+    final_elf_audit(elf)
+    return elf, run_spike(elf) if spike else None
+
+
+@dataclass
+class RunResult:
+    status: str
+    passed: list[str]
+    failed: list[str]
+    info: list[str]
+    perf: dict[str, int]
+    exit_code: int
+    seconds: float
+    log: str
+
+    @property
+    def ok(self) -> bool:
+        return self.status == "PASS"
+
+
+def parse(log: str, code: int, seconds: float) -> RunResult:
+    lines = log.splitlines()
+    passed = [l.split()[1] for l in lines if l.startswith("PASS ")]
+    failed = [l for l in lines if l.startswith("FAIL ")]
+    info = [l for l in lines if l.startswith("INFO ")]
+    perf = {}
+    for l in lines:
+        m = re.match(r"PERF (\S+) cycles=(\d+)", l)
+        if m:
+            perf[m.group(1)] = int(m.group(2))
+    done = [l for l in lines if l.startswith("HARNESS_DONE")]
+    asserted = any("Assertion failed" in l or "assertion" in l.lower() and "fail" in l.lower() for l in lines)
+    if done and "fail=0" in done[-1] and code == 0 and not failed and not asserted:
+        status = "PASS"
+    elif done:
+        status = "FAIL"
+    else:
+        status = "ERROR"
+    return RunResult(status, passed, failed, info, perf, code, seconds, log)
+
+
+def run_spike(elf: Path, timeout: int = 1800) -> RunResult:
+    tools = env("GEMMINI_RISCV_TOOLS")
+    cmd = [str(tools / "bin" / "spike"), f"--extlib={tools / 'lib' / 'libgemmini.so'}", "--extension=gemmini", str(elf)]
+    t0 = time.time()
+    envv = dict(os.environ, LD_LIBRARY_PATH=f"{tools / 'lib'}:{os.environ.get('LD_LIBRARY_PATH', '')}")
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=envv)
+        log, code = p.stdout + p.stderr, p.returncode
+    except subprocess.TimeoutExpired as exc:
+        log, code = (exc.stdout or b"").decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or ""), 124
+    return parse(log, code, time.time() - t0)
+

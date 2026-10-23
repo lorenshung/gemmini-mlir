@@ -38,3 +38,33 @@ def test_snapshots_match_recorded_content_hashes():
     for record in provenance["files"]:
         expected = evolved_identity(ROOT, record["path"], record["sha256"])
         assert hashlib.sha256((ROOT / record["path"]).read_bytes()).hexdigest() == expected
+
+
+def test_provider_contracts_are_generated_from_selected_merlin_contract(monkeypatch):
+    import importlib.util
+    import os
+    import merlin
+
+    spec = importlib.util.spec_from_file_location('sync_contracts', ROOT / 'tools/sync_contracts.py')
+    generator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(generator)
+    # Installed Merlin source, or an explicitly selected checkout. No workstation path.
+    source_root = Path(os.environ.get('MERLIN_SOURCE_ROOT', Path(merlin.__file__).resolve().parents[2]))
+    selected = source_root / 'examples/gemmini/target/contracts'
+    generator.sync(selected, check=True)
+    for name, (original, rendered) in generator.generated(selected).items():
+        provider = yaml.safe_load(rendered)
+        upstream = yaml.safe_load(original)
+        provider.pop('plugin')
+        upstream.pop('plugin', None)
+        assert provider == upstream, name
+
+    import pytest
+    with monkeypatch.context() as patch:
+        original_generated = generator.generated
+        patch.setattr(generator, 'generated', lambda path: {
+            name: (original, rendered + b'\n# simulated upstream drift\n')
+            for name, (original, rendered) in original_generated(path).items()
+        })
+        with pytest.raises(ValueError, match='provider contract drift'):
+            generator.sync(selected, check=True)

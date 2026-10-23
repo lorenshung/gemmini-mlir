@@ -67,6 +67,7 @@ GSIM_MAX_CYCLES = 20_000_000
 ORACLE = {
     "spike": {"kind": "spike_gemmini_functional", "derived_from_rtl": False},
     "verilator": {"kind": "rtl_verilator", "derived_from_rtl": True},
+    "vcs": {"kind": "rtl_vcs", "derived_from_rtl": True},
     # Same elaborated design, different lowering of it (FIRRTL->C++). `derived_from_rtl` is the claim
     # the grade cites, and it is true of GSIM for exactly the reason it is true of Verilator; a missing
     # entry here is not "no oracle metadata" but a KeyError in `contract.compile.run_on_oracle`, i.e. the
@@ -424,15 +425,41 @@ def spike_extension() -> "tuple[tuple[str, ...], Path]":
 
 
 def simulator_identity(simulator: str) -> "dict | None":
-    """Which build of ``simulator`` runs a program here, by content: the binary and, for spike, the
-    extension library it loads -- ``None`` for a simulator this backend states no identity for. A result
+    """Which build runs here: Spike's binary/extensions or VCS's binary/daidir manifest.
+    Returns ``None`` for a simulator this backend states no identity for. A result
     cached against a simulator (a whole model's reference arm) is keyed on this, so a rebuilt simulator
     is a different key rather than a silently reused answer."""
     import hashlib
 
     def digest(path: Path) -> "str | None":
-        return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+        if not path.is_file():
+            return None
+        with path.open("rb") as stream:
+            return hashlib.file_digest(stream, "sha256").hexdigest()
 
+    if simulator == "vcs":
+        import json
+
+        directory = vcs_daidir()
+        manifest = []
+        complete = directory.is_dir()
+        if complete:
+            for path in sorted(directory.rglob("*")):
+                if path.is_dir() and not path.is_symlink():
+                    continue
+                # File symlinks authenticate both the link and its target bytes.
+                # Do not silently omit a symlinked subtree or special file.
+                sha = digest(path)
+                entry = {"path": path.relative_to(directory).as_posix(), "sha256": sha}
+                if path.is_symlink():
+                    entry["symlink"] = os.readlink(path)
+                manifest.append(entry)
+                complete &= sha is not None
+        parts = {"binary": digest(vcs_path()), "daidir": manifest}
+        complete &= bool(manifest) and parts["binary"] is not None
+        parts["daidir_sha256"] = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest() if complete else None
+        return {**parts, "digest": hashlib.sha256(json.dumps(parts, sort_keys=True).encode()).hexdigest()
+                if complete else None}
     if simulator != "spike":
         return None
     flags, libdir = spike_extension()
@@ -453,11 +480,11 @@ def platform_dram_base() -> int:
     return _rb.platform_dram_base("gemmini", "chipyard")
 
 
-def _rtl_sim_config() -> str:
-    """The verilator harness config that realizes gemmini — a DECLARED target fact (capability manifest
+def _rtl_sim_config(env_var: str = "MERLIN_GEMMINI_VERILATOR_CONFIG") -> str:
+    """The RTL harness config that realizes gemmini — a DECLARED target fact (capability manifest
     ``runtime.rtl_sim_config``), read via the target registry rather than a hardcoded backend constant.
     Env override wins; then the manifest; then the module fallback (kept coherent with the facts config)."""
-    env = os.environ.get("MERLIN_GEMMINI_VERILATOR_CONFIG")
+    env = os.environ.get(env_var)
     if env:
         return env
     try:
@@ -476,6 +503,42 @@ def verilator_path() -> Path:
     if env:
         return Path(env)
     return chipyard_root() / "sims/verilator" / f"simulator-chipyard.harness-{_rtl_sim_config()}"
+
+
+def vcs_path() -> Path:
+    """Explicit VCS build, or the Chipyard VCS product for the selected RTL config."""
+    configured = os.environ.get("MERLIN_GEMMINI_SIMV")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return chipyard_root() / "sims/vcs" / f"simv-chipyard.harness-{_rtl_sim_config('MERLIN_GEMMINI_VCS_CONFIG')}"
+
+
+def vcs_daidir() -> Path:
+    return Path(str(vcs_path().resolve()) + ".daidir")
+
+
+def vcs_dramsim_ini() -> Path:
+    configured = os.environ.get("MERLIN_GEMMINI_DRAMSIM_INI") or os.environ.get("GEMMINI_DRAMSIM_INI")
+    return (Path(configured).expanduser().resolve() if configured else
+            chipyard_root() / "generators/testchipip/src/main/resources/dramsim2_ini")
+
+
+def _vcs_argv(elf: str | Path) -> list[str]:
+    # The sole image loader is +loadmem, for execution AND oracle timing.
+    # The positional ELF supplies symbols/HTIF metadata; TSI must not load it.
+    # Chipyard variables.mk/common.mk SIM_FLAGS, LOADMEM=1 and VCS seed convention.
+    # -no_save avoids VCS's ASLR/personality re-exec in restricted sandboxes.
+    cycles = os.environ.get("MERLIN_GEMMINI_VCS_MAXCYCLES", "10000000")
+    seed = os.environ.get("MERLIN_GEMMINI_VCS_SEED", "1")
+    try:
+        if int(cycles) <= 0 or int(seed) < 0:
+            raise ValueError
+    except ValueError as exc:
+        raise GemminiError("VCS max cycles must be positive and seed nonnegative integers") from exc
+    image = Path(elf).resolve()
+    return [str(vcs_path()), "+permissive", "-no_save", "+dramsim",
+            f"+dramsim_ini_dir={vcs_dramsim_ini()}", f"+max-cycles={int(cycles)}",
+            f"+ntb_random_seed={int(seed)}", f"+loadmem={image}", "+permissive-off", str(image)]
 
 
 GSIM_EMU_ENV = "MERLIN_GEMMINI_GSIM_EMU"
@@ -594,6 +657,9 @@ def available(simulator: str = "verilator") -> bool:
         return base and spike_path().is_file()
     if simulator == "verilator":
         return base and verilator_path().is_file()
+    if simulator == "vcs":
+        simv = vcs_path()
+        return base and simv.is_file() and os.access(simv, os.X_OK) and vcs_daidir().is_dir()
     if simulator == "gsim":
         # Executability is checked as well as existence, unlike the Verilator path: that binary is a
         # build product of a chipyard rule that leaves it executable, whereas the GSIM emu arrives via an
@@ -739,6 +805,7 @@ def prepare_short_program_execution(elf, **kwargs):
 def run_elf(elf: str | Path, simulator: str = "verilator", timeout: int = 600) -> str:
     """Run the ELF on the chosen oracle; return raw console output."""
     preexec = None
+    run_options = {}
     dependencies = [Path(__file__).resolve()]
     stage = "engine_execution"
     if simulator == "spike":
@@ -765,6 +832,13 @@ def run_elf(elf: str | Path, simulator: str = "verilator", timeout: int = 600) -
         env = dict(os.environ)
         cmd = [str(verilator_path()), str(elf)]
         preexec = _unlimited_stack
+    elif simulator == "vcs":
+        env = dict(os.environ)  # Includes caller-owned license and runtime library settings.
+        cmd = _vcs_argv(elf)
+        preexec = _unlimited_stack
+        run_options = dict(cwd=Path(elf).resolve().parent, stdin=subprocess.DEVNULL)
+        dependencies.extend(path.resolve() for directory in (vcs_daidir(), vcs_dramsim_ini())
+                            for path in directory.rglob("*") if path.is_file())
     elif simulator == "gsim":
         env = dict(os.environ)
         # The SAME ELF the Verilator path runs, so the console it prints is the same OUT/METRIC/DONE text
@@ -788,7 +862,7 @@ def run_elf(elf: str | Path, simulator: str = "verilator", timeout: int = 600) -
     proc = invocation_record.run(
         cmd, directory=Path(elf).resolve().parent, stage=stage,
         inputs=(Path(elf),), dependencies=tuple(dict.fromkeys(dependencies)),
-        capture_output=True, text=True, timeout=timeout, env=env, preexec_fn=preexec,
+        capture_output=True, text=True, timeout=timeout, env=env, preexec_fn=preexec, **run_options,
     )
     # The Verilator harness exits 0 on $finish; spike exits 0 on htif_exit(0); the GSIM-emitted model
     # exits 0 when the design's own stop condition fires before +max-cycles.

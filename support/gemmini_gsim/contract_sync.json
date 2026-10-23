@@ -1,0 +1,7 @@
+{
+  "schema": "gemmini.gsim_contract_sync.v1",
+  "source": "Merlin selected target contract; only provider plugin adapted",
+  "source_sha256": "5ddceed1b635ce09334d295a9d63a42046f2fbc7f8d50d01481781060290de49",
+  "previous_sha256": "7f7abb6ebeadbf6e23aec63cb50e353b4241842ed95797afbf3aab6f53bc6de1",
+  "destination_sha256": "732ea31977923800271ac4b804b85465cdf06e94f17a60ffc0af9c410eff1211"
+}
