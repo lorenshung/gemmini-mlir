@@ -105,6 +105,20 @@ def test_literal_selector_is_quantized_once_with_rational_rne(literal):
     assert not match.kernel.stream.readouts
 
 
+# -inf and NaN: a scalar in the selector body, and a dense splat (xDSL reads its hex as little-endian bytes).
+@pytest.mark.parametrize('fill', ['0xFF800000 : f32', '0x7FC00000 : f32',
+                                  'dense<"0x000080FF"> : tensor<256xf32>', 'dense<"0x0000C07F"> : tensor<256xf32>'])
+def test_non_finite_literal_is_declined_not_raised(fill):
+    if fill.startswith('dense'):
+        text = source().replace('(%copy,', '(%literal,').replace(
+            '%empty =', f'%literal = arith.constant {fill}\n        %empty =')
+    else:
+        text = source().replace('linalg.yield %a : f32',
+            f'%literal = arith.constant {fill}\n linalg.yield %literal : f32')
+    _, catalog, matches = build(text)
+    assert not matches and any('integer ratio' in d['reason'] for d in catalog['declines'])
+
+
 def test_equal_rationals_need_not_have_identical_numerator_spelling():
     text = source()
     n, d = Fraction(float(np.float32(.03))).as_integer_ratio()

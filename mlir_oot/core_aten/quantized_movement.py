@@ -5,14 +5,14 @@ Only literal elements undergo quantization, once at compile time using rationals
 """
 
 from fractions import Fraction
-from math import prod
+from math import isfinite, prod
 
 import numpy as np
 
 from . import linmap, ops
 from .exactness import code_offset, quantized
 from .bitwise import Selectors
-from .match import (Match, dequant, name_of, producer, quant_sink,
+from .match import (Decline, Match, dequant, name_of, producer, quant_sink,
                     shape, _prop_int, _region_closed)
 from .quant_schema import attributes, ratios
 from .recipes import movement as mv
@@ -26,6 +26,13 @@ class QuantizedSelectors(Selectors):
                 str(op.operands[0].type), str(op.results[0].type)):
             return vals[0]
         return super()._scalar(op, vals, env, ivs, mask)
+
+
+def _literal(value):
+    """A fill literal as a rational. -inf, inf and NaN have no code; the normal matchers record the decline."""
+    if not isfinite(value):
+        raise Decline('non-finite fill literal')
+    return Fraction(value)
 
 
 def _contract(q, kind, ordinal):
@@ -108,7 +115,7 @@ def structural(op, qout, ordinals):
             continue
         target = 'y' if value is root_value else scratch(f'layout_{number}','i8',shape(value))
         if constant is not None:
-            code=quantized(Fraction(constant)/so,qout.qmin,qout.qmax,qout.zero_point)
+            code=quantized(_literal(constant)/so,qout.qmin,qout.qmax,qout.zero_point)
             layout.fill(s,target,prod(shape(value)),code)
         for v,mapping in zip(values,maps):
             sh,ss,offset,ds,*source_offset=mapping
@@ -196,7 +203,7 @@ def match(op, ordinals):
         scale = Fraction(int(output['scale_numerator']), int(output['scale_denominator']))
         codes = np.zeros(n, np.uint8)
         for p in np.flatnonzero(which < 0):
-            code = quantized(Fraction(constants[p]) / scale, qout.qmin, qout.qmax, qout.zero_point)
+            code = quantized(_literal(constants[p]) / scale, qout.qmin, qout.qmax, qout.zero_point)
             codes[p] = code & 255
         s.const('literal', codes.view(np.int8))
         if not identical:
