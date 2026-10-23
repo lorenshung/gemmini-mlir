@@ -58,5 +58,6 @@
     "7e7a88387d555485d298cc9a57ecf6aaa2682aea": "Already present in merlin-support/contracts/residual.yaml as plugin.backend: backend.",
     "c5b94f11a3a2111e961cec290d23ac7d8ac9a491": "Superseded by evolved lazy rocc_semantics and RTL-check capabilities, tracked in rocc_semantics_migration.json and rtl_checks_migration.json."
   },
-  "qualification": "Relocation inventory, not hardware certification; functional Spike observations are recorded separately."
+  "qualification": "Relocation inventory, not hardware certification; functional Spike observations are recorded separately.",
+  "note": "Historical record: file identities and the overlay text are as of the migration commit 31efa8d and nothing verifies them against the tree. Relocated files changed afterwards; the code shrink changed core_aten/overlay_provider.py and tests/test_core_aten_overlay.py and deleted core_aten/resources/conformance.yaml, so the overlay now reads Merlin's experiments/reference-data/phase0/conformance/gemmini.yaml and refuses any sha256 other than the recorded 7d5f435e1033863fbcf44ad241a5ae4c864a001ceae6bbea4e222551cdf48aa4."
 }
